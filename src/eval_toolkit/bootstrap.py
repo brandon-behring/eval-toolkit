@@ -348,7 +348,7 @@ def paired_bootstrap_diff(
         delta=delta_point,
         ci_low=ci_low,
         ci_high=ci_high,
-        overlaps_zero=ci_low < 0.0 < ci_high,
+        overlaps_zero=ci_low <= 0.0 <= ci_high,
         confidence=confidence,
         n_resamples=n_resamples,
     )
@@ -449,7 +449,7 @@ def paired_bootstrap_ece_diff(
         delta=delta_point,
         ci_low=ci_low,
         ci_high=ci_high,
-        overlaps_zero=ci_low < 0.0 < ci_high,
+        overlaps_zero=ci_low <= 0.0 <= ci_high,
         confidence=confidence,
         n_resamples=len(deltas),
     )
@@ -570,7 +570,7 @@ def paired_bootstrap_op_point_diff(
         delta=delta_point,
         ci_low=ci_low,
         ci_high=ci_high,
-        overlaps_zero=ci_low < 0.0 < ci_high,
+        overlaps_zero=ci_low <= 0.0 <= ci_high,
         confidence=confidence,
         n_resamples=int(len(valid)),
     )

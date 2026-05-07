@@ -249,3 +249,35 @@ def test_mde_from_ci_validates() -> None:
         mde_from_ci(fake, alpha=0.0)
     with pytest.raises(ValueError, match="power"):
         mde_from_ci(fake, alpha=0.05, power=1.0)
+
+
+@pytest.mark.unit
+def test_paired_bootstrap_overlaps_zero_inclusive_on_degenerate_ci() -> None:
+    """A zero-width CI at zero must report overlaps_zero=True (inclusive bounds).
+
+    Regression test for the case where two scorers produce identical scores
+    (delta=0 always, ci_low=ci_high=0). The semantic claim "0 ∈ [ci_low, ci_high]"
+    is True and must round-trip through the dataclass.
+    """
+    n = 50
+    y = np.array([0] * 5 + [1] * (n - 5), dtype=int)
+    s_const = np.zeros(n, dtype=float)
+    diff = paired_bootstrap_diff(y, s_const, s_const, pr_auc, n_resamples=100, seed=0)
+    assert diff.delta == 0.0
+    assert diff.ci_low == 0.0
+    assert diff.ci_high == 0.0
+    assert diff.overlaps_zero is True
+
+
+@pytest.mark.unit
+def test_paired_bootstrap_overlaps_zero_at_lower_boundary() -> None:
+    """overlaps_zero is True when ci_low == 0 exactly (inclusive boundary)."""
+    fake = PairedBootstrapCI(
+        delta=0.05,
+        ci_low=0.0,
+        ci_high=0.10,
+        overlaps_zero=(0.0 <= 0.0 <= 0.10),
+        confidence=0.95,
+        n_resamples=1000,
+    )
+    assert fake.overlaps_zero is True
