@@ -1,13 +1,21 @@
-"""Text deduplication: near-duplicate detection and cross-source leakage scrubbing.
+"""Text deduplication: pluggable similarity strategies + near-dup orchestrators.
 
 Pure helpers:
 
 - :func:`sha256_text` — canonical SHA-256 of (optionally normalized) text
 - :func:`normalize_text_for_dedup` — Unicode/whitespace normalization
 
-Algorithmic:
+Similarity strategies (Protocol + reference implementations):
 
-- :func:`near_dedup` — TF-IDF cosine forward-scan greedy near-deduplication
+- :class:`SimilarityStrategy` — Protocol; ``pairs_within`` + ``pairs_across``
+- :class:`TfidfCosineStrategy` — default lexical near-dedup (TF-IDF + cosine)
+- :class:`ExactNormalizedHashStrategy` — SHA-256-bucket exact-paraphrase dedup
+- :class:`EmbeddingCosineStrategy` — cosine on caller-supplied embeddings
+- :class:`JaccardNgramStrategy` — set-based n-gram Jaccard
+
+Orchestrators (strategy-agnostic):
+
+- :func:`near_dedup` — forward-scan greedy near-deduplication
 - :func:`cross_dedup` — drop eval rows near-duplicate to any train row
 - :class:`DedupReport` — frozen audit-trail of which rows were dropped and why
 """
@@ -586,19 +594,29 @@ def near_dedup(
     texts: list[str],
     threshold: float = DEFAULT_DEDUP_THRESHOLD,
     k_neighbors: int = 20,
+    *,
+    strategy: SimilarityStrategy | None = None,
 ) -> DedupReport:
-    """Greedy near-deduplication on TF-IDF (1-3-gram) cosine similarity.
+    """Greedy near-deduplication via a pluggable similarity strategy.
 
     Forward-scan: for each kept text ``i``, drop all ``j > i`` with
-    ``cosine(i, j) >= threshold``.
+    ``similarity(i, j) >= threshold`` per the active strategy. Default
+    strategy is :class:`TfidfCosineStrategy` with literal v0.1.0 defaults
+    (preserved bit-for-bit; existing callers keep working unchanged).
 
     Parameters
     ----------
     texts : list[str]
     threshold : float, optional
-        Cosine-similarity threshold in (0, 1). Default 0.9.
+        Similarity threshold in (0, 1). Default 0.9. Strategy-specific scale:
+        for cosine-style strategies (TF-IDF, embedding) similarities are in
+        [-1, 1]; for hash-bucket dedup similarities are in {0.0, 1.0}; for
+        Jaccard in [0, 1].
     k_neighbors : int, optional
         Maximum neighbors to consider per query. Default 20.
+    strategy : SimilarityStrategy or None, optional
+        Pluggable similarity backend. ``None`` (default) instantiates
+        :class:`TfidfCosineStrategy` with constructor defaults.
 
     Returns
     -------
@@ -613,6 +631,8 @@ def near_dedup(
 
     Examples
     --------
+    Default strategy (TF-IDF cosine):
+
     >>> texts = ["the quick brown fox", "the quick brown fox!", "lorem ipsum"]
     >>> report = near_dedup(texts, threshold=0.8)
     >>> report.n_kept >= 2  # at most one near-duplicate dropped
@@ -620,11 +640,22 @@ def near_dedup(
     >>> set(report.kept_indices) | {p[0] for p in report.dropped_pairs} == set(range(3))
     True
 
+    Custom strategy (exact-match-after-normalization):
+
+    >>> report_exact = near_dedup(
+    ...     ["foo", "FOO", "bar"], threshold=0.5,
+    ...     strategy=ExactNormalizedHashStrategy(),
+    ... )
+    >>> report_exact.n_kept  # "foo"/"FOO" collide; "bar" isolated
+    2
+
     Notes
     -----
-    TF-IDF (1-3-gram) cosine is a fast lexical near-dedup signal. It will
-    miss paraphrase duplicates that share no n-grams; for those, use
-    semantic embeddings + cosine.
+    The orchestrator is strategy-agnostic: it dispatches to
+    ``strategy.pairs_within(texts, k_neighbors)`` and applies the threshold
+    plus forward-scan greedy drop logic. Different "senses of leakage"
+    (lexical, semantic, exact, n-gram-set) are encoded by swapping the
+    strategy.
     """
     if not isinstance(texts, list):
         raise TypeError(f"texts must be a list, got {type(texts).__name__}")
@@ -634,13 +665,10 @@ def near_dedup(
     if not 0.0 < threshold < 1.0:
         raise ValueError(f"threshold must be in (0, 1), got {threshold}")
 
-    vec = TfidfVectorizer(ngram_range=(1, 3), min_df=1, lowercase=True)
-    tfidf = vec.fit_transform(texts)
-
-    k = min(k_neighbors, n)
-    nn = NearestNeighbors(n_neighbors=k, metric="cosine").fit(tfidf)
-    distances, indices = nn.kneighbors(tfidf)
-    similarities = 1.0 - distances
+    active_strategy: SimilarityStrategy = (
+        strategy if strategy is not None else TfidfCosineStrategy()
+    )
+    similarities, indices = active_strategy.pairs_within(texts, k_neighbors)
 
     kept_mask = np.ones(n, dtype=bool)
     dropped: list[tuple[int, int, float]] = []
@@ -649,11 +677,12 @@ def near_dedup(
         if not kept_mask[i]:
             continue
         for sim, j in zip(similarities[i], indices[i], strict=True):
-            if j == i or j < i:
+            j_int = int(j)
+            if j_int == i or j_int < i:
                 continue
-            if sim >= threshold and kept_mask[j]:
-                kept_mask[j] = False
-                dropped.append((int(j), i, float(sim)))
+            if float(sim) >= threshold and kept_mask[j_int]:
+                kept_mask[j_int] = False
+                dropped.append((j_int, i, float(sim)))
 
     kept_indices = np.where(kept_mask)[0].tolist()
     return DedupReport(kept_indices, dropped, threshold, n)
@@ -664,19 +693,24 @@ def cross_dedup(
     eval_texts: list[str],
     threshold: float = DEFAULT_DEDUP_THRESHOLD,
     k_neighbors: int = 20,
+    *,
+    strategy: SimilarityStrategy | None = None,
 ) -> list[int]:
     """Return eval indices to KEEP (drop those near-duplicate to any train text).
 
     Used to scrub OOD eval slices of any train-pool leakage before reporting
-    OOD metrics.
+    OOD metrics. The notion of "near-duplicate" is owned by ``strategy``.
 
     Parameters
     ----------
     train_texts, eval_texts : list[str]
     threshold : float, optional
-        Cosine-similarity threshold in (0, 1). Default 0.9.
+        Similarity threshold in (0, 1). Default 0.9.
     k_neighbors : int, optional
         Maximum neighbors to consider per eval text. Default 20.
+    strategy : SimilarityStrategy or None, optional
+        Pluggable similarity backend. ``None`` (default) instantiates
+        :class:`TfidfCosineStrategy` with constructor defaults.
 
     Returns
     -------
@@ -699,14 +733,12 @@ def cross_dedup(
     if not eval_texts:
         return []
 
-    vec = TfidfVectorizer(ngram_range=(1, 3), min_df=1, lowercase=True)
-    vec.fit(train_texts + eval_texts)
-    tfidf_train = vec.transform(train_texts)
-    tfidf_eval = vec.transform(eval_texts)
-
-    k = min(k_neighbors, len(train_texts))
-    nn = NearestNeighbors(n_neighbors=k, metric="cosine").fit(tfidf_train)
-    distances, _ = nn.kneighbors(tfidf_eval)
-    max_sim_per_eval = 1.0 - distances.min(axis=1)
+    active_strategy: SimilarityStrategy = (
+        strategy if strategy is not None else TfidfCosineStrategy()
+    )
+    similarities, _indices = active_strategy.pairs_across(eval_texts, train_texts, k_neighbors)
+    if similarities.size == 0:
+        return list(range(len(eval_texts)))
+    max_sim_per_eval = similarities.max(axis=1)
     keep_mask = max_sim_per_eval < threshold
     return [int(i) for i in np.where(keep_mask)[0]]
