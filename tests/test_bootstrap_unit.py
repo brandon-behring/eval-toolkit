@@ -238,8 +238,12 @@ def test_paired_mde_runs() -> None:
 def test_mde_from_ci_validates() -> None:
     """mde_from_ci rejects invalid alpha/power."""
     fake = PairedBootstrapCI(
-        delta=0.1, ci_low=0.05, ci_high=0.15,
-        overlaps_zero=False, confidence=0.95, n_resamples=1000,
+        delta=0.1,
+        ci_low=0.05,
+        ci_high=0.15,
+        overlaps_zero=False,
+        confidence=0.95,
+        n_resamples=1000,
     )
     with pytest.raises(ValueError, match="alpha"):
         mde_from_ci(fake, alpha=0.0)

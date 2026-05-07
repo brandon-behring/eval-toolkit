@@ -18,7 +18,6 @@ import pytest
 
 from eval_toolkit.docs import render_files, render_text
 
-
 GOLDEN_DIR = Path(__file__).parent / "golden" / "docs"
 
 

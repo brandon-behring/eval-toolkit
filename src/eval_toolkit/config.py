@@ -107,6 +107,8 @@ def from_yaml(path: Path | str, cls: type[T]) -> T:
     field_names = {f.name for f in fields(cls)}
     unknown = set(raw.keys()) - field_names
     if unknown:
-        raise KeyError(f"unknown config keys: {sorted(unknown)}; expected subset of {sorted(field_names)}")
+        raise KeyError(
+            f"unknown config keys: {sorted(unknown)}; expected subset of {sorted(field_names)}"
+        )
 
     return cls(**raw)

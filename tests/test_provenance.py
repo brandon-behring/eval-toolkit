@@ -61,9 +61,21 @@ def test_capture_git_sha_in_git_repo(tmp_path: Path) -> None:
     """Inside a git repo, returns the SHA."""
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     subprocess.run(
-        ["git", "-c", "user.email=t@t", "-c", "user.name=T", "commit",
-         "--allow-empty", "-m", "init", "--no-gpg-sign"],
-        cwd=tmp_path, check=True, capture_output=True,
+        [
+            "git",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=T",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "init",
+            "--no-gpg-sign",
+        ],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
     )
     sha = capture_git_sha(tmp_path)
     assert sha is not None

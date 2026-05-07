@@ -43,9 +43,7 @@ def _score_array(n: int) -> st.SearchStrategy[np.ndarray]:
     seed=st.integers(0, 1000),
 )
 @settings(deadline=None, max_examples=15, suppress_health_check=[HealthCheck.filter_too_much])
-def test_bootstrap_point_estimate_fidelity(
-    y: np.ndarray, s: np.ndarray, seed: int
-) -> None:
+def test_bootstrap_point_estimate_fidelity(y: np.ndarray, s: np.ndarray, seed: int) -> None:
     """ci.point_estimate equals the metric value on the original sample."""
     ci = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="percentile", seed=seed)
     direct = pr_auc(y, s)

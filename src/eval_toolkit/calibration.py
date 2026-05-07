@@ -569,9 +569,7 @@ def fit_temperature(
     }
 
 
-def _negative_log_likelihood(
-    t: float, logits: np.ndarray, labels: np.ndarray
-) -> float:
+def _negative_log_likelihood(t: float, logits: np.ndarray, labels: np.ndarray) -> float:
     """NLL of softmax(logits / T) against true labels."""
     if t <= 0:
         return float("inf")

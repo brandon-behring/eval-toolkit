@@ -14,7 +14,6 @@ from eval_toolkit.harness import (
     RunResult,
     Scorer,
     evaluate,
-    evaluate_scorer_on_slice,
     write_run_result,
 )
 
@@ -122,9 +121,7 @@ def test_slice_aware_scorer_skips() -> None:
 
 
 @pytest.mark.smoke
-def test_write_run_result_creates_two_jsons(
-    slice_with_data: EvalSlice, tmp_path: Path
-) -> None:
+def test_write_run_result_creates_two_jsons(slice_with_data: EvalSlice, tmp_path: Path) -> None:
     rng = np.random.default_rng(42)
     sc = _StubScorer(rng.uniform(0, 1, size=len(slice_with_data.df)))
     result = evaluate({"stub": sc}, [slice_with_data], run_id="rt", n_resamples=20)

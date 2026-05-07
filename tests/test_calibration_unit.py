@@ -34,9 +34,16 @@ def test_reliability_curve_schema(well_separated: tuple[np.ndarray, np.ndarray])
     y, s = well_separated
     out = reliability_curve(y, s, n_bins=10, strategy="uniform")
     expected = {
-        "n", "n_positive", "n_bins", "strategy",
-        "prob_true", "prob_pred", "bin_edges", "n_per_bin",
-        "ece_equal_mass", "ece_equal_width",
+        "n",
+        "n_positive",
+        "n_bins",
+        "strategy",
+        "prob_true",
+        "prob_pred",
+        "bin_edges",
+        "n_per_bin",
+        "ece_equal_mass",
+        "ece_equal_width",
     }
     assert expected.issubset(out.keys())
     assert len(out["bin_edges"]) == 11  # n_bins + 1

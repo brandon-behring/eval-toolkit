@@ -655,9 +655,7 @@ def quantile_stratified_pr_auc(
     n_pos = int((sub_y == 1).sum())
     n_neg = int((sub_y == 0).sum())
     if n_pos < 10 or n_neg < 10:
-        raise ValueError(
-            f"stratified subset too imbalanced for PR-AUC: pos={n_pos}, neg={n_neg}"
-        )
+        raise ValueError(f"stratified subset too imbalanced for PR-AUC: pos={n_pos}, neg={n_neg}")
     return {
         "pr_auc": pr_auc(sub_y, sub_s),
         "n": int(mask.sum()),

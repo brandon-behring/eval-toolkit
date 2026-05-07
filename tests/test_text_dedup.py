@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 
-import numpy as np
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -74,7 +73,9 @@ def test_near_dedup_single_item() -> None:
 
 @pytest.mark.unit
 def test_near_dedup_drops_exact_duplicates() -> None:
-    rep = near_dedup(["the quick brown fox jumps", "the quick brown fox jumps", "lorem ipsum dolor"])
+    rep = near_dedup(
+        ["the quick brown fox jumps", "the quick brown fox jumps", "lorem ipsum dolor"]
+    )
     assert rep.n_kept == 2  # one of the dupes plus the unique
 
 

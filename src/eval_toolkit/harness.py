@@ -308,14 +308,10 @@ def evaluate(
                 if a not in scorers or b not in scorers:
                     continue
                 if a not in scores_by_scorer or b not in scores_by_scorer:
-                    diffs[f"{b}_minus_{a}"] = {
-                        "skipped": "one or both scorers skipped this slice"
-                    }
+                    diffs[f"{b}_minus_{a}"] = {"skipped": "one or both scorers skipped this slice"}
                     continue
                 if is_single_class:
-                    diffs[f"{b}_minus_{a}"] = {
-                        "skipped": "single-class slice; PR-AUC Δ degenerate"
-                    }
+                    diffs[f"{b}_minus_{a}"] = {"skipped": "single-class slice; PR-AUC Δ degenerate"}
                     continue
                 if len(slice_.y_true) < 30:
                     diffs[f"{b}_minus_{a}"] = {"skipped": f"n={len(slice_.y_true)} < 30"}

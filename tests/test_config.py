@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from eval_toolkit.config import frozen_config, from_yaml
+from eval_toolkit.config import from_yaml, frozen_config
 
 
 @pytest.mark.unit
