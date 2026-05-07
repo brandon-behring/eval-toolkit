@@ -1,0 +1,625 @@
+"""Coverage-targeted tests for error paths and defensive code.
+
+Adds targeted tests to reach the library-grade ≥ 90% coverage bar by
+exercising input-validation error branches that the smoke / property
+suites do not naturally hit.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+
+from eval_toolkit.bootstrap import (
+    BootstrapCI,
+    PairedBootstrapCI,
+    bootstrap_ci,
+    mde_from_ci,
+    paired_bootstrap_diff,
+    paired_bootstrap_ece_diff,
+    paired_bootstrap_op_point_diff,
+    paired_mde,
+)
+from eval_toolkit.calibration import (
+    bayes_optimal_threshold,
+    fit_isotonic_calibrator,
+    fit_platt_calibrator,
+    fit_temperature,
+    fit_temperature_oracle,
+    reliability_curve,
+)
+from eval_toolkit.harness import EvalSlice, Scorer
+from eval_toolkit.metrics import (
+    expected_calibration_error,
+    expected_calibration_error_equal_mass,
+    metrics_at_threshold,
+    pr_auc,
+    precision_at_prior,
+    quantile_stratified_pr_auc,
+    select_threshold,
+    single_class_threshold_metrics,
+    stratified_recall,
+)
+from eval_toolkit.plotting import (
+    plot_confusion_matrix_grid,
+    plot_lift_ci,
+    plot_metric_bars,
+    plot_pr_curve,
+    plot_reliability_diagram,
+    plot_score_histograms,
+    save_figure,
+)
+
+
+@pytest.fixture(autouse=True)
+def _close_figures() -> None:
+    yield
+    plt.close("all")
+
+
+@dataclass(frozen=True, slots=True)
+class _StubCI:
+    """Duck-typed CI for plot_lift_ci tests."""
+
+    point_estimate: float
+    ci_low: float
+    ci_high: float
+
+
+@pytest.fixture
+def informative() -> tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(42)
+    y = rng.binomial(1, 0.3, size=200).astype(int)
+    s = np.clip(y + rng.normal(0, 0.3, size=200), 0, 1)
+    return y, s
+
+
+# ---------------------------------------------------------------------------
+# metrics: validation error paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_pr_auc_rejects_shape_mismatch() -> None:
+    with pytest.raises(ValueError, match="shape"):
+        pr_auc(np.array([0, 1, 0]), np.array([0.1, 0.9]))
+
+
+@pytest.mark.unit
+def test_pr_auc_rejects_empty_input() -> None:
+    with pytest.raises(ValueError):
+        pr_auc(np.array([], dtype=int), np.array([], dtype=float))
+
+
+@pytest.mark.unit
+def test_pr_auc_rejects_non_binary_labels() -> None:
+    with pytest.raises(ValueError, match="binary"):
+        pr_auc(np.array([0, 1, 2]), np.array([0.1, 0.5, 0.9]))
+
+
+@pytest.mark.unit
+def test_select_threshold_rejects_unknown_criterion() -> None:
+    y = np.array([0, 0, 1, 1])
+    s = np.array([0.1, 0.2, 0.7, 0.9])
+    with pytest.raises(ValueError, match="unknown"):
+        select_threshold(y, s, criterion="bogus")  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_metrics_at_threshold_rejects_shape_mismatch() -> None:
+    with pytest.raises(ValueError):
+        metrics_at_threshold(np.array([0, 1]), np.array([0.5]), 0.5)
+
+
+@pytest.mark.unit
+def test_single_class_threshold_metrics_all_negative() -> None:
+    y = np.zeros(20, dtype=int)
+    s = np.linspace(0, 1, 20)
+    out = single_class_threshold_metrics(y, s, threshold=0.5)
+    assert out["slice_class"] == "all_negative"
+    assert "fpr@threshold" in out
+
+
+@pytest.mark.unit
+def test_single_class_threshold_metrics_rejects_mixed_class() -> None:
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8])
+    with pytest.raises(ValueError, match="single-class"):
+        single_class_threshold_metrics(y, s, threshold=0.5)
+
+
+@pytest.mark.unit
+def test_stratified_recall_rejects_shape_mismatch() -> None:
+    y = np.array([0, 1])
+    s = np.array([0.5, 0.5])
+    strata = np.array(["A"])
+    with pytest.raises(ValueError, match="strata"):
+        stratified_recall(y, s, threshold=0.5, strata=strata)
+
+
+@pytest.mark.unit
+def test_stratified_recall_handles_none_and_nan_strata() -> None:
+    y = np.array([1, 1, 0, 0])
+    s = np.array([0.9, 0.1, 0.1, 0.9])
+    strata = np.array([None, np.nan, "B", "B"], dtype=object)
+    out = stratified_recall(y, s, threshold=0.5, strata=strata)
+    assert "unlabeled" in out
+
+
+@pytest.mark.unit
+def test_quantile_stratified_pr_auc_rejects_shape_mismatch() -> None:
+    y = np.array([0, 1])
+    s = np.array([0.1, 0.9])
+    bad_strat = np.array([1.0])
+    with pytest.raises(ValueError, match="stratifier"):
+        quantile_stratified_pr_auc(y, s, bad_strat)
+
+
+@pytest.mark.unit
+def test_quantile_stratified_pr_auc_rejects_bad_quantiles() -> None:
+    y = np.zeros(20, dtype=int)
+    s = np.linspace(0, 1, 20)
+    strat = np.linspace(0, 1, 20)
+    with pytest.raises(ValueError, match="q_low"):
+        quantile_stratified_pr_auc(y, s, strat, q_low=0.9, q_high=0.1)
+
+
+@pytest.mark.unit
+def test_quantile_stratified_pr_auc_too_imbalanced_raises() -> None:
+    rng = np.random.default_rng(0)
+    y = rng.binomial(1, 0.01, size=100).astype(int)
+    s = rng.uniform(0, 1, 100)
+    strat = rng.uniform(0, 1, 100)
+    if y.sum() < 10:
+        with pytest.raises(ValueError, match="imbalanced"):
+            quantile_stratified_pr_auc(y, s, strat)
+
+
+@pytest.mark.unit
+def test_expected_calibration_error_rejects_few_bins() -> None:
+    y = np.array([0, 1])
+    s = np.array([0.5, 0.5])
+    with pytest.raises(ValueError, match="n_bins"):
+        expected_calibration_error(y, s, n_bins=1)
+
+
+@pytest.mark.unit
+def test_expected_calibration_error_equal_mass_rejects_n_lt_bins() -> None:
+    y = np.zeros(5, dtype=int)
+    s = np.linspace(0, 1, 5)
+    with pytest.raises(ValueError, match="quantile bins"):
+        expected_calibration_error_equal_mass(y, s, n_bins=10)
+
+
+@pytest.mark.unit
+def test_precision_at_prior_rejects_invalid_prior() -> None:
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8])
+    with pytest.raises(ValueError, match="assumed_prior"):
+        precision_at_prior(y, s, threshold=0.5, assumed_prior=1.5)
+
+
+@pytest.mark.unit
+def test_precision_at_prior_rejects_single_class() -> None:
+    y = np.zeros(10, dtype=int)
+    s = np.linspace(0, 1, 10)
+    with pytest.raises(ValueError, match="both classes"):
+        precision_at_prior(y, s, threshold=0.5, assumed_prior=0.01)
+
+
+# ---------------------------------------------------------------------------
+# bootstrap: validation paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_bootstrap_ci_rejects_shape_mismatch() -> None:
+    with pytest.raises(ValueError, match="shape"):
+        bootstrap_ci(np.zeros(20, dtype=int), np.zeros(10), pr_auc)
+
+
+@pytest.mark.unit
+def test_bootstrap_ci_rejects_too_small() -> None:
+    with pytest.raises(ValueError, match="too small"):
+        bootstrap_ci(np.array([0, 1, 0]), np.array([0.1, 0.9, 0.2]), pr_auc)
+
+
+@pytest.mark.unit
+def test_bootstrap_ci_rejects_invalid_confidence() -> None:
+    y = np.array([0, 1] * 10)
+    s = np.linspace(0, 1, 20)
+    with pytest.raises(ValueError, match="confidence"):
+        bootstrap_ci(y, s, pr_auc, confidence=1.5)
+
+
+@pytest.mark.unit
+def test_paired_bootstrap_diff_rejects_shape_mismatch() -> None:
+    with pytest.raises(ValueError, match="shape"):
+        paired_bootstrap_diff(
+            np.zeros(20, dtype=int),
+            np.zeros(10),
+            np.zeros(20),
+            pr_auc,
+        )
+
+
+@pytest.mark.unit
+def test_paired_bootstrap_diff_rejects_too_small() -> None:
+    with pytest.raises(ValueError, match="too small"):
+        paired_bootstrap_diff(
+            np.array([0, 1, 0]),
+            np.array([0.1, 0.5, 0.2]),
+            np.array([0.2, 0.6, 0.3]),
+            pr_auc,
+        )
+
+
+@pytest.mark.unit
+def test_paired_bootstrap_ece_diff_rejects_shape_mismatch() -> None:
+    with pytest.raises(ValueError, match="shape"):
+        paired_bootstrap_ece_diff(
+            np.zeros(20, dtype=int),
+            np.zeros(10),
+            np.zeros(20),
+            ece_fn=expected_calibration_error,
+        )
+
+
+@pytest.mark.unit
+def test_paired_bootstrap_ece_diff_rejects_too_small() -> None:
+    with pytest.raises(ValueError, match="too small"):
+        paired_bootstrap_ece_diff(
+            np.array([0, 1]),
+            np.array([0.5, 0.5]),
+            np.array([0.5, 0.5]),
+            ece_fn=expected_calibration_error,
+        )
+
+
+@pytest.mark.unit
+def test_paired_bootstrap_op_point_diff_rejects_shape_mismatch(
+    informative: tuple[np.ndarray, np.ndarray],
+) -> None:
+    y, s = informative
+    val_y = y[:100]
+    val_a = s[:100]
+    with pytest.raises(ValueError, match="val shape mismatch"):
+        paired_bootstrap_op_point_diff(
+            val_y=val_y,
+            val_score_a=val_a,
+            val_score_b=val_a[:50],
+            test_y=y[100:],
+            test_score_a=s[100:],
+            test_score_b=s[100:],
+            threshold_fn=lambda yt, ys: 0.5,
+            metric_fn=lambda yt, ys, t: 0.0,
+        )
+
+
+@pytest.mark.unit
+def test_mde_from_ci_rejects_zero_width() -> None:
+    fake = PairedBootstrapCI(
+        delta=0.0,
+        ci_low=0.05,
+        ci_high=0.05,
+        overlaps_zero=False,
+        confidence=0.95,
+        n_resamples=100,
+    )
+    with pytest.raises(RuntimeError, match="non-positive"):
+        mde_from_ci(fake)
+
+
+@pytest.mark.unit
+def test_paired_mde_returns_estimate(
+    informative: tuple[np.ndarray, np.ndarray],
+) -> None:
+    y, s = informative
+    s_b = s + 0.05 * y.astype(float)
+    est = paired_mde(y, s, s_b, pr_auc, n_resamples=50, seed=0)
+    assert est.mde >= 0
+    assert est.n == len(y)
+
+
+@pytest.mark.unit
+def test_bootstrap_ci_to_dict_schema() -> None:
+    ci = BootstrapCI(0.5, 0.4, 0.6, 0.95, 100, "BCa")
+    d = ci.to_dict()
+    assert set(d.keys()) == {"mean", "ci_95", "confidence", "n_resamples", "method"}
+
+
+@pytest.mark.unit
+def test_paired_bootstrap_ci_to_dict_schema() -> None:
+    pci = PairedBootstrapCI(0.05, 0.02, 0.08, False, 0.95, 100)
+    d = pci.to_dict()
+    assert set(d.keys()) == {"delta", "ci_95", "overlaps_zero", "confidence", "n_resamples"}
+
+
+# ---------------------------------------------------------------------------
+# calibration: validation paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_bayes_optimal_threshold_rejects_invalid_inputs() -> None:
+    with pytest.raises(ValueError, match="prior"):
+        bayes_optimal_threshold(1.5, c_fp=1.0, c_fn=1.0)
+    with pytest.raises(ValueError, match="c_fp"):
+        bayes_optimal_threshold(0.5, c_fp=0.0, c_fn=1.0)
+    with pytest.raises(ValueError, match="c_fn"):
+        bayes_optimal_threshold(0.5, c_fp=1.0, c_fn=-1.0)
+
+
+@pytest.mark.unit
+def test_reliability_curve_handles_single_class() -> None:
+    y = np.zeros(20, dtype=int)
+    s = np.linspace(0, 1, 20)
+    out = reliability_curve(y, s, n_bins=5)
+    assert "skipped" in out
+
+
+@pytest.mark.unit
+def test_reliability_curve_validates_inputs() -> None:
+    with pytest.raises(ValueError, match="shape"):
+        reliability_curve(np.array([0, 1]), np.array([0.5]))
+    with pytest.raises(ValueError, match="empty"):
+        reliability_curve(np.array([], dtype=int), np.array([], dtype=float))
+    with pytest.raises(ValueError, match="n_bins"):
+        reliability_curve(np.array([0, 1]), np.array([0.4, 0.6]), n_bins=1)
+    with pytest.raises(ValueError, match="strategy"):
+        reliability_curve(np.array([0, 1]), np.array([0.4, 0.6]), strategy="bogus")  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_fit_isotonic_validates_inputs() -> None:
+    with pytest.raises(ValueError, match="shape"):
+        fit_isotonic_calibrator(np.array([0, 1]), np.array([0.5]))
+    with pytest.raises(ValueError, match="empty"):
+        fit_isotonic_calibrator(np.array([], dtype=int), np.array([], dtype=float))
+    with pytest.raises(ValueError, match="NaN"):
+        fit_isotonic_calibrator(np.array([0, 1]), np.array([np.nan, 0.5]))
+    with pytest.raises(ValueError, match="both classes"):
+        fit_isotonic_calibrator(np.zeros(10, dtype=int), np.linspace(0, 1, 10))
+
+
+@pytest.mark.unit
+def test_fit_isotonic_apply_rejects_nan_input() -> None:
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=50)
+    s = (y + rng.normal(0, 0.3, 50)).clip(0, 1)
+    g = fit_isotonic_calibrator(y, s)
+    with pytest.raises(ValueError, match="NaN"):
+        g(np.array([np.nan, 0.5]))
+
+
+@pytest.mark.unit
+def test_fit_platt_apply_rejects_nan_input() -> None:
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=50)
+    s = y + rng.normal(0, 0.3, 50)
+    g = fit_platt_calibrator(y, s)
+    with pytest.raises(ValueError, match="NaN"):
+        g(np.array([np.nan, 0.5]))
+
+
+@pytest.mark.unit
+def test_fit_temperature_validates_logits_shape() -> None:
+    with pytest.raises(ValueError, match="must be"):
+        fit_temperature(np.zeros((10,)), np.zeros(10, dtype=int))
+
+
+@pytest.mark.unit
+def test_fit_temperature_validates_length_match() -> None:
+    with pytest.raises(ValueError, match="length mismatch"):
+        fit_temperature(np.zeros((10, 2)), np.zeros(5, dtype=int))
+
+
+@pytest.mark.unit
+def test_fit_temperature_validates_binary_labels() -> None:
+    with pytest.raises(ValueError, match="binary"):
+        fit_temperature(np.zeros((10, 2)), np.array([0, 1, 2] + [0] * 7))
+
+
+@pytest.mark.unit
+def test_fit_temperature_oracle_apply_rejects_nan() -> None:
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=50)
+    s = (y + rng.normal(0, 0.3, 50)).clip(0.01, 0.99)
+    _, apply = fit_temperature_oracle(y, s)
+    with pytest.raises(ValueError, match="NaN"):
+        apply(np.array([np.nan, 0.5]))
+
+
+# ---------------------------------------------------------------------------
+# plotting: validation + branch coverage
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.smoke
+def test_save_figure_rejects_non_positive_dpi(tmp_path: Path) -> None:
+    fig, _ = plt.subplots()
+    with pytest.raises(ValueError, match="dpi"):
+        save_figure(fig, tmp_path / "x.png", dpi=0)
+
+
+@pytest.mark.smoke
+def test_save_figure_skip_env_var(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EVAL_TOOLKIT_SKIP_SAVEFIG", "1")
+    fig, _ = plt.subplots()
+    target = tmp_path / "skipped.png"
+    out = save_figure(fig, target)
+    assert out == target.resolve()
+    assert not target.exists()
+
+
+@pytest.mark.smoke
+def test_plot_pr_curve_with_baseline_curve_and_threshold() -> None:
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=100).astype(np.int64)
+    s = (y + rng.normal(0, 0.3, 100)).clip(0, 1)
+    bl = (np.linspace(0, 1, 50), np.linspace(0.5, 0.5, 50))
+    fig = plot_pr_curve(
+        y, s, threshold=0.5, prevalence=0.3, baseline_curve=bl, baseline_label="rand"
+    )
+    assert fig.axes
+
+
+@pytest.mark.smoke
+def test_plot_pr_curve_rejects_invalid_threshold() -> None:
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8])
+    with pytest.raises(ValueError, match="threshold"):
+        plot_pr_curve(y, s, threshold=1.5)
+
+
+@pytest.mark.smoke
+def test_plot_pr_curve_rejects_invalid_prevalence() -> None:
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8])
+    with pytest.raises(ValueError, match="prevalence"):
+        plot_pr_curve(y, s, prevalence=1.5)
+
+
+@pytest.mark.smoke
+def test_plot_pr_curve_rejects_bad_baseline_curve() -> None:
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8])
+    with pytest.raises(ValueError, match="baseline_curve"):
+        plot_pr_curve(y, s, baseline_curve=(np.array([0.1]),))  # type: ignore[arg-type]
+
+
+@pytest.mark.smoke
+def test_plot_pr_curve_baseline_shape_mismatch_raises() -> None:
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8])
+    bad = (np.array([0.0, 1.0]), np.array([0.5]))
+    with pytest.raises(ValueError, match="same shape"):
+        plot_pr_curve(y, s, baseline_curve=bad)
+
+
+@pytest.mark.smoke
+def test_plot_reliability_rejects_single_class() -> None:
+    y = np.zeros(20, dtype=int)
+    s = np.linspace(0, 1, 20)
+    with pytest.raises(ValueError, match="single class"):
+        plot_reliability_diagram(y, s)
+
+
+@pytest.mark.smoke
+def test_plot_confusion_matrix_grid_validates() -> None:
+    with pytest.raises(ValueError):
+        plot_confusion_matrix_grid({})
+
+
+@pytest.mark.smoke
+def test_plot_metric_bars_rejects_empty() -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        plot_metric_bars({})
+
+
+@pytest.mark.smoke
+def test_plot_score_histograms_rejects_empty() -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        plot_score_histograms({})
+
+
+@pytest.mark.smoke
+def test_plot_score_histograms_validates_array_shape() -> None:
+    with pytest.raises(ValueError, match="1D"):
+        plot_score_histograms({"x": np.zeros((3, 3))})
+
+
+@pytest.mark.smoke
+def test_plot_score_histograms_rejects_empty_array() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        plot_score_histograms({"x": np.array([], dtype=float)})
+
+
+@pytest.mark.smoke
+def test_plot_score_histograms_rejects_nonfinite() -> None:
+    with pytest.raises(ValueError, match="NaN"):
+        plot_score_histograms({"x": np.array([0.1, np.nan, 0.5])})
+
+
+@pytest.mark.smoke
+def test_plot_lift_ci_handles_empty_dict() -> None:
+    with pytest.raises(ValueError):
+        plot_lift_ci({})
+
+
+@pytest.mark.smoke
+def test_plot_lift_ci_renders_zero_line() -> None:
+    cis = {
+        "A": _StubCI(0.05, 0.02, 0.08),
+        "B": _StubCI(-0.01, -0.05, 0.03),
+    }
+    fig = plot_lift_ci(cis)
+    assert fig.axes
+
+
+# ---------------------------------------------------------------------------
+# harness: edge cases + Scorer protocol exercise
+# ---------------------------------------------------------------------------
+
+
+class _ConstantScorer:
+    """Scorer Protocol implementation returning a constant score."""
+
+    def __init__(self, value: float = 0.5) -> None:
+        self._value = value
+
+    def predict_proba(self, X: list[str]) -> np.ndarray:
+        return np.full(len(X), self._value, dtype=float)
+
+
+@pytest.mark.unit
+def test_scorer_protocol_accepts_duck_typed() -> None:
+    scorer: Scorer = _ConstantScorer(0.7)
+    assert isinstance(scorer.predict_proba(["a", "b", "c"]), np.ndarray)
+
+
+@pytest.mark.unit
+def test_eval_slice_strata_returns_none_when_unset() -> None:
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame({"text": ["a", "b"], "label": [0, 1]})
+    sl = EvalSlice(name="t", df=df)
+    assert sl.strata is None
+
+
+@pytest.mark.unit
+def test_eval_slice_strata_returns_array() -> None:
+    pd = pytest.importorskip("pandas")
+    df = pd.DataFrame({"text": ["a", "b"], "label": [0, 1], "stratum": ["x", "y"]})
+    sl = EvalSlice(name="t", df=df, strata_col="stratum")
+    arr = sl.strata
+    assert arr is not None and arr.shape == (2,)
+
+
+# ---------------------------------------------------------------------------
+# seeds: exercise the public branch; torch branch optional
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_set_global_seeds_makes_numpy_deterministic() -> None:
+    from eval_toolkit.seeds import set_global_seeds
+
+    set_global_seeds(42)
+    a = np.random.rand(10)
+    set_global_seeds(42)
+    b = np.random.rand(10)
+    np.testing.assert_array_equal(a, b)
+
+
+@pytest.mark.unit
+def test_set_global_seeds_rejects_invalid() -> None:
+    from eval_toolkit.seeds import set_global_seeds
+
+    with pytest.raises(TypeError, match="int"):
+        set_global_seeds("42")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="non-negative"):
+        set_global_seeds(-1)
