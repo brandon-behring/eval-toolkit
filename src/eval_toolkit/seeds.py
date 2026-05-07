@@ -51,7 +51,7 @@ def set_global_seeds(seed: int) -> None:
     np.random.seed(seed)
 
     try:
-        import torch  # noqa: PLC0415
+        import torch  # type: ignore[import-not-found]  # noqa: PLC0415
     except ImportError:
         return
 

@@ -146,7 +146,7 @@ def test_fit_temperature_oracle_runs(
 
 
 @pytest.mark.unit
-def test_fit_temperature_recovers_known_T() -> None:
+def test_fit_temperature_recovers_known_temperature() -> None:
     """When labels are sampled at T_true=3, fit_temperature should recover ~3."""
     rng = np.random.default_rng(42)
     n = 2000

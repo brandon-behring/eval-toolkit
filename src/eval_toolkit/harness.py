@@ -120,7 +120,8 @@ class EvalSlice:
         """Stratifier column as np.ndarray, or None if unset."""
         if self.strata_col is None:
             return None
-        return self.df[self.strata_col].to_numpy()
+        out: np.ndarray = self.df[self.strata_col].to_numpy()
+        return out
 
 
 @dataclass(slots=True)
@@ -195,7 +196,7 @@ def evaluate_scorer_on_slice(
     y_score = scorer.predict_proba(slice_.features)
     y_true = slice_.y_true
     metrics = headline_metrics(y_true, y_score, strata=slice_.strata)
-    is_single_class = len(set(int(v) for v in y_true)) == 1
+    is_single_class = len({int(v) for v in y_true}) == 1
     metrics["is_single_class"] = is_single_class
 
     if is_single_class:
@@ -302,7 +303,7 @@ def evaluate(
             _logger.info("    %s: PR-AUC=%s (%.1fs)", sname, pr_display, elapsed)
 
         diffs: dict[str, dict[str, object]] = {}
-        is_single_class = len(set(int(v) for v in slice_.y_true)) == 1
+        is_single_class = len({int(v) for v in slice_.y_true}) == 1
         if paired_diffs:
             for a, b in paired_diffs:
                 if a not in scorers or b not in scorers:

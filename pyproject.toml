@@ -111,7 +111,7 @@ warn_no_return = true
 strict_equality = true
 
 [[tool.mypy.overrides]]
-module = ["scipy.*", "sklearn.*", "matplotlib.*", "pandas.*", "yaml.*", "hypothesis.*"]
+module = ["scipy.*", "sklearn.*", "matplotlib.*", "pandas.*", "yaml.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

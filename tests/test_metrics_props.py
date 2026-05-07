@@ -73,7 +73,6 @@ def test_auroc_in_unit_interval(y: np.ndarray, s: np.ndarray) -> None:
 @settings(deadline=None, max_examples=30, suppress_health_check=[HealthCheck.filter_too_much])
 def test_auprc_bounded_by_prevalence_and_one(y: np.ndarray, s: np.ndarray) -> None:
     """prevalence ≤ pr_auc(y, s) ≤ 1."""
-    prevalence = float(y.mean())
     score = pr_auc(y, s)
     # Tolerance for finite-sample variance in PR-AUC of random-vs-prevalence
     assert score <= 1.0 + 1e-9

@@ -542,7 +542,7 @@ def plot_metric_bars(
     title: str | None = None,
     figsize: tuple[float, float] | None = None,
     label_formatter: Callable[[str], str] | None = None,
-    sort_key: Callable[[str], object] | None = None,
+    sort_key: Callable[[str], Any] | None = None,
 ) -> Figure:
     """Bar chart for a ``{label: metric}`` mapping.
 
@@ -595,7 +595,7 @@ def plot_score_histograms(
     title: str | None = None,
     figsize: tuple[float, float] | None = None,
     label_formatter: Callable[[str], str] | None = None,
-    sort_key: Callable[[str], object] | None = None,
+    sort_key: Callable[[str], Any] | None = None,
 ) -> Figure:
     """Overlaid score-distribution histograms, one per slice.
 
