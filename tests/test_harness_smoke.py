@@ -1,0 +1,156 @@
+"""Smoke tests for the harness — pure/IO split, slice-aware skip, EvalSlice column flexibility."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from eval_toolkit.harness import (
+    EvalSlice,
+    RunResult,
+    Scorer,
+    evaluate,
+    evaluate_scorer_on_slice,
+    write_run_result,
+)
+
+
+class _StubScorer:
+    def __init__(self, scores: np.ndarray) -> None:
+        self._scores = scores
+
+    def predict_proba(self, X: object) -> np.ndarray:
+        return self._scores
+
+
+class _SliceAwareStub:
+    def __init__(self, scores: np.ndarray, allow: set[str]) -> None:
+        self._scores = scores
+        self._allow = allow
+
+    def predict_proba(self, X: object) -> np.ndarray:
+        return self._scores
+
+    def should_score_slice(self, slice_name: str) -> bool:
+        return slice_name in self._allow
+
+
+@pytest.fixture
+def slice_with_data() -> EvalSlice:
+    rng = np.random.default_rng(42)
+    n = 100
+    y = rng.integers(0, 2, size=n)
+    df = pd.DataFrame(
+        {
+            "text": [f"row{i}" for i in range(n)],
+            "label": y,
+            "family": rng.choice(["A", "B"], size=n),
+        }
+    )
+    return EvalSlice(name="test", df=df, strata_col="family")
+
+
+@pytest.mark.smoke
+def test_evalslice_validates_columns() -> None:
+    df = pd.DataFrame({"x": [1, 2], "label": [0, 1]})
+    with pytest.raises(KeyError, match="text"):
+        EvalSlice(name="bad", df=df)
+
+
+@pytest.mark.smoke
+def test_evalslice_custom_columns() -> None:
+    """feature_col / label_col / strata_col are configurable."""
+    df = pd.DataFrame({"input": ["a", "b", "c"], "y": [0, 1, 0], "group": ["x", "y", "x"]})
+    s = EvalSlice(name="custom", df=df, feature_col="input", label_col="y", strata_col="group")
+    assert s.features == ["a", "b", "c"]
+    assert list(s.y_true) == [0, 1, 0]
+
+
+@pytest.mark.smoke
+def test_evaluate_pure_no_filesystem(slice_with_data: EvalSlice, tmp_path: Path) -> None:
+    """evaluate(...) does not write any files."""
+    rng = np.random.default_rng(42)
+    sc = _StubScorer(rng.uniform(0, 1, size=len(slice_with_data.df)))
+    result = evaluate({"stub": sc}, [slice_with_data], run_id="pure-test", n_resamples=50)
+    assert isinstance(result, RunResult)
+    assert result.run_id == "pure-test"
+    assert result.git_sha is None
+    # Nothing should have been written into tmp_path
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.smoke
+def test_evaluate_idempotent_for_same_seed(slice_with_data: EvalSlice) -> None:
+    """Same inputs → identical RunResult JSON."""
+    rng = np.random.default_rng(42)
+    s = rng.uniform(0, 1, size=len(slice_with_data.df))
+    sc = _StubScorer(s)
+    r1 = evaluate({"stub": sc}, [slice_with_data], run_id="x", n_resamples=50, seed=42)
+    r2 = evaluate({"stub": sc}, [slice_with_data], run_id="x", n_resamples=50, seed=42)
+    assert json.dumps(r1.to_dict(), default=str) == json.dumps(r2.to_dict(), default=str)
+
+
+@pytest.mark.smoke
+def test_evaluate_paired_diffs(slice_with_data: EvalSlice) -> None:
+    """paired_diffs are computed and labeled correctly."""
+    rng = np.random.default_rng(42)
+    s_a = rng.uniform(0, 1, size=len(slice_with_data.df))
+    s_b = s_a + 0.1 * slice_with_data.y_true
+    sc = {"a": _StubScorer(s_a), "b": _StubScorer(s_b)}
+    result = evaluate(sc, [slice_with_data], run_id="x", n_resamples=50, paired_diffs=[("a", "b")])
+    diffs = result.by_slice["test"]["paired_diffs"]
+    assert "b_minus_a" in diffs
+
+
+@pytest.mark.smoke
+def test_slice_aware_scorer_skips() -> None:
+    """SliceAwareScorer with should_score_slice returning False causes skip."""
+    rng = np.random.default_rng(42)
+    df = pd.DataFrame({"text": ["a", "b", "c", "d"], "label": [0, 1, 0, 1]})
+    slice1 = EvalSlice(name="slice_1", df=df)
+    slice2 = EvalSlice(name="slice_2", df=df)
+    sc = _SliceAwareStub(rng.uniform(0, 1, size=4), allow={"slice_1"})
+    result = evaluate({"sa": sc}, [slice1, slice2], run_id="x", n_resamples=20)
+    s1 = result.by_slice["slice_1"]["by_scorer"]["sa"]
+    s2 = result.by_slice["slice_2"]["by_scorer"]["sa"]
+    assert "skipped" not in s1
+    assert "skipped" in s2
+
+
+@pytest.mark.smoke
+def test_write_run_result_creates_two_jsons(
+    slice_with_data: EvalSlice, tmp_path: Path
+) -> None:
+    rng = np.random.default_rng(42)
+    sc = _StubScorer(rng.uniform(0, 1, size=len(slice_with_data.df)))
+    result = evaluate({"stub": sc}, [slice_with_data], run_id="rt", n_resamples=20)
+    run_dir = tmp_path / "run_rt"
+    compact, full = write_run_result(result, run_dir)
+    assert compact.exists()
+    assert full.exists()
+    # Compact should not contain raw scores
+    compact_data = json.loads(compact.read_text())
+    full_data = json.loads(full.read_text())
+    compact_scorer = compact_data["by_slice"]["test"]["by_scorer"]["stub"]
+    full_scorer = full_data["by_slice"]["test"]["by_scorer"]["stub"]
+    assert "scores" not in compact_scorer
+    assert "scores" in full_scorer
+
+
+@pytest.mark.smoke
+def test_evaluate_validates_inputs(slice_with_data: EvalSlice) -> None:
+    with pytest.raises(ValueError, match="scorer"):
+        evaluate({}, [slice_with_data], run_id="x")
+    with pytest.raises(ValueError, match="slice"):
+        evaluate({"a": _StubScorer(np.zeros(1))}, [], run_id="x")
+
+
+@pytest.mark.smoke
+def test_scorer_protocol_runtime_check() -> None:
+    """Any object with predict_proba is accepted by the Protocol."""
+    scorer: Scorer = _StubScorer(np.array([0.1, 0.9]))
+    assert hasattr(scorer, "predict_proba")
