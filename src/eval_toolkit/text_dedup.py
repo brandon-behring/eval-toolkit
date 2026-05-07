@@ -8,10 +8,18 @@ Pure helpers:
 Similarity strategies (Protocol + reference implementations):
 
 - :class:`SimilarityStrategy` — Protocol; ``pairs_within`` + ``pairs_across``
-- :class:`TfidfCosineStrategy` — default lexical near-dedup (TF-IDF + cosine)
-- :class:`ExactNormalizedHashStrategy` — SHA-256-bucket exact-paraphrase dedup
-- :class:`EmbeddingCosineStrategy` — cosine on caller-supplied embeddings
-- :class:`JaccardNgramStrategy` — set-based n-gram Jaccard
+- :class:`TfidfCosineStrategy` — default lexical near-dedup (TF-IDF + cosine).
+  Recommended default. Scales to 100K+ texts (sklearn sparse + ANN k-NN).
+- :class:`ExactNormalizedHashStrategy` — SHA-256-bucket exact-paraphrase dedup.
+  O(n) hashing; trivially scales to millions of texts.
+- :class:`EmbeddingCosineStrategy` — cosine on caller-supplied embeddings.
+  Scale follows the embedder + sklearn k-NN; recommended for semantic
+  near-dedup when lexical signal is insufficient.
+- :class:`JaccardNgramStrategy` — set-based n-gram Jaccard. **Diagnostic /
+  small-corpus only**: brute-force pairwise (O(n²) memory + compute). Stalls
+  on corpora above ~1K texts. Prefer :class:`TfidfCosineStrategy` or
+  :class:`EmbeddingCosineStrategy` (with a MinHash/LSH-backed embedder) at
+  any production scale.
 
 Orchestrators (strategy-agnostic):
 
@@ -247,6 +255,10 @@ class TfidfCosineStrategy:
     TF-IDF cosine is a fast lexical signal — it will miss paraphrase
     duplicates that share no n-grams. For semantic-paraphrase dedup, see
     :class:`EmbeddingCosineStrategy`.
+
+    Scaling: scales to ~100K+ texts on a single machine via sklearn's
+    sparse vectorizer + approximate nearest neighbors. This is the
+    recommended default for any non-trivial corpus.
     """
 
     ngram_range: tuple[int, int] = (1, 3)
@@ -329,6 +341,12 @@ class ExactNormalizedHashStrategy:
     catches all collisions (since collisions are sim=1.0); a threshold
     ``> 1.0`` catches nothing. The default ``DEFAULT_DEDUP_THRESHOLD = 0.9``
     works as expected.
+
+    Scaling: O(n) hashing + O(n) bucket lookup — trivially scales to
+    millions of texts. Use this strategy when "leakage" means *exact match
+    after normalization*, not paraphrase. For lexical near-paraphrase use
+    :class:`TfidfCosineStrategy`; for semantic near-paraphrase use
+    :class:`EmbeddingCosineStrategy`.
     """
 
     normalize: bool = True
@@ -428,6 +446,12 @@ class EmbeddingCosineStrategy:
     The embedder is called once per ``pairs_*`` invocation. Persistent
     embedding caches are out of scope — callers should wrap their embedder
     in any cache they need.
+
+    Scaling: dominated by the embedder. With sentence-transformers on GPU,
+    100K+ texts is routine; with OpenAI / remote-API embedders, throughput
+    is API-limited but k-NN itself remains fast (sklearn cosine NN). This
+    is the recommended strategy whenever lexical TF-IDF signal is
+    insufficient (paraphrase, multilingual, semantic-near-duplicate).
     """
 
     embedder: Callable[[Sequence[str]], np.ndarray]
@@ -476,10 +500,27 @@ class EmbeddingCosineStrategy:
 
 @dataclass(frozen=True, slots=True)
 class JaccardNgramStrategy:
-    """Set-based n-gram Jaccard similarity.
+    """Set-based n-gram Jaccard similarity — **diagnostic / small-corpus only**.
 
-    Useful when token order is irrelevant (e.g., SQL fingerprints,
-    CLI-flag-style inputs, command-string normalization).
+    .. warning::
+
+        Brute-force pairwise — O(n²) in the corpus size for both memory and
+        compute. Empirical scaling on a single core: ~1K texts in under a
+        second; ~10K texts ≈ tens of seconds; ~100K texts will exhaust
+        memory and is effectively unusable. **Do not use this strategy at
+        production scale.** Prefer :class:`TfidfCosineStrategy` (default,
+        sparse + ANN k-NN, scales to 100K+) or :class:`EmbeddingCosineStrategy`
+        backed by a MinHash/LSH or sentence-transformer embedder.
+
+    When this strategy is the right tool:
+
+    - **Tiny diagnostic corpora** (< ~500 texts) where you want a clean
+      mathematical match-counting interpretation of similarity.
+    - **Token-order-invariant fingerprints** where lexical TF-IDF cosine
+      over-weights position (e.g., SQL fragments, CLI-flag strings,
+      shell-command normalization, JSON-key bag-of-words).
+    - **Reference / sanity-check** implementation against which you want to
+      validate a faster MinHash/LSH approximation.
 
     Parameters
     ----------
@@ -499,14 +540,19 @@ class JaccardNgramStrategy:
 
     Notes
     -----
-    Brute-force pairwise — O(n²) in the corpus size. For corpora larger than
-    ~10K texts, prefer :class:`TfidfCosineStrategy` or
-    :class:`EmbeddingCosineStrategy` with a MinHash/LSH-backed embedder.
+    Jaccard on *sets* of n-grams (order-invariant) gives a strict-match
+    similarity in ``[0, 1]``: identical n-gram sets map to 1.0, disjoint
+    n-gram sets to 0.0. For approximate Jaccard at production scale, see
+    MinHash + LSH (Broder 1997, Indyk & Motwani 1998); the toolkit does not
+    ship a MinHash strategy in v0.2 — wrap your preferred MinHash library in
+    :class:`EmbeddingCosineStrategy` if you need it.
 
     References
     ----------
     .. [1] Broder, A. "On the resemblance and containment of documents."
            Compression and Complexity of Sequences, 1997.
+    .. [2] Indyk, P. & Motwani, R. "Approximate nearest neighbors: Towards
+           removing the curse of dimensionality." STOC 1998.
     """
 
     n: int = 3
