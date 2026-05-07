@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-05-07
+
+### Added
+
+Pluggable similarity strategies for `text_dedup`. Different classification
+projects encode different operational senses of "leakage" (lexical,
+semantic, exact-after-normalization, set-based n-gram); the toolkit now
+ships a `SimilarityStrategy` Protocol + four reference implementations so
+users can plug in a project-specific strategy without forking.
+
+- `SimilarityStrategy(Protocol)` — `pairs_within(texts, k)` and
+  `pairs_across(query_texts, reference_texts, k)`. Runtime-checkable
+  (`isinstance(obj, SimilarityStrategy)` works). Mirrors the existing
+  `Scorer` Protocol pattern from `harness.py`.
+- `TfidfCosineStrategy(ngram_range=(1,3), min_df=1, lowercase=True)` —
+  default lexical near-dedup; bit-for-bit equivalent to v0.1.0 inline
+  TF-IDF + cosine path.
+- `ExactNormalizedHashStrategy(normalize=True)` — SHA-256-bucket
+  exact-paraphrase dedup; similarities are exactly `{0.0, 1.0}`. Reuses
+  `sha256_text` + `normalize_text_for_dedup`.
+- `EmbeddingCosineStrategy(embedder)` — cosine on caller-supplied
+  embeddings. Caller owns the embedder (sentence-transformers, OpenAI,
+  local model) so the toolkit stays dep-free.
+- `JaccardNgramStrategy(n=3, analyzer='char'|'word')` — set-based n-gram
+  Jaccard; brute-force pairwise (O(n²)). Useful for token-order-invariant
+  dedup (SQL fingerprints, CLI flags).
+
+### Changed
+
+- `near_dedup` and `cross_dedup` now accept a keyword-only
+  `strategy: SimilarityStrategy | None = None` parameter. When `None`
+  (default), behavior is bit-for-bit equivalent to v0.1.0; existing
+  callers keep working unchanged.
+- `near_dedup` orchestrator dispatches to `strategy.pairs_within(...)`
+  instead of inlining `TfidfVectorizer` + `NearestNeighbors`. Forward-scan
+  greedy-drop logic preserved.
+- `cross_dedup` orchestrator dispatches to `strategy.pairs_across(...)`.
+  `max_sim_per_eval` now from `sims.max(axis=1)` instead of
+  `1 - distances.min(axis=1)` — equivalent for any strategy that returns
+  the k nearest references per query.
+
+### Tests
+
+- 45 unit tests in `tests/test_text_dedup_strategies.py`: cross-strategy
+  contract (Protocol conformance, shape, self-pair, determinism,
+  empty-input edge case), strategy-specific behavior, plug-in contract
+  (custom `_CountingStrategy` proves the user's strategy is dispatched).
+- 24 Hypothesis property tests in `tests/test_text_dedup_props.py`,
+  parameterized over all four strategies: partition invariant,
+  idempotence, threshold monotonicity, `cross_dedup(X, X, t) == []`,
+  `kept_indices` sorted.
+- Existing `tests/test_text_dedup.py` (18 tests) passes unmodified —
+  back-compat verified.
+
+### Quality gates (2026-05-07)
+
+- 290 tests passing (was 221 in v0.1.0; +69).
+- 9 doctests passing on math/algorithmic kernels (was 5; +4 strategy
+  class examples).
+- ruff + black + mypy strict all clean.
+- 89 symbols re-exported from top-level `eval_toolkit` (+5 strategy types
+  vs. v0.1.0's 84).
+
 ## [0.1.0] — 2026-05-07
 
 ### Added
