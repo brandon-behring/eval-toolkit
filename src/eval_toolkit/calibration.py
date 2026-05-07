@@ -1,0 +1,608 @@
+r"""Calibration: reliability curves, Bayes-optimal thresholds, isotonic/Platt/temperature scaling.
+
+Public surface:
+
+- :func:`reliability_curve` — bin-level calibration data
+  (DeGroot & Fienberg 1983 [#degroot]_; Niculescu-Mizil & Caruana 2005 [#nm05]_)
+- :func:`bayes_optimal_threshold` — closed-form cost-sensitive decision boundary
+  (Elkan 2001 [#elkan]_); :class:`CostMatrix` packages prior + costs + abstain cost.
+- :func:`fit_isotonic_calibrator` — Niculescu-Mizil & Caruana 2005 [#nm05]_
+- :func:`fit_platt_calibrator` — Platt 1999 [#platt]_ sigmoid scaling
+- :func:`fit_temperature` — Guo et al. 2017 [#guo]_ — fits T on val *logits* (literature standard)
+- :func:`fit_temperature_oracle` — Guo et al. 2017 [#guo]_ — fits T on *probabilities*; diagnostic
+  upper-bound only (T is fit on the data it then scores).
+
+References
+----------
+.. [#degroot] DeGroot, M. H. & Fienberg, S. E. "The Comparison and Evaluation of Forecasters."
+   *The Statistician* 32 (1/2): 12-22, 1983.
+.. [#elkan] Elkan, C. "The Foundations of Cost-Sensitive Learning." IJCAI 2001.
+.. [#guo] Guo, C., Pleiss, G., Sun, Y. & Weinberger, K. "On Calibration of Modern Neural Networks."
+   ICML 2017. arXiv:1706.04599.
+.. [#nm05] Niculescu-Mizil, A. & Caruana, R. "Predicting Good Probabilities With Supervised
+   Learning." ICML 2005.
+.. [#platt] Platt, J. "Probabilistic Outputs for Support Vector Machines and Comparisons to
+   Regularized Likelihood Methods." *Advances in Large Margin Classifiers*, 1999.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Literal
+
+import numpy as np
+from scipy.optimize import minimize_scalar
+from scipy.special import log_softmax
+from sklearn.calibration import calibration_curve
+from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import LogisticRegression
+
+__all__ = [
+    "DEFAULT_FN_COST",
+    "DEFAULT_FP_COST",
+    "DEFAULT_N_BINS",
+    "DEFAULT_PRIOR",
+    "DEFAULT_STRATEGY",
+    "CostMatrix",
+    "bayes_optimal_threshold",
+    "fit_isotonic_calibrator",
+    "fit_platt_calibrator",
+    "fit_temperature",
+    "fit_temperature_oracle",
+    "reliability_curve",
+]
+
+DEFAULT_N_BINS = 10
+DEFAULT_STRATEGY: Literal["uniform", "quantile"] = "quantile"
+
+# Example cost-matrix defaults (rare-positive deployment surface). These are
+# illustrative scaffolding; a real cost matrix should come from stakeholder
+# elicitation, not library defaults.
+DEFAULT_PRIOR = 0.01
+DEFAULT_FP_COST = 1.0
+DEFAULT_FN_COST = 10.0
+
+
+def reliability_curve(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    n_bins: int = DEFAULT_N_BINS,
+    strategy: Literal["uniform", "quantile"] = DEFAULT_STRATEGY,
+) -> dict[str, object]:
+    """Bin-level calibration data wrapping :func:`sklearn.calibration.calibration_curve`.
+
+    Returns a JSON-friendly dict with bin centers, observed positive rates,
+    per-bin counts, and both equal-width and equal-mass ECE summaries.
+    Single-class slices are skipped with an explicit marker.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Predicted probabilities in [0, 1].
+    n_bins : int, optional
+        Number of bins (default 10).
+    strategy : {"uniform", "quantile"}, optional
+        Equal-width vs equal-mass binning. Default "quantile".
+
+    Returns
+    -------
+    dict
+        Either the calibration record with keys ``prob_true``, ``prob_pred``,
+        ``bin_edges``, ``n_per_bin``, ``ece_equal_mass``, ``ece_equal_width``,
+        ``n_bins``, ``strategy``, ``n``, ``n_positive``,
+        or ``{"skipped": "...", "n", "n_positive"}`` for a single-class slice.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, empty input, ``n_bins <= 1``, or unknown strategy.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(42)
+    >>> y = rng.integers(0, 2, size=200)
+    >>> s = (y + rng.normal(0, 0.5, size=200)).clip(0, 1)
+    >>> result = reliability_curve(y, s, n_bins=5, strategy="uniform")
+    >>> sorted(result.keys())[:5]
+    ['bin_edges', 'ece_equal_mass', 'ece_equal_width', 'n', 'n_bins']
+    """
+    y_true_arr = np.asarray(y_true).astype(int)
+    y_score_arr = np.asarray(y_score).astype(float)
+    if y_true_arr.shape != y_score_arr.shape:
+        raise ValueError(f"shape mismatch: y_true {y_true_arr.shape}, y_score {y_score_arr.shape}")
+    if y_true_arr.size == 0:
+        raise ValueError("y_true is empty")
+    if n_bins <= 1:
+        raise ValueError(f"n_bins must be > 1, got {n_bins}")
+    if strategy not in {"uniform", "quantile"}:
+        raise ValueError(f"strategy must be 'uniform' or 'quantile', got {strategy!r}")
+
+    n = int(y_true_arr.size)
+    n_positive = int(y_true_arr.sum())
+    if n_positive == 0 or n_positive == n:
+        return {
+            "skipped": (
+                "single-class slice; calibration is degenerate (per-bin observed "
+                "rates are constant 0 or 1)."
+            ),
+            "n": n,
+            "n_positive": n_positive,
+        }
+
+    prob_true, prob_pred = calibration_curve(
+        y_true_arr, y_score_arr, n_bins=n_bins, strategy=strategy
+    )
+
+    if strategy == "uniform":
+        bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+    else:
+        bin_edges = np.quantile(y_score_arr, np.linspace(0.0, 1.0, n_bins + 1))
+    n_per_bin, _ = np.histogram(y_score_arr, bins=bin_edges)
+
+    ece_equal_mass = _ece_via_calibration_curve(y_true_arr, y_score_arr, n_bins, "quantile")
+    ece_equal_width = _ece_via_calibration_curve(y_true_arr, y_score_arr, n_bins, "uniform")
+
+    return {
+        "n": n,
+        "n_positive": n_positive,
+        "n_bins": int(n_bins),
+        "strategy": strategy,
+        "prob_true": [float(x) for x in prob_true],
+        "prob_pred": [float(x) for x in prob_pred],
+        "bin_edges": [float(x) for x in bin_edges],
+        "n_per_bin": [int(x) for x in n_per_bin],
+        "ece_equal_mass": float(ece_equal_mass),
+        "ece_equal_width": float(ece_equal_width),
+    }
+
+
+def _ece_via_calibration_curve(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    n_bins: int,
+    strategy: Literal["uniform", "quantile"],
+) -> float:
+    """ECE computed via sklearn's ``calibration_curve`` (handles empty bins).
+
+    Used internally by :func:`reliability_curve`. For metric-only ECE in
+    bootstrap contexts, use ``eval_toolkit.metrics.expected_calibration_error``.
+    """
+    prob_true, prob_pred = calibration_curve(y_true, y_score, n_bins=n_bins, strategy=strategy)
+    if strategy == "uniform":
+        bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+    else:
+        bin_edges = np.quantile(y_score, np.linspace(0.0, 1.0, n_bins + 1))
+    n_per_bin, _ = np.histogram(y_score, bins=bin_edges)
+    non_empty_mask = n_per_bin > 0
+    n_per_bin_nonempty = n_per_bin[non_empty_mask]
+    if len(n_per_bin_nonempty) != len(prob_true):
+        n_per_bin_nonempty = np.full(len(prob_true), len(y_score) / max(len(prob_true), 1))
+    weights = n_per_bin_nonempty / max(int(n_per_bin_nonempty.sum()), 1)
+    return float((weights * np.abs(prob_true - prob_pred)).sum())
+
+
+def bayes_optimal_threshold(π: float, c_fp: float, c_fn: float) -> float:
+    r"""Bayes-optimal threshold per Elkan 2001 [#elkan]_ cost-sensitive derivation.
+
+    For a calibrated probabilistic classifier P(y=1 | x), the cost-minimizing
+    decision rule is "predict 1 iff score ≥ t*" with:
+
+    .. math:: t^* = \frac{c_{FP} \cdot (1 - π)}{c_{FP} \cdot (1 - π) + c_{FN} \cdot π}
+
+    Parameters
+    ----------
+    π : float
+        Assumed deployment prior P(y=1) ∈ [0, 1].
+    c_fp : float
+        Cost of a false positive. Must be > 0.
+    c_fn : float
+        Cost of a false negative. Must be > 0.
+
+    Returns
+    -------
+    float
+        Optimal threshold ∈ [0, 1].
+
+    Raises
+    ------
+    ValueError
+        If π is outside [0, 1] or costs are non-positive.
+
+    Examples
+    --------
+    Symmetric costs at prior=0.5: threshold should equal the prior.
+
+    >>> bayes_optimal_threshold(0.5, c_fp=1.0, c_fn=1.0)
+    0.5
+
+    Rare-positive case with FN 10× more expensive than FP:
+
+    >>> round(bayes_optimal_threshold(0.01, c_fp=1.0, c_fn=10.0), 4)
+    0.9083
+
+    Edge cases:
+
+    >>> bayes_optimal_threshold(0.0, c_fp=1.0, c_fn=1.0)
+    1.0
+    >>> bayes_optimal_threshold(1.0, c_fp=1.0, c_fn=1.0)
+    0.0
+    """
+    if not 0.0 <= π <= 1.0:
+        raise ValueError(f"π (prior) must be in [0, 1], got {π}")
+    if c_fp <= 0:
+        raise ValueError(f"c_fp must be > 0, got {c_fp}")
+    if c_fn <= 0:
+        raise ValueError(f"c_fn must be > 0, got {c_fn}")
+
+    if π == 0.0:
+        return 1.0
+    if π == 1.0:
+        return 0.0
+    numerator = c_fp * (1.0 - π)
+    denominator = numerator + c_fn * π
+    return float(numerator / denominator)
+
+
+@dataclass(frozen=True, slots=True)
+class CostMatrix:
+    r"""Frozen scaffolding for FP/FN/abstain costs at an assumed prior.
+
+    Pairs a deployment prior with FP/FN costs (and optionally an abstain cost
+    for selective classification). The :attr:`bayes_threshold` property
+    composes :func:`bayes_optimal_threshold`.
+
+    Parameters
+    ----------
+    prior : float, optional
+        Assumed deployment prevalence P(y=1). Default 0.01.
+    fp_cost : float, optional
+        Cost of a false positive. Default 1.0.
+    fn_cost : float, optional
+        Cost of a false negative. Default 10.0.
+    abstain_cost : float or None, optional
+        Optional cost of abstaining/escalating. ``None`` means abstention is
+        not allowed in this policy.
+    notes : str, optional
+        Free-form annotation.
+
+    Examples
+    --------
+    >>> cm = CostMatrix(prior=0.5, fp_cost=1.0, fn_cost=1.0)
+    >>> cm.bayes_threshold
+    0.5
+    """
+
+    prior: float = DEFAULT_PRIOR
+    fp_cost: float = DEFAULT_FP_COST
+    fn_cost: float = DEFAULT_FN_COST
+    abstain_cost: float | None = None
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate the cost-matrix triple."""
+        if not 0.0 <= self.prior <= 1.0:
+            raise ValueError(f"prior must be in [0, 1], got {self.prior}")
+        if self.fp_cost <= 0:
+            raise ValueError(f"fp_cost must be > 0, got {self.fp_cost}")
+        if self.fn_cost <= 0:
+            raise ValueError(f"fn_cost must be > 0, got {self.fn_cost}")
+        if self.abstain_cost is not None and self.abstain_cost < 0:
+            raise ValueError(f"abstain_cost must be >= 0 if set, got {self.abstain_cost}")
+
+    @property
+    def bayes_threshold(self) -> float:
+        """Compose :func:`bayes_optimal_threshold` using this matrix's fields."""
+        return bayes_optimal_threshold(self.prior, self.fp_cost, self.fn_cost)
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-serializable form with the derived threshold."""
+        return {
+            "prior": self.prior,
+            "fp_cost": self.fp_cost,
+            "fn_cost": self.fn_cost,
+            "abstain_cost": self.abstain_cost,
+            "notes": self.notes,
+            "bayes_threshold": self.bayes_threshold,
+        }
+
+
+_SCORE_CLIP_LO = 1e-7
+_SCORE_CLIP_HI = 1.0 - 1e-7
+
+
+def _validate_calibrator_inputs(
+    y_true: np.ndarray, y_score: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Shared input validation for the three calibrator fitters."""
+    y_true_arr = np.asarray(y_true).astype(int)
+    y_score_arr = np.asarray(y_score).astype(float)
+    if y_true_arr.shape != y_score_arr.shape:
+        raise ValueError(f"shape mismatch: y_true {y_true_arr.shape}, y_score {y_score_arr.shape}")
+    if y_true_arr.size == 0:
+        raise ValueError("y_true is empty")
+    if not np.isfinite(y_score_arr).all():
+        raise ValueError("y_score contains NaN or inf")
+    n_pos = int(y_true_arr.sum())
+    if n_pos == 0 or n_pos == y_true_arr.size:
+        raise ValueError(
+            f"y_true must contain both classes; got n={y_true_arr.size}, n_positive={n_pos}"
+        )
+    return y_true_arr, y_score_arr
+
+
+def fit_isotonic_calibrator(
+    y_true: np.ndarray, y_score: np.ndarray
+) -> Callable[[np.ndarray], np.ndarray]:
+    """Niculescu-Mizil & Caruana 2005 [#nm05]_ isotonic regression.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Predicted probabilities in [0, 1].
+
+    Returns
+    -------
+    callable
+        Maps raw scores to monotonically calibrated probabilities,
+        clipped to [0, 1] via ``out_of_bounds="clip"``.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, empty input, non-finite scores, or single-class
+        ``y_true`` (calibration is degenerate).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(42)
+    >>> y = rng.integers(0, 2, size=200)
+    >>> s = (y + rng.normal(0, 0.5, size=200)).clip(0, 1)
+    >>> g = fit_isotonic_calibrator(y, s)
+    >>> calibrated = g(s)
+    >>> bool(calibrated.min() >= 0.0 and calibrated.max() <= 1.0)
+    True
+    """
+    y_true_arr, y_score_arr = _validate_calibrator_inputs(y_true, y_score)
+    iso = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
+    iso.fit(y_score_arr, y_true_arr)
+
+    def apply(scores: np.ndarray) -> np.ndarray:
+        arr = np.asarray(scores, dtype=float).ravel()
+        if not np.isfinite(arr).all():
+            raise ValueError("scores contains NaN or inf")
+        out: np.ndarray = np.asarray(iso.predict(arr), dtype=float)
+        return out
+
+    return apply
+
+
+def fit_platt_calibrator(
+    y_true: np.ndarray, y_score: np.ndarray
+) -> Callable[[np.ndarray], np.ndarray]:
+    r"""Platt 1999 [#platt]_ sigmoid scaling on a fitting set (1-D logistic regression).
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Predicted probabilities or scores.
+
+    Returns
+    -------
+    callable
+        Maps raw scores to calibrated probabilities via the fitted sigmoid
+        :math:`\sigma(a \cdot s + b)`.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, empty input, non-finite scores, or single-class
+        ``y_true``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(42)
+    >>> y = rng.integers(0, 2, size=200)
+    >>> s = (y + rng.normal(0, 0.5, size=200))
+    >>> g = fit_platt_calibrator(y, s)
+    >>> out = g(s)
+    >>> bool(out.min() > 0.0 and out.max() < 1.0)
+    True
+    """
+    y_true_arr, y_score_arr = _validate_calibrator_inputs(y_true, y_score)
+    lr = LogisticRegression(solver="lbfgs", max_iter=1000)
+    lr.fit(y_score_arr.reshape(-1, 1), y_true_arr)
+
+    def apply(scores: np.ndarray) -> np.ndarray:
+        arr = np.asarray(scores, dtype=float).ravel()
+        if not np.isfinite(arr).all():
+            raise ValueError("scores contains NaN or inf")
+        out: np.ndarray = lr.predict_proba(arr.reshape(-1, 1))[:, 1].astype(float)
+        return out
+
+    return apply
+
+
+def fit_temperature(
+    val_logits: np.ndarray,
+    val_labels: np.ndarray,
+    bounds: tuple[float, float] = (0.05, 20.0),
+) -> dict[str, float]:
+    r"""Single-parameter temperature scaling per Guo et al. 2017 [#guo]_.
+
+    Fits a scalar T > 0 on validation logits to minimize negative log-likelihood:
+
+    .. math:: T^* = \arg\min_T - \frac{1}{n}\sum_i \log p_{y_i}(x_i / T)
+
+    where :math:`p_y(x / T) = \mathrm{softmax}(x/T)_y`. T scales the entire
+    logit vector before softmax, so accuracy (argmax) is preserved exactly
+    while the confidence distribution flattens (T > 1) or sharpens (T < 1).
+
+    Parameters
+    ----------
+    val_logits : np.ndarray, shape (n, 2)
+        Validation logits for the binary classifier (column 0 = negative class,
+        column 1 = positive class).
+    val_labels : np.ndarray, shape (n,)
+        Binary labels in {0, 1}.
+    bounds : tuple of float, optional
+        ``(lo, hi)`` bracket for ``T``. Default ``(0.05, 20.0)``.
+
+    Returns
+    -------
+    dict
+        Keys: ``temperature`` (T*), ``nll_pre`` (NLL at T=1), ``nll_post``
+        (NLL at T=T*), ``improvement`` (nll_pre - nll_post; ≥ 0 always).
+
+    Raises
+    ------
+    ValueError
+        If ``val_logits`` shape is not (n, 2), shapes mismatch, or labels are
+        not binary.
+    RuntimeError
+        If the bounded scalar optimizer fails to converge.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(42)
+    >>> # synthesize uncalibrated logits with known T_true = 3.0
+    >>> base = rng.normal(size=(500, 2))
+    >>> labels = (base[:, 1] > base[:, 0]).astype(int)
+    >>> logits = base * 3.0  # makes scores overconfident
+    >>> result = fit_temperature(logits, labels)
+    >>> 0.05 <= result['temperature'] <= 20.0
+    True
+    >>> result['nll_post'] <= result['nll_pre']  # always non-increasing
+    True
+    """
+    if val_logits.ndim != 2 or val_logits.shape[1] != 2:
+        raise ValueError(f"val_logits must be (n, 2), got shape {val_logits.shape}")
+    if val_logits.shape[0] != val_labels.shape[0]:
+        raise ValueError(
+            f"length mismatch: logits {val_logits.shape[0]} vs labels {val_labels.shape[0]}"
+        )
+    if not set(np.unique(val_labels).tolist()).issubset({0, 1}):
+        raise ValueError("val_labels must be binary (0/1)")
+
+    nll_pre = _negative_log_likelihood(1.0, val_logits, val_labels)
+    res = minimize_scalar(
+        _negative_log_likelihood,
+        bounds=bounds,
+        method="bounded",
+        args=(val_logits, val_labels),
+    )
+    if not res.success:
+        raise RuntimeError(f"temperature optimization failed: {res.message}")
+    t_opt = float(res.x)
+    nll_post = _negative_log_likelihood(t_opt, val_logits, val_labels)
+    return {
+        "temperature": t_opt,
+        "nll_pre": nll_pre,
+        "nll_post": nll_post,
+        "improvement": nll_pre - nll_post,
+    }
+
+
+def _negative_log_likelihood(
+    t: float, logits: np.ndarray, labels: np.ndarray
+) -> float:
+    """NLL of softmax(logits / T) against true labels."""
+    if t <= 0:
+        return float("inf")
+    log_probs = log_softmax(logits / t, axis=-1)
+    return float(-log_probs[np.arange(len(labels)), labels].mean())
+
+
+def fit_temperature_oracle(
+    y_true: np.ndarray, y_score: np.ndarray
+) -> tuple[float, Callable[[np.ndarray], np.ndarray]]:
+    r"""Per-slice oracle T-scaling per Guo et al. 2017 [#guo]_.
+
+    DIAGNOSTIC UPPER-BOUND ONLY. Fits T on the same data the resulting
+    callable scores. Use only as an upper-bound on what any single-T
+    recalibration could achieve; never as a deployment policy.
+
+    Internally inverts probabilities to logits via :math:`\log(p / (1 - p))`,
+    fits T to minimize NLL on the T-scaled logits, then exposes a callable
+    that applies :math:`\sigma(\mathrm{logit} / T)`.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Predicted probabilities in (0, 1). Scores at the extremes {0, 1} are
+        clipped to [1e-7, 1-1e-7] so the logit inversion is finite.
+
+    Returns
+    -------
+    tuple
+        ``(T_optimal, apply)`` where ``apply`` maps any input probability array
+        through :math:`\sigma(\mathrm{logit}(p) / T_{optimal})`.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, empty input, non-finite scores, or single-class
+        ``y_true``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(42)
+    >>> y = rng.integers(0, 2, size=200)
+    >>> s = (y + rng.normal(0, 0.5, size=200)).clip(0.01, 0.99)
+    >>> T_opt, apply = fit_temperature_oracle(y, s)
+    >>> T_opt > 0
+    True
+    """
+    y_true_arr, y_score_arr = _validate_calibrator_inputs(y_true, y_score)
+
+    def _logits_from_probs(p: np.ndarray) -> np.ndarray:
+        clipped = np.clip(p, _SCORE_CLIP_LO, _SCORE_CLIP_HI)
+        out: np.ndarray = np.log(clipped / (1.0 - clipped))
+        return out
+
+    def _sigmoid(z: np.ndarray) -> np.ndarray:
+        out: np.ndarray = 1.0 / (1.0 + np.exp(-z))
+        return out
+
+    logits = _logits_from_probs(y_score_arr)
+
+    def nll_at_t(t: float) -> float:
+        if t <= 0:
+            return float("inf")
+        scaled = logits / t
+        # Stable log-sigmoid via softplus identity.
+        log_p1 = -np.logaddexp(0.0, -scaled)
+        log_p0 = -np.logaddexp(0.0, scaled)
+        return float(-(y_true_arr * log_p1 + (1 - y_true_arr) * log_p0).sum())
+
+    result = minimize_scalar(
+        nll_at_t,
+        bounds=(0.05, 20.0),
+        method="bounded",
+        options={"xatol": 1e-4},
+    )
+    t_optimal = float(result.x)
+
+    def apply(scores: np.ndarray) -> np.ndarray:
+        arr = np.asarray(scores, dtype=float).ravel()
+        if not np.isfinite(arr).all():
+            raise ValueError("scores contains NaN or inf")
+        scaled = _logits_from_probs(arr) / t_optimal
+        out: np.ndarray = _sigmoid(scaled).astype(float)
+        return out
+
+    return t_optimal, apply

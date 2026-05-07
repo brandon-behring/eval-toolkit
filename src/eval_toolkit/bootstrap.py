@@ -1,0 +1,629 @@
+r"""Bootstrap confidence intervals: BCa per-condition, paired-difference, MDE.
+
+- :class:`BootstrapCI` — 95% CI on a single metric on one condition (BCa or percentile)
+- :class:`PairedBootstrapCI` — paired CI on metric(B) − metric(A) using shared resample indices
+- :func:`paired_bootstrap_op_point_diff` — two-level bootstrap that re-fits operating-point
+  thresholds within each resample (correctly accounts for threshold-selection variance)
+- :func:`paired_bootstrap_ece_diff` — paired CI on ECE deltas; metric-agnostic via dependency
+  injection (caller supplies an ``ece_fn`` callable)
+- :class:`MDEEstimate` and :func:`paired_mde` — minimum detectable Δ at requested (α, power)
+
+The math kernels depend only on numpy + scipy.stats; no other module in this toolkit imports
+into bootstrap.
+
+References
+----------
+.. [1] Efron, B. & Tibshirani, R. "An Introduction to the Bootstrap." Chapman & Hall, 1993.
+.. [2] DiCiccio, T. & Efron, B. "Bootstrap Confidence Intervals." Statistical Science, 1996.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Literal
+
+import numpy as np
+from scipy.stats import bootstrap as _scipy_bootstrap
+from scipy.stats import norm as _scipy_norm
+
+__all__ = [
+    "DEFAULT_CONFIDENCE",
+    "DEFAULT_METHOD",
+    "DEFAULT_N_RESAMPLES",
+    "DEFAULT_SEED",
+    "BootstrapCI",
+    "MDEEstimate",
+    "MetricFn",
+    "PairedBootstrapCI",
+    "ThresholdFn",
+    "ThresholdedMetricFn",
+    "bootstrap_ci",
+    "mde_from_ci",
+    "paired_bootstrap_diff",
+    "paired_bootstrap_ece_diff",
+    "paired_bootstrap_op_point_diff",
+    "paired_mde",
+]
+
+DEFAULT_N_RESAMPLES = 1000
+DEFAULT_CONFIDENCE = 0.95
+DEFAULT_METHOD: Literal["BCa", "percentile"] = "BCa"
+DEFAULT_SEED = 42
+
+MetricFn = Callable[[np.ndarray, np.ndarray], float]
+ThresholdFn = Callable[[np.ndarray, np.ndarray], float]
+ThresholdedMetricFn = Callable[[np.ndarray, np.ndarray, float], float]
+
+
+@dataclass(frozen=True, slots=True)
+class BootstrapCI:
+    """95% CI for a metric on a single condition."""
+
+    point_estimate: float
+    ci_low: float
+    ci_high: float
+    confidence: float
+    n_resamples: int
+    method: str
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize to a stable dict schema for JSON output."""
+        return {
+            "mean": self.point_estimate,
+            "ci_95": [self.ci_low, self.ci_high],
+            "confidence": self.confidence,
+            "n_resamples": self.n_resamples,
+            "method": self.method,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PairedBootstrapCI:
+    """95% CI for ``metric(B) − metric(A)`` on shared resample indices.
+
+    The lift Δ is the headline statistic for an anti-overengineering stopping
+    rule: if ``ci_low < 0 < ci_high`` (``overlaps_zero`` is True), the
+    improvement is not statistically significant.
+    """
+
+    delta: float
+    ci_low: float
+    ci_high: float
+    overlaps_zero: bool
+    confidence: float
+    n_resamples: int
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize to a stable dict schema for JSON output."""
+        return {
+            "delta": self.delta,
+            "ci_95": [self.ci_low, self.ci_high],
+            "overlaps_zero": self.overlaps_zero,
+            "confidence": self.confidence,
+            "n_resamples": self.n_resamples,
+        }
+
+
+def bootstrap_ci(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    metric: MetricFn,
+    n_resamples: int = DEFAULT_N_RESAMPLES,
+    confidence: float = DEFAULT_CONFIDENCE,
+    method: Literal["BCa", "percentile"] = DEFAULT_METHOD,
+    seed: int = DEFAULT_SEED,
+) -> BootstrapCI:
+    """Per-condition CI via :func:`scipy.stats.bootstrap`.
+
+    Resamples paired ``(y_true, y_score)`` indices with replacement. Standard
+    BCa unless ``method='percentile'`` is forced (recommended fallback for
+    very small slices where BCa jackknife may misbehave).
+
+    Parameters
+    ----------
+    y_true, y_score : np.ndarray, shape (n,)
+        Labels and scores.
+    metric : callable ``(y_true, y_score) -> float``
+        Any metric. ``pr_auc``, ``roc_auc``, etc.
+    n_resamples : int, optional
+        Default 1000.
+    confidence : float, optional
+        Two-sided confidence level (default 0.95).
+    method : {"BCa", "percentile"}, optional
+        Default "BCa".
+    seed : int, optional
+        RNG seed for reproducibility.
+
+    Returns
+    -------
+    BootstrapCI
+
+    Raises
+    ------
+    ValueError
+        If shapes mismatch, ``n < 10``, or ``confidence ∉ (0, 1)``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from eval_toolkit.metrics import pr_auc
+    >>> rng = np.random.default_rng(42)
+    >>> y = rng.integers(0, 2, size=200)
+    >>> s = y + rng.normal(0, 0.3, size=200)
+    >>> ci = bootstrap_ci(y, s, metric=pr_auc, n_resamples=200, seed=42)
+    >>> ci.ci_low <= ci.point_estimate <= ci.ci_high
+    True
+
+    Notes
+    -----
+    The bias-corrected and accelerated (BCa) interval [1]_ is recommended over
+    plain percentile for asymmetric statistics. For very small samples, BCa
+    jackknife can degenerate; percentile is the safe fallback.
+    """
+    y_true_arr = np.asarray(y_true)
+    y_score_arr = np.asarray(y_score)
+    if y_true_arr.shape != y_score_arr.shape:
+        raise ValueError(f"y_true shape {y_true_arr.shape} != y_score shape {y_score_arr.shape}")
+    n = len(y_true_arr)
+    if n < 10:
+        raise ValueError(f"n={n} too small for bootstrap; need ≥ 10")
+    if not 0 < confidence < 1:
+        raise ValueError(f"confidence must be in (0, 1), got {confidence}")
+
+    point = float(metric(y_true_arr, y_score_arr))
+
+    def _statistic(yt: np.ndarray, ys: np.ndarray) -> float:
+        return float(metric(yt, ys))
+
+    rng = np.random.default_rng(seed)
+    res = _scipy_bootstrap(
+        (y_true_arr, y_score_arr),
+        statistic=_statistic,
+        n_resamples=n_resamples,
+        confidence_level=confidence,
+        method=method,
+        paired=True,
+        random_state=rng,
+    )
+    return BootstrapCI(
+        point_estimate=point,
+        ci_low=float(res.confidence_interval.low),
+        ci_high=float(res.confidence_interval.high),
+        confidence=confidence,
+        n_resamples=n_resamples,
+        method=method,
+    )
+
+
+def paired_bootstrap_diff(
+    y_true: np.ndarray,
+    y_score_a: np.ndarray,
+    y_score_b: np.ndarray,
+    metric: MetricFn,
+    n_resamples: int = DEFAULT_N_RESAMPLES,
+    confidence: float = DEFAULT_CONFIDENCE,
+    seed: int = DEFAULT_SEED,
+) -> PairedBootstrapCI:
+    """Paired-bootstrap CI on ``metric(B) − metric(A)`` using the same resample indices.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels.
+    y_score_a, y_score_b : np.ndarray, shape (n,)
+        Scores from two scorers on the same rows.
+    metric : callable ``(y_true, y_score) -> float``
+    n_resamples, confidence, seed : standard bootstrap params.
+
+    Returns
+    -------
+    PairedBootstrapCI
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from eval_toolkit.metrics import pr_auc
+    >>> rng = np.random.default_rng(42)
+    >>> y = rng.integers(0, 2, size=200)
+    >>> s_a = rng.normal(0, 1, size=200)                 # random scorer
+    >>> s_b = y + rng.normal(0, 0.3, size=200)           # signal scorer
+    >>> diff = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=200, seed=42)
+    >>> diff.delta > 0  # B beats A
+    True
+
+    Notes
+    -----
+    Resampling indices once and computing both metrics on the same resample
+    correlates the two bootstrap distributions, producing a tighter CI on Δ
+    than independent unpaired bootstraps would.
+    """
+    y_true_arr = np.asarray(y_true)
+    a = np.asarray(y_score_a)
+    b = np.asarray(y_score_b)
+    if not (y_true_arr.shape == a.shape == b.shape):
+        raise ValueError(f"shapes mismatch: y_true {y_true_arr.shape}, a {a.shape}, b {b.shape}")
+    n = len(y_true_arr)
+    if n < 10:
+        raise ValueError(f"n={n} too small for paired bootstrap; need ≥ 10")
+
+    delta_point = float(metric(y_true_arr, b)) - float(metric(y_true_arr, a))
+    rng = np.random.default_rng(seed)
+    deltas = np.empty(n_resamples, dtype=np.float64)
+    for r in range(n_resamples):
+        idx = rng.integers(0, n, size=n)
+        deltas[r] = metric(y_true_arr[idx], b[idx]) - metric(y_true_arr[idx], a[idx])
+
+    alpha = (1.0 - confidence) / 2.0
+    ci_low = float(np.quantile(deltas, alpha))
+    ci_high = float(np.quantile(deltas, 1.0 - alpha))
+    return PairedBootstrapCI(
+        delta=delta_point,
+        ci_low=ci_low,
+        ci_high=ci_high,
+        overlaps_zero=ci_low < 0.0 < ci_high,
+        confidence=confidence,
+        n_resamples=n_resamples,
+    )
+
+
+def paired_bootstrap_ece_diff(
+    y_true: np.ndarray,
+    y_score_a: np.ndarray,
+    y_score_b: np.ndarray,
+    *,
+    ece_fn: Callable[[np.ndarray, np.ndarray, int], float],
+    n_resamples: int = DEFAULT_N_RESAMPLES,
+    confidence: float = DEFAULT_CONFIDENCE,
+    seed: int = DEFAULT_SEED,
+    n_bins: int = 10,
+) -> PairedBootstrapCI:
+    r"""Paired-bootstrap CI on ``ECE(B) − ECE(A)`` for two calibrated outputs.
+
+    Uses the same resample indices for both calibrators so the Δ is paired
+    across calibration methods (correlated → tighter CI). Skips degenerate
+    single-class resamples (which have undefined ECE) and raises if the
+    failure rate exceeds 5%.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels.
+    y_score_a, y_score_b : np.ndarray, shape (n,)
+        Calibrated probabilities from method A and method B.
+    ece_fn : callable ``(y_true, y_score, n_bins) -> float``
+        ECE function to use. Bootstrap is metric-agnostic; caller injects the
+        specific ECE variant (equal-width, equal-mass, etc.) so this module
+        does not depend on calibration. Typical use:
+        ``from eval_toolkit.metrics import expected_calibration_error``,
+        then pass ``ece_fn=expected_calibration_error``.
+    n_resamples, confidence, seed : standard bootstrap params.
+    n_bins : int, optional
+        Number of ECE bins (passed through to ``ece_fn``).
+
+    Returns
+    -------
+    PairedBootstrapCI
+        ``Δ = ECE_B − ECE_A`` with paired-percentile CI. Lower delta means
+        method B is *better calibrated* than A.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, ``n < 10``, or > 5% degenerate resamples.
+
+    Notes
+    -----
+    The dependency injection of ``ece_fn`` is intentional: bootstrap math is
+    independent of which ECE variant is being compared, so this module stays
+    metric-agnostic and depends only on numpy + scipy.
+    """
+    y_true_arr = np.asarray(y_true).astype(int)
+    a = np.asarray(y_score_a, dtype=float)
+    b = np.asarray(y_score_b, dtype=float)
+    if not (y_true_arr.shape == a.shape == b.shape):
+        raise ValueError(f"shapes mismatch: y_true {y_true_arr.shape}, a {a.shape}, b {b.shape}")
+    n = int(y_true_arr.size)
+    if n < 10:
+        raise ValueError(f"n={n} too small for paired bootstrap; need >= 10")
+
+    delta_point = float(ece_fn(y_true_arr, b, n_bins)) - float(ece_fn(y_true_arr, a, n_bins))
+    rng = np.random.default_rng(seed)
+    deltas: list[float] = []
+    failures = 0
+    for _ in range(n_resamples):
+        idx = rng.integers(0, n, size=n)
+        y_re = y_true_arr[idx]
+        n_pos = int(y_re.sum())
+        if n_pos == 0 or n_pos == n:
+            failures += 1
+            continue
+        try:
+            ece_a = ece_fn(y_re, a[idx], n_bins)
+            ece_b = ece_fn(y_re, b[idx], n_bins)
+        except (ValueError, ZeroDivisionError):
+            failures += 1
+            continue
+        deltas.append(float(ece_b - ece_a))
+
+    if failures > 0.05 * n_resamples:
+        raise ValueError(
+            f"paired_bootstrap_ece_diff: {failures}/{n_resamples} resamples degenerate; "
+            "input may be too small or too imbalanced"
+        )
+    if not deltas:
+        raise ValueError("paired_bootstrap_ece_diff: no usable resamples")
+
+    deltas_arr = np.asarray(deltas, dtype=float)
+    alpha = (1.0 - confidence) / 2.0
+    ci_low = float(np.quantile(deltas_arr, alpha))
+    ci_high = float(np.quantile(deltas_arr, 1.0 - alpha))
+    return PairedBootstrapCI(
+        delta=delta_point,
+        ci_low=ci_low,
+        ci_high=ci_high,
+        overlaps_zero=ci_low < 0.0 < ci_high,
+        confidence=confidence,
+        n_resamples=len(deltas),
+    )
+
+
+def paired_bootstrap_op_point_diff(
+    val_y: np.ndarray,
+    val_score_a: np.ndarray,
+    val_score_b: np.ndarray,
+    test_y: np.ndarray,
+    test_score_a: np.ndarray,
+    test_score_b: np.ndarray,
+    threshold_fn: ThresholdFn,
+    metric_fn: ThresholdedMetricFn,
+    n_resamples: int = DEFAULT_N_RESAMPLES,
+    confidence: float = DEFAULT_CONFIDENCE,
+    seed: int = DEFAULT_SEED,
+) -> PairedBootstrapCI:
+    r"""Two-level paired bootstrap for operating-point lifts.
+
+    Operating-point metrics (F1@threshold, precision@threshold, recall@
+    threshold) depend on a threshold *chosen on val*. The single-level
+    paired bootstrap re-uses one fixed val-derived threshold across all
+    resamples, which under-counts variance from threshold selection. This
+    helper resamples val + test independently per iteration, refits the
+    threshold on the val resample (via ``threshold_fn``), then evaluates
+    ``metric_fn`` at that threshold on the test resample for both scorers.
+
+    Both scorers share the val resample (so threshold differences stay
+    apples-to-apples); each scorer fits its *own* threshold from that
+    shared resample. Test indices are likewise shared across scorers.
+
+    Parameters
+    ----------
+    val_y, val_score_a, val_score_b : np.ndarray
+        Validation labels and scores for both scorers.
+    test_y, test_score_a, test_score_b : np.ndarray
+        Test labels and scores for both scorers.
+    threshold_fn : callable ``(y_true, y_score) -> threshold``
+        Typically wraps ``select_threshold(..., criterion=...).threshold``.
+    metric_fn : callable ``(y_true, y_score, threshold) -> float``
+        Operating-point metric (e.g., F1, precision) at the given threshold.
+    n_resamples, confidence, seed : standard bootstrap params.
+
+    Returns
+    -------
+    PairedBootstrapCI
+        ``Δ = metric_B(test) − metric_A(test)`` with both val-threshold variance
+        and test-metric variance baked in.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch or insufficient sample size.
+    RuntimeError
+        If > 50% of resamples are degenerate (e.g., single-class val draws).
+    """
+    val_y_arr = np.asarray(val_y)
+    val_a, val_b = np.asarray(val_score_a), np.asarray(val_score_b)
+    test_y_arr = np.asarray(test_y)
+    test_a, test_b = np.asarray(test_score_a), np.asarray(test_score_b)
+    if not (val_y_arr.shape == val_a.shape == val_b.shape):
+        raise ValueError(
+            f"val shape mismatch: y={val_y_arr.shape}, a={val_a.shape}, b={val_b.shape}"
+        )
+    if not (test_y_arr.shape == test_a.shape == test_b.shape):
+        raise ValueError(
+            f"test shape mismatch: y={test_y_arr.shape}, a={test_a.shape}, b={test_b.shape}"
+        )
+    n_val, n_test = len(val_y_arr), len(test_y_arr)
+    if n_val < 10 or n_test < 10:
+        raise ValueError(f"need ≥ 10 rows in val and test; got val={n_val}, test={n_test}")
+
+    thr_a_full = float(threshold_fn(val_y_arr, val_a))
+    thr_b_full = float(threshold_fn(val_y_arr, val_b))
+    delta_point = float(metric_fn(test_y_arr, test_b, thr_b_full)) - float(
+        metric_fn(test_y_arr, test_a, thr_a_full)
+    )
+
+    rng = np.random.default_rng(seed)
+    deltas = np.empty(n_resamples, dtype=np.float64)
+    failures = 0
+    for r in range(n_resamples):
+        val_idx = rng.integers(0, n_val, size=n_val)
+        test_idx = rng.integers(0, n_test, size=n_test)
+        try:
+            thr_a = float(threshold_fn(val_y_arr[val_idx], val_a[val_idx]))
+            thr_b = float(threshold_fn(val_y_arr[val_idx], val_b[val_idx]))
+            m_a = float(metric_fn(test_y_arr[test_idx], test_a[test_idx], thr_a))
+            m_b = float(metric_fn(test_y_arr[test_idx], test_b[test_idx], thr_b))
+            deltas[r] = m_b - m_a
+        except (ValueError, RuntimeError):
+            deltas[r] = np.nan
+            failures += 1
+    valid = deltas[~np.isnan(deltas)]
+    if len(valid) < n_resamples // 2:
+        raise RuntimeError(
+            f"paired_bootstrap_op_point_diff: {failures}/{n_resamples} resamples degenerate; "
+            "refusing to compute CI on < 50% of requested resamples"
+        )
+
+    alpha = (1.0 - confidence) / 2.0
+    ci_low = float(np.quantile(valid, alpha))
+    ci_high = float(np.quantile(valid, 1.0 - alpha))
+    return PairedBootstrapCI(
+        delta=delta_point,
+        ci_low=ci_low,
+        ci_high=ci_high,
+        overlaps_zero=ci_low < 0.0 < ci_high,
+        confidence=confidence,
+        n_resamples=int(len(valid)),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class MDEEstimate:
+    r"""Minimum detectable Δ at the requested (α, 1-β).
+
+    ``mde`` is the smallest true Δ that the paired bootstrap on this
+    ``(y, a, b)`` configuration would detect with probability ≥ ``power`` at
+    significance ``alpha`` (two-sided). Computed analytically from the
+    bootstrap-estimated standard error of Δ:
+
+    .. math::
+
+        \mathrm{MDE} = (z_{\alpha/2} + z_{\beta}) \cdot \sigma_\Delta
+
+    where :math:`\sigma_\Delta = (\mathrm{ci\_high} - \mathrm{ci\_low}) / (2 \cdot 1.96)`.
+    Assumes asymptotic normality of the bootstrap distribution; for small N
+    this is a reasonable but not exact approximation.
+    """
+
+    mde: float
+    sigma_delta: float
+    delta_observed: float
+    alpha: float
+    power: float
+    n_resamples: int
+    n: int
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize the MDE estimate."""
+        return {
+            "mde": self.mde,
+            "sigma_delta": self.sigma_delta,
+            "delta_observed": self.delta_observed,
+            "alpha": self.alpha,
+            "power": self.power,
+            "n_resamples": self.n_resamples,
+            "n": self.n,
+        }
+
+
+def mde_from_ci(
+    paired: PairedBootstrapCI,
+    alpha: float = 0.05,
+    power: float = 0.80,
+) -> MDEEstimate:
+    r"""Derive MDE from an existing ``PairedBootstrapCI`` (no second bootstrap).
+
+    Reuses the bootstrap distribution implicit in the paired CI: the
+    half-width at 95% gives :math:`\sigma_\Delta \approx (\mathrm{ci\_high} - \mathrm{ci\_low}) / (2 \cdot 1.96)`,
+    and the standard two-sided MDE formula gives
+    :math:`\mathrm{MDE} = (z_{\alpha/2} + z_{\beta}) \cdot \sigma_\Delta`.
+
+    Parameters
+    ----------
+    paired : PairedBootstrapCI
+    alpha : float, optional
+        Two-sided significance level (default 0.05).
+    power : float, optional
+        Detection probability at true Δ = MDE (default 0.80).
+
+    Returns
+    -------
+    MDEEstimate
+        ``n`` is set to -1 (unknown without source arrays).
+    """
+    if not 0.0 < alpha < 1.0:
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+    if not 0.0 < power < 1.0:
+        raise ValueError(f"power must be in (0, 1), got {power}")
+    width = paired.ci_high - paired.ci_low
+    if width <= 0:
+        raise RuntimeError(f"non-positive CI width ({width}); paired bootstrap likely degenerate")
+    z_at_paired_conf = _normal_quantile((1.0 + paired.confidence) / 2.0)
+    sigma = width / (2.0 * z_at_paired_conf)
+    z_alpha = _normal_quantile(1.0 - alpha / 2.0)
+    z_power = _normal_quantile(power)
+    mde = float((z_alpha + z_power) * sigma)
+    return MDEEstimate(
+        mde=mde,
+        sigma_delta=float(sigma),
+        delta_observed=float(paired.delta),
+        alpha=alpha,
+        power=power,
+        n_resamples=int(paired.n_resamples),
+        n=-1,
+    )
+
+
+def paired_mde(
+    y_true: np.ndarray,
+    y_score_a: np.ndarray,
+    y_score_b: np.ndarray,
+    metric: MetricFn,
+    alpha: float = 0.05,
+    power: float = 0.80,
+    n_resamples: int = DEFAULT_N_RESAMPLES,
+    seed: int = DEFAULT_SEED,
+) -> MDEEstimate:
+    r"""Minimum detectable paired Δ at (α, power).
+
+    Quantifies "the headline lift barely clears zero": given the observed
+    paired-bootstrap variance of Δ, the smallest true Δ this test would
+    reject the null on with ``power`` probability is
+
+    .. math::
+
+        \mathrm{MDE} = (z_{\alpha/2} + z_{\beta}) \cdot \sigma_\Delta
+
+    For α=0.05, power=0.80 the multiplier is ≈ 2.80
+    (:math:`z_{0.025} \approx 1.96`, :math:`z_{0.20} \approx 0.842`).
+
+    Parameters
+    ----------
+    y_true, y_score_a, y_score_b : np.ndarray
+        Labels and two scorers' outputs on the same rows.
+    metric : MetricFn
+    alpha : float, optional
+        Two-sided significance (default 0.05).
+    power : float, optional
+        1 − β; probability of detection at true Δ = MDE (default 0.80).
+
+    Returns
+    -------
+    MDEEstimate
+    """
+    paired = paired_bootstrap_diff(
+        y_true,
+        y_score_a,
+        y_score_b,
+        metric,
+        n_resamples=n_resamples,
+        confidence=0.95,
+        seed=seed,
+    )
+    est = mde_from_ci(paired, alpha=alpha, power=power)
+    return MDEEstimate(
+        mde=est.mde,
+        sigma_delta=est.sigma_delta,
+        delta_observed=est.delta_observed,
+        alpha=est.alpha,
+        power=est.power,
+        n_resamples=est.n_resamples,
+        n=int(len(np.asarray(y_true))),
+    )
+
+
+def _normal_quantile(p: float) -> float:
+    """Inverse CDF (PPF) of the standard normal — exact via :func:`scipy.stats.norm.ppf`."""
+    if not 0.0 < p < 1.0:
+        raise ValueError(f"p must be in (0, 1), got {p}")
+    return float(_scipy_norm.ppf(p))
