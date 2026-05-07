@@ -1,0 +1,17 @@
+{
+  "slices": {
+    "test": {
+      "pr_auc": 0.951234,
+      "roc_auc": 0.974567,
+      "ece_equal_width": 0.043214,
+      "ece_equal_mass": 0.037891,
+      "n": 600,
+      "n_positive": 100,
+      "diffs": {
+        "delta": 0.123,
+        "ci_low": 0.050,
+        "ci_high": 0.200
+      }
+    }
+  }
+}
