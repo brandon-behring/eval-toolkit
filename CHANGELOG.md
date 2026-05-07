@@ -49,6 +49,17 @@ PoC. Eleven modules promoted to library-grade status:
   bootstrap, calibration, text_dedup, provenance, paths, seeds, and config.
 - **Doctested Examples** required for math kernels (metrics, bootstrap,
   calibration, text_dedup); enforced via `pytest --doctest-modules`.
-- **Coverage gate**: ≥ 90%.
+
+### Quality gates (2026-05-07)
+
+- **Tests**: 221 passing (122 unit + smoke, 25 property, 13 docs golden,
+  59 coverage-gap, 27 doctests). `pytest --doctest-modules` green.
+- **Coverage**: 90.10% line + branch. Largest remaining gap is the optional
+  torch branch in `seeds.py` (5 stmts unreachable when torch is not in the
+  dev env).
+- **Lint**: `ruff check src tests` and `black --check src tests` clean.
+- **Types**: `mypy src` strict mode clean (PEP 561 `py.typed` marker shipped).
+- **Public API**: 84 symbols re-exported from top-level `eval_toolkit`
+  package; `from eval_toolkit import *` is well-defined.
 
 [0.1.0]: ./
