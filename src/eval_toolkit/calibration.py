@@ -197,7 +197,9 @@ def bayes_optimal_threshold(π: float, c_fp: float, c_fn: float) -> float:
     Parameters
     ----------
     π : float
-        Assumed deployment prior P(y=1) ∈ [0, 1].
+        Deployment positive-class prior P(y=1) ∈ [0, 1].
+        (π = empirical positive prior; English alias on first appearance per the
+        Unicode-identifier convention in STYLE.md.)
     c_fp : float
         Cost of a false positive. Must be > 0.
     c_fn : float
@@ -231,6 +233,17 @@ def bayes_optimal_threshold(π: float, c_fp: float, c_fn: float) -> float:
     1.0
     >>> bayes_optimal_threshold(1.0, c_fp=1.0, c_fn=1.0)
     0.0
+
+    Notes
+    -----
+    Symmetric costs (c_fp == c_fn) collapse the formula to t* = 1 - π.
+    Equivalently, when costs are equal the optimal threshold is the *negative*
+    prior — predicting 1 whenever P(y=1 | x) > P(y=0).
+
+    References
+    ----------
+    .. [#elkan] Elkan, C. "The foundations of cost-sensitive learning." IJCAI
+       2001.
     """
     if not 0.0 <= π <= 1.0:
         raise ValueError(f"π (prior) must be in [0, 1], got {π}")
@@ -369,6 +382,20 @@ def fit_isotonic_calibrator(
     >>> calibrated = g(s)
     >>> bool(calibrated.min() >= 0.0 and calibrated.max() <= 1.0)
     True
+
+    Notes
+    -----
+    Isotonic regression fits a monotonic step function from raw scores to
+    calibrated probabilities. The fit is non-parametric; on small fitting
+    sets it can overfit, so prefer Platt for n < 200 per Niculescu-Mizil &
+    Caruana 2005 guidance.
+
+    References
+    ----------
+    .. [1] Niculescu-Mizil, A. & Caruana, R. "Predicting good probabilities
+           with supervised learning." ICML 2005.
+    .. [2] Zadrozny, B. & Elkan, C. "Transforming classifier scores into
+           accurate multiclass probability estimates." KDD 2002.
     """
     y_true_arr, y_score_arr = _validate_calibrator_inputs(y_true, y_score)
     iso = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
@@ -418,6 +445,22 @@ def fit_platt_calibrator(
     >>> out = g(s)
     >>> bool(out.min() > 0.0 and out.max() < 1.0)
     True
+
+    Notes
+    -----
+    Platt scaling fits the two-parameter sigmoid
+
+    .. math:: P(y=1 \mid s) = \sigma(a \cdot s + b) = \frac{1}{1 + \exp(-(a s + b))}
+
+    by maximum-likelihood logistic regression on the score. Unlike isotonic,
+    the parametric form regularizes small samples but cannot correct strongly
+    non-monotone miscalibration.
+
+    References
+    ----------
+    .. [#platt] Platt, J. "Probabilistic outputs for support vector machines
+       and comparisons to regularized likelihood methods." Advances in Large
+       Margin Classifiers, 1999.
     """
     y_true_arr, y_score_arr = _validate_calibrator_inputs(y_true, y_score)
     lr = LogisticRegression(solver="lbfgs", max_iter=1000)
@@ -485,6 +528,18 @@ def fit_temperature(
     True
     >>> result['nll_post'] <= result['nll_pre']  # always non-increasing
     True
+
+    Notes
+    -----
+    Temperature scaling preserves accuracy exactly because dividing all
+    logits by the same scalar does not change the argmax. It only rescales
+    the *confidence* (max softmax probability), which is what miscalibration
+    in modern overconfident networks measures.
+
+    References
+    ----------
+    .. [#guo] Guo, C., Pleiss, G., Sun, Y., & Weinberger, K. Q. "On
+       calibration of modern neural networks." ICML 2017. arXiv:1706.04599.
     """
     if val_logits.ndim != 2 or val_logits.shape[1] != 2:
         raise ValueError(f"val_logits must be (n, 2), got shape {val_logits.shape}")

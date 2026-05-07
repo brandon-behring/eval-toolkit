@@ -46,7 +46,41 @@ OperatingPoint = Literal["max_f1", "recall_0.90", "recall_0.95"]
 
 @dataclass(frozen=True, slots=True)
 class ThresholdResult:
-    """Outcome of operating-point selection at a given criterion."""
+    """Outcome of operating-point selection at a given criterion.
+
+    Parameters
+    ----------
+    threshold : float
+        Decision boundary on the score; predictions are positive when
+        ``y_score >= threshold``.
+    f1 : float
+        F1 score at this threshold ∈ [0, 1].
+    precision : float
+        Precision at this threshold ∈ [0, 1].
+    recall : float
+        Recall (true-positive rate) at this threshold ∈ [0, 1].
+    criterion : str
+        Selection-rule label (e.g. ``"max_f1"``, ``"recall_0.90"``).
+
+    Examples
+    --------
+    >>> tr = ThresholdResult(
+    ...     threshold=0.5, f1=0.8, precision=0.9, recall=0.72, criterion="max_f1"
+    ... )
+    >>> tr.threshold, tr.criterion
+    (0.5, 'max_f1')
+
+    Notes
+    -----
+    Frozen value-type; equality is field-wise. The selection rule is recorded
+    in ``criterion`` so downstream consumers (plots, reports) can label
+    operating points without re-deriving the rule.
+
+    References
+    ----------
+    .. [1] Davis, J. & Goadrich, M. "The relationship between precision-recall
+           and ROC curves." ICML 2006.
+    """
 
     threshold: float
     f1: float
@@ -96,6 +130,14 @@ def pr_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     .. math:: \\mathrm{AP} = \\sum_n (R_n - R_{n-1}) P_n
 
     where :math:`P_n, R_n` are precision and recall at the :math:`n`-th threshold.
+
+    References
+    ----------
+    .. [1] Davis, J. & Goadrich, M. "The relationship between precision-recall
+           and ROC curves." ICML 2006.
+    .. [2] Saito, T. & Rehmsmeier, M. "The precision-recall plot is more
+           informative than the ROC plot when evaluating binary classifiers
+           on imbalanced datasets." PLOS ONE 10(3), 2015.
     """
     _validate_inputs(y_true, y_score)
     return float(average_precision_score(y_true, y_score))
@@ -134,6 +176,12 @@ def roc_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     ROC-AUC is invariant to monotone transforms of ``y_score``: for any
     strictly monotone :math:`f`, :math:`\\mathrm{ROC-AUC}(y, s) = \\mathrm{ROC-AUC}(y, f(s))`.
     Inversion: :math:`\\mathrm{ROC-AUC}(y, -s) = 1 - \\mathrm{ROC-AUC}(y, s)`.
+
+    References
+    ----------
+    .. [1] Hanley, J. A. & McNeil, B. J. "The meaning and use of the area under
+           a receiver operating characteristic (ROC) curve." Radiology 143(1),
+           1982.
     """
     _validate_inputs(y_true, y_score)
     return float(roc_auc_score(y_true, y_score))
@@ -457,7 +505,9 @@ def expected_calibration_error(
 
     References
     ----------
-    .. [1] Naeini, M. P., Cooper, G., & Hauskrecht, M. "Obtaining well
+    .. [1] DeGroot, M. H. & Fienberg, S. E. "The comparison and evaluation of
+           forecasters." The Statistician 32(1-2), 1983.
+    .. [2] Naeini, M. P., Cooper, G., & Hauskrecht, M. "Obtaining well
            calibrated probabilities using Bayesian binning." AAAI 2015.
     """
     _validate_inputs(y_true, y_score)
@@ -515,6 +565,20 @@ def expected_calibration_error_equal_mass(
     >>> s = (y + rng.normal(0, 0.5, size=200)).clip(0, 1)
     >>> 0.0 <= expected_calibration_error_equal_mass(y, s) <= 1.0
     True
+
+    Notes
+    -----
+    Quantile-binned ECE replaces equal-width bins with bin edges placed at
+    score quantiles, so each bin holds roughly :math:`n / M` examples. This
+    eliminates the sparse-bin variance that dominates equal-width ECE under
+    class imbalance.
+
+    References
+    ----------
+    .. [1] Nixon, J., et al. "Measuring calibration in deep learning."
+           CVPR Workshops 2019. (Discussion of equal-mass binning rationale.)
+    .. [2] DeGroot, M. H. & Fienberg, S. E. "The comparison and evaluation of
+           forecasters." The Statistician 32(1-2), 1983.
     """
     _validate_inputs(y_true, y_score)
     if n_bins < 2:
@@ -661,6 +725,12 @@ def precision_at_prior(
     Caveat: assumes the *class-conditional* score distributions on the eval
     set match deployment. If the input distribution shifts, TPR/FPR move and
     this projection no longer holds.
+
+    References
+    ----------
+    .. [1] Saerens, M., Latinne, P., & Decaestecker, C. "Adjusting the outputs
+           of a classifier to new a priori probabilities: A simple procedure."
+           Neural Computation 14(1), 2002.
     """
     _validate_inputs(y_true, y_score)
     if not 0.0 < assumed_prior < 1.0:

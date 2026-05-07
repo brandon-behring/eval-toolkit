@@ -58,7 +58,42 @@ ThresholdedMetricFn = Callable[[np.ndarray, np.ndarray, float], float]
 
 @dataclass(frozen=True, slots=True)
 class BootstrapCI:
-    """95% CI for a metric on a single condition."""
+    """95% CI for a metric on a single condition.
+
+    Parameters
+    ----------
+    point_estimate : float
+        Metric value on the original (non-resampled) data.
+    ci_low, ci_high : float
+        Lower / upper bound of the confidence interval.
+    confidence : float
+        Two-sided confidence level ∈ (0, 1) (typically 0.95).
+    n_resamples : int
+        Number of bootstrap resamples used.
+    method : str
+        Either ``"BCa"`` (bias-corrected accelerated) or ``"percentile"``.
+
+    Examples
+    --------
+    >>> ci = BootstrapCI(
+    ...     point_estimate=0.85, ci_low=0.78, ci_high=0.91,
+    ...     confidence=0.95, n_resamples=1000, method="BCa",
+    ... )
+    >>> ci.ci_low <= ci.point_estimate <= ci.ci_high
+    True
+
+    Notes
+    -----
+    Frozen value-type. The BCa interval does **not** guarantee
+    ``ci_low ≤ point_estimate ≤ ci_high`` — the bias correction can shift
+    the interval off-center. Callers that need that invariant should use
+    ``method="percentile"``.
+
+    References
+    ----------
+    .. [1] Efron, B. & Tibshirani, R. "An Introduction to the Bootstrap."
+           Chapman & Hall, 1993. (Chapter 14: BCa.)
+    """
 
     point_estimate: float
     ci_low: float
@@ -83,8 +118,46 @@ class PairedBootstrapCI:
     """95% CI for ``metric(B) − metric(A)`` on shared resample indices.
 
     The lift Δ is the headline statistic for an anti-overengineering stopping
-    rule: if ``ci_low < 0 < ci_high`` (``overlaps_zero`` is True), the
+    rule: if ``ci_low <= 0 <= ci_high`` (``overlaps_zero`` is True), the
     improvement is not statistically significant.
+
+    Parameters
+    ----------
+    delta : float
+        Point estimate of ``metric(B) − metric(A)`` on the original data.
+    ci_low, ci_high : float
+        Lower / upper paired-bootstrap CI bounds on the difference.
+    overlaps_zero : bool
+        True iff ``ci_low <= 0 <= ci_high`` (inclusive). Encodes the
+        zero-effect null result, including the degenerate case where
+        ``ci_low == ci_high == 0``.
+    confidence : float
+        Two-sided confidence level ∈ (0, 1).
+    n_resamples : int
+        Number of paired bootstrap resamples.
+
+    Examples
+    --------
+    >>> pci = PairedBootstrapCI(
+    ...     delta=0.05, ci_low=0.02, ci_high=0.08,
+    ...     overlaps_zero=False, confidence=0.95, n_resamples=1000,
+    ... )
+    >>> pci.overlaps_zero, pci.delta
+    (False, 0.05)
+
+    Notes
+    -----
+    Paired resampling shares the resample indices between the A and B score
+    arrays, so the variance of the difference is reduced by the
+    cross-condition correlation — typically a much tighter CI than
+    differencing two unpaired CIs would produce.
+
+    References
+    ----------
+    .. [1] Efron, B. "Bootstrap methods: Another look at the jackknife."
+           Annals of Statistics 7(1), 1979.
+    .. [2] Efron, B. & Tibshirani, R. "An Introduction to the Bootstrap."
+           Chapman & Hall, 1993. (§10.3 paired bootstrap.)
     """
 
     delta: float
@@ -160,6 +233,13 @@ def bootstrap_ci(
     The bias-corrected and accelerated (BCa) interval [1]_ is recommended over
     plain percentile for asymmetric statistics. For very small samples, BCa
     jackknife can degenerate; percentile is the safe fallback.
+
+    References
+    ----------
+    .. [1] Efron, B. "Better bootstrap confidence intervals." JASA 82(397),
+           1987.
+    .. [2] DiCiccio, T. J. & Efron, B. "Bootstrap confidence intervals."
+           Statistical Science 11(3), 1996.
     """
     y_true_arr = np.asarray(y_true)
     y_score_arr = np.asarray(y_score)
@@ -237,6 +317,13 @@ def paired_bootstrap_diff(
     Resampling indices once and computing both metrics on the same resample
     correlates the two bootstrap distributions, producing a tighter CI on Δ
     than independent unpaired bootstraps would.
+
+    References
+    ----------
+    .. [1] Efron, B. "Bootstrap methods: Another look at the jackknife."
+           Annals of Statistics 7(1), 1979.
+    .. [2] Efron, B. & Tibshirani, R. "An Introduction to the Bootstrap."
+           Chapman & Hall, 1993. (§10.3.)
     """
     y_true_arr = np.asarray(y_true)
     a = np.asarray(y_score_a)
@@ -419,6 +506,18 @@ def paired_bootstrap_op_point_diff(
         On shape mismatch or insufficient sample size.
     RuntimeError
         If > 50% of resamples are degenerate (e.g., single-class val draws).
+
+    Notes
+    -----
+    Two-level structure: outer level resamples val + test indices; inner level
+    refits the threshold on the val resample, then evaluates on the test
+    resample. The combined CI is wider than the fixed-threshold paired CI
+    because it absorbs threshold-selection noise.
+
+    References
+    ----------
+    .. [1] Davison, A. C. & Hinkley, D. V. "Bootstrap Methods and their
+           Application." Cambridge, 1997. (§4.2 Nested bootstrap.)
     """
     val_y_arr = np.asarray(val_y)
     val_a, val_b = np.asarray(val_score_a), np.asarray(val_score_b)
@@ -493,6 +592,45 @@ class MDEEstimate:
     where :math:`\sigma_\Delta = (\mathrm{ci\_high} - \mathrm{ci\_low}) / (2 \cdot 1.96)`.
     Assumes asymptotic normality of the bootstrap distribution; for small N
     this is a reasonable but not exact approximation.
+
+    Parameters
+    ----------
+    mde : float
+        Minimum detectable difference at the configured (α, power).
+    sigma_delta : float
+        Standard error of Δ inferred from the paired-bootstrap CI half-width.
+    delta_observed : float
+        Observed point estimate of Δ on the original data.
+    alpha : float
+        Two-sided significance level used in the MDE calculation (typically
+        0.05).
+    power : float
+        Detection probability used in the MDE calculation (typically 0.80).
+    n_resamples : int
+        Number of paired-bootstrap resamples that produced the source CI.
+    n : int
+        Sample size used in the paired bootstrap (-1 if unknown — see
+        :func:`mde_from_ci`).
+
+    Examples
+    --------
+    >>> est = MDEEstimate(
+    ...     mde=0.04, sigma_delta=0.014, delta_observed=0.02,
+    ...     alpha=0.05, power=0.8, n_resamples=1000, n=500,
+    ... )
+    >>> est.delta_observed < est.mde  # observed < MDE → underpowered
+    True
+
+    Notes
+    -----
+    The MDE is the minimum *true* effect size detectable; the *observed*
+    delta can be smaller than MDE (in which case the experiment is
+    underpowered) or larger (in which case the result is interpretable).
+
+    References
+    ----------
+    .. [1] Cohen, J. "Statistical Power Analysis for the Behavioral Sciences."
+           2nd ed., Lawrence Erlbaum, 1988.
     """
 
     mde: float

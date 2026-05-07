@@ -38,9 +38,33 @@ DEFAULT_DEDUP_THRESHOLD = 0.9
 class DedupReport:
     """Outcome of a near-dedup pass.
 
-    ``kept_indices`` are positions in the input ``texts`` to retain.
-    ``dropped_pairs`` is a list of ``(dropped_idx, kept_idx, similarity)``
-    triples for audit.
+    Parameters
+    ----------
+    kept_indices : list[int]
+        Sorted positions in the input ``texts`` retained after dedup.
+    dropped_pairs : list[tuple[int, int, float]]
+        Triples ``(dropped_idx, kept_idx, similarity)`` for audit.
+    threshold : float
+        Cosine-similarity threshold the dedup pass used.
+    n_input : int
+        Length of the input list (so kept + dropped invariant is checkable).
+
+    Examples
+    --------
+    >>> report = DedupReport(
+    ...     kept_indices=[0, 2],
+    ...     dropped_pairs=[(1, 0, 0.95)],
+    ...     threshold=0.9,
+    ...     n_input=3,
+    ... )
+    >>> report.n_kept + report.n_dropped == report.n_input
+    True
+
+    Notes
+    -----
+    The ``kept_indices`` and the first element of each ``dropped_pairs``
+    triple form a disjoint partition of ``range(n_input)``. Callers can use
+    this property to reconstruct the dropped-set without re-running dedup.
     """
 
     kept_indices: list[int]
@@ -153,6 +177,21 @@ def near_dedup(
         If ``texts`` is not a list.
     ValueError
         If ``threshold`` is outside (0, 1).
+
+    Examples
+    --------
+    >>> texts = ["the quick brown fox", "the quick brown fox!", "lorem ipsum"]
+    >>> report = near_dedup(texts, threshold=0.8)
+    >>> report.n_kept >= 2  # at most one near-duplicate dropped
+    True
+    >>> set(report.kept_indices) | {p[0] for p in report.dropped_pairs} == set(range(3))
+    True
+
+    Notes
+    -----
+    TF-IDF (1-3-gram) cosine is a fast lexical near-dedup signal. It will
+    miss paraphrase duplicates that share no n-grams; for those, use
+    semantic embeddings + cosine.
     """
     if not isinstance(texts, list):
         raise TypeError(f"texts must be a list, got {type(texts).__name__}")
@@ -211,6 +250,14 @@ def cross_dedup(
     list[int]
         Indices into ``eval_texts`` of rows that are NOT near-duplicate to
         any train text. Order preserved.
+
+    Examples
+    --------
+    >>> train = ["the quick brown fox", "lorem ipsum dolor sit amet"]
+    >>> eval_set = ["the quick brown fox!", "completely different text"]
+    >>> kept = cross_dedup(train, eval_set, threshold=0.8)
+    >>> 1 in kept  # second eval text has no train match
+    True
     """
     if not 0.0 < threshold < 1.0:
         raise ValueError(f"threshold must be in (0, 1), got {threshold}")
