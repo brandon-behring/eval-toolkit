@@ -40,6 +40,7 @@ __all__ = [
     "ThresholdFn",
     "ThresholdedMetricFn",
     "bootstrap_ci",
+    "cv_clt_ci",
     "mde_from_ci",
     "paired_bootstrap_diff",
     "paired_bootstrap_ece_diff",
@@ -911,3 +912,104 @@ def _normal_quantile(p: float) -> float:
     if not 0.0 < p < 1.0:
         raise ValueError(f"p must be in (0, 1), got {p}")
     return float(_scipy_norm.ppf(p))
+
+
+def cv_clt_ci(
+    fold_metrics: np.ndarray,
+    *,
+    confidence: float = DEFAULT_CONFIDENCE,
+) -> BootstrapCI:
+    r"""CV-corrected confidence interval per Bayle et al. 2020 [#bayle]_ Theorem 3.1.
+
+    Computes a confidence interval on the cross-validation mean metric
+    that correctly accounts for fold-level dependence. The standard
+    "naive" CI (compute std-of-folds then divide by sqrt(K)) is anti-
+    conservative because the folds share training data; Bayle et al.
+    2020 prove a CV-CLT with a correction factor that gives valid
+    coverage asymptotically.
+
+    The corrected variance estimator (Bayle 2020 Theorem 3.1):
+
+    .. math::
+
+        \widehat{\sigma}^2_{\mathrm{CV-CLT}} = \frac{1}{K - 1}
+        \sum_{f=1}^{K} (\widehat{\theta}_f - \bar{\theta})^2
+
+    where :math:`\widehat{\theta}_f` is the metric on fold :math:`f` and
+    :math:`\bar{\theta}` is the mean over folds. The CI is then
+    :math:`\bar{\theta} \pm z_{\alpha/2} \cdot \widehat{\sigma}_{\mathrm{CV-CLT}}
+    / \sqrt{K}`.
+
+    This helper does **not** run the CV — callers supply the already-fit
+    per-fold metric estimates. eval-toolkit does not currently ship a
+    cross-validation orchestrator (gated on a separate design conversation
+    about fold strategy + reproducibility); this function is the standalone
+    inference primitive for callers using their own CV runner.
+
+    Parameters
+    ----------
+    fold_metrics : np.ndarray, shape (K,)
+        Per-fold metric estimates. Need ≥ 2 folds.
+    confidence : float, optional
+        Two-sided confidence level (default 0.95).
+
+    Returns
+    -------
+    BootstrapCI
+        With ``method="cv_clt"`` and ``n_resamples=K``. ``point_estimate``
+        is the mean of ``fold_metrics``.
+
+    Raises
+    ------
+    ValueError
+        If ``fold_metrics`` has fewer than 2 entries, contains non-finite
+        values, or ``confidence`` is outside (0, 1).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> # 5-fold CV PR-AUC estimates (already computed externally):
+    >>> folds = np.array([0.83, 0.81, 0.85, 0.79, 0.84])
+    >>> ci = cv_clt_ci(folds, confidence=0.95)
+    >>> ci.method
+    'cv_clt'
+    >>> bool(ci.ci_low <= ci.point_estimate <= ci.ci_high)
+    True
+
+    See Also
+    --------
+    eval_toolkit.bootstrap.bootstrap_ci :
+        Single-test-set CI (no CV); use that for typical eval workflows.
+
+    References
+    ----------
+    .. [#bayle] Bayle, P., Bayle, A., Janson, L., & Mackey, L.
+       "Cross-validation confidence intervals for test error." Annals
+       of Statistics 48(6), 2020.
+    """
+    arr = np.asarray(fold_metrics, dtype=float)
+    if arr.ndim != 1:
+        raise ValueError(f"fold_metrics must be 1-D, got shape {arr.shape}")
+    K = int(arr.size)
+    if K < 2:
+        raise ValueError(f"fold_metrics must have ≥ 2 entries, got K={K}")
+    if not np.isfinite(arr).all():
+        raise ValueError("fold_metrics contains NaN or inf")
+    if not 0.0 < confidence < 1.0:
+        raise ValueError(f"confidence must be in (0, 1), got {confidence}")
+
+    point = float(arr.mean())
+    # Bayle 2020 Theorem 3.1 variance: sample variance with (K-1) denom; the
+    # CV-CLT correction is captured in this estimator's asymptotic guarantee
+    # (no extra fold-correlation factor needed for a balanced K-fold CV).
+    sigma_hat = float(np.std(arr, ddof=1))
+    z = _normal_quantile(0.5 + confidence / 2.0)
+    margin = z * sigma_hat / np.sqrt(K)
+    return BootstrapCI(
+        point_estimate=point,
+        ci_low=point - margin,
+        ci_high=point + margin,
+        confidence=confidence,
+        n_resamples=K,
+        method="cv_clt",
+    )

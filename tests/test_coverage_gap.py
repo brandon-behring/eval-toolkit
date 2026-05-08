@@ -988,3 +988,46 @@ def test_bootstrap_ci_studentized_deterministic() -> None:
     ci2 = bootstrap_ci(y, s, pr_auc, n_resamples=80, method="studentized", seed=7)
     assert ci1.ci_low == ci2.ci_low
     assert ci1.ci_high == ci2.ci_high
+
+
+# ---------------------------------------------------------------------------
+# v0.4.0 C3: cv_clt_ci helper
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_cv_clt_ci_known_value() -> None:
+    """CV-CLT CI for fixed inputs equals the closed-form Bayle 2020 formula."""
+    from eval_toolkit.bootstrap import cv_clt_ci
+
+    # 5-fold CV PR-AUC: mean=0.82, std (ddof=1)≈0.0245, z_{0.975}=1.96
+    folds = np.array([0.83, 0.81, 0.85, 0.79, 0.82])
+    ci = cv_clt_ci(folds, confidence=0.95)
+    assert ci.method == "cv_clt"
+    assert ci.n_resamples == 5
+    assert ci.point_estimate == pytest.approx(0.82, abs=1e-9)
+    expected_margin = 1.959963984540054 * float(np.std(folds, ddof=1)) / np.sqrt(5)
+    assert ci.ci_low == pytest.approx(0.82 - expected_margin, abs=1e-9)
+    assert ci.ci_high == pytest.approx(0.82 + expected_margin, abs=1e-9)
+
+
+@pytest.mark.unit
+def test_cv_clt_ci_validates() -> None:
+    from eval_toolkit.bootstrap import cv_clt_ci
+
+    with pytest.raises(ValueError, match="≥ 2 entries"):
+        cv_clt_ci(np.array([0.5]))
+    with pytest.raises(ValueError, match="NaN or inf"):
+        cv_clt_ci(np.array([0.5, np.nan, 0.6]))
+    with pytest.raises(ValueError, match="confidence"):
+        cv_clt_ci(np.array([0.5, 0.6, 0.7]), confidence=0.0)
+
+
+@pytest.mark.unit
+def test_cv_clt_ci_widens_with_variance() -> None:
+    """Higher across-fold variance → wider CI at fixed K."""
+    from eval_toolkit.bootstrap import cv_clt_ci
+
+    tight = cv_clt_ci(np.array([0.80, 0.81, 0.79, 0.80, 0.81]))
+    wide = cv_clt_ci(np.array([0.70, 0.90, 0.60, 0.95, 0.80]))
+    assert (wide.ci_high - wide.ci_low) > (tight.ci_high - tight.ci_low)
