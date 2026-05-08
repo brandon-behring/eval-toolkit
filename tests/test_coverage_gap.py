@@ -953,3 +953,38 @@ def test_l2_ece_rejects_logits() -> None:
 
     with pytest.raises(ValueError, match="must be in \\[0, 1\\]"):
         expected_calibration_error_l2(np.array([0, 1, 0, 1] * 5), np.linspace(-2, 2, 20))
+
+
+# ---------------------------------------------------------------------------
+# v0.4.0 C2: studentized bootstrap-t
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_bootstrap_ci_studentized_runs() -> None:
+    """method='studentized' returns a valid BootstrapCI."""
+    from eval_toolkit.metrics import pr_auc
+
+    rng = np.random.default_rng(0)
+    n = 60  # smaller n so jackknife is fast
+    y = rng.binomial(1, 0.4, size=n).astype(int)
+    s = np.clip(y * 0.5 + rng.normal(0, 0.3, n), 0, 1)
+    ci = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="studentized", seed=42)
+    assert ci.method == "studentized"
+    assert ci.ci_low <= ci.point_estimate <= ci.ci_high
+    assert ci.ci_high - ci.ci_low > 0  # non-degenerate
+
+
+@pytest.mark.unit
+def test_bootstrap_ci_studentized_deterministic() -> None:
+    """Same seed → identical studentized CI."""
+    from eval_toolkit.metrics import pr_auc
+
+    rng = np.random.default_rng(0)
+    n = 60
+    y = rng.binomial(1, 0.4, size=n).astype(int)
+    s = np.clip(y * 0.5 + rng.normal(0, 0.3, n), 0, 1)
+    ci1 = bootstrap_ci(y, s, pr_auc, n_resamples=80, method="studentized", seed=7)
+    ci2 = bootstrap_ci(y, s, pr_auc, n_resamples=80, method="studentized", seed=7)
+    assert ci1.ci_low == ci2.ci_low
+    assert ci1.ci_high == ci2.ci_high

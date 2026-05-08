@@ -19,6 +19,7 @@ References
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
@@ -185,7 +186,7 @@ def bootstrap_ci(
     *,
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
-    method: Literal["BCa", "percentile"] = DEFAULT_METHOD,
+    method: Literal["BCa", "percentile", "studentized"] = DEFAULT_METHOD,
     seed: int = DEFAULT_SEED,
 ) -> BootstrapCI:
     """Per-condition CI via :func:`scipy.stats.bootstrap`.
@@ -258,23 +259,108 @@ def bootstrap_ci(
         return float(metric(yt, ys))
 
     rng = np.random.default_rng(seed)
-    res = _scipy_bootstrap(
-        (y_true_arr, y_score_arr),
-        statistic=_statistic,
-        n_resamples=n_resamples,
-        confidence_level=confidence,
-        method=method,
-        paired=True,
-        random_state=rng,
-    )
+    if method == "studentized":
+        ci_low, ci_high = _bootstrap_t_ci(
+            y_true_arr,
+            y_score_arr,
+            metric,
+            point,
+            n_resamples=n_resamples,
+            confidence=confidence,
+            rng=rng,
+        )
+    else:
+        res = _scipy_bootstrap(
+            (y_true_arr, y_score_arr),
+            statistic=_statistic,
+            n_resamples=n_resamples,
+            confidence_level=confidence,
+            method=method,
+            paired=True,
+            random_state=rng,
+        )
+        ci_low = float(res.confidence_interval.low)
+        ci_high = float(res.confidence_interval.high)
     return BootstrapCI(
         point_estimate=point,
-        ci_low=float(res.confidence_interval.low),
-        ci_high=float(res.confidence_interval.high),
+        ci_low=ci_low,
+        ci_high=ci_high,
         confidence=confidence,
         n_resamples=n_resamples,
         method=method,
     )
+
+
+def _bootstrap_t_ci(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    metric: MetricFn,
+    point: float,
+    *,
+    n_resamples: int,
+    confidence: float,
+    rng: np.random.Generator,
+) -> tuple[float, float]:
+    r"""Studentized bootstrap-t CI per Algeshiemer 2024 / Davison & Hinkley §5.2.
+
+    Outer loop: B bootstrap resamples → ``θ̂_b`` per resample.
+    Inner loop: jackknife within each resample → ``SE_b`` per resample.
+    Pivot: ``T_b = (θ̂_b - θ̂) / SE_b``.
+    CI: ``[θ̂ - q_{1-α/2}(T) · SE, θ̂ - q_{α/2}(T) · SE]`` where ``SE`` is
+    the bootstrap standard error of ``θ̂``.
+
+    Best CI coverage of any non-nested method per Algeshiemer 2024
+    simulations, at the cost of an extra factor ~n compute (per-resample
+    jackknife). Use for high-stakes inference where coverage matters.
+
+    Skips degenerate resamples (single-class draws causing the metric to
+    raise); raises if > 5% of resamples are degenerate.
+    """
+    n = int(len(y_true))
+    theta_stars = np.full(n_resamples, np.nan, dtype=np.float64)
+    se_stars = np.full(n_resamples, np.nan, dtype=np.float64)
+
+    for b in range(n_resamples):
+        idx = rng.integers(0, n, size=n)
+        y_b = y_true[idx]
+        s_b = y_score[idx]
+        try:
+            theta_b = float(metric(y_b, s_b))
+        except (ValueError, RuntimeError):
+            continue
+        # Inner jackknife: leave-one-out within the resample.
+        loo = np.full(n, np.nan, dtype=np.float64)
+        for i in range(n):
+            with contextlib.suppress(ValueError, RuntimeError):
+                loo[i] = float(metric(np.delete(y_b, i), np.delete(s_b, i)))
+        valid = ~np.isnan(loo)
+        if int(valid.sum()) < 2:
+            continue
+        loo_mean = float(np.nanmean(loo))
+        jack_var = (n - 1.0) / n * float(np.nansum((loo[valid] - loo_mean) ** 2))
+        if jack_var <= 0.0:
+            continue
+        theta_stars[b] = theta_b
+        se_stars[b] = float(np.sqrt(jack_var))
+
+    valid_mask = ~np.isnan(theta_stars) & ~np.isnan(se_stars) & (se_stars > 0.0)
+    n_valid = int(valid_mask.sum())
+    if n_valid < n_resamples * 0.95:
+        raise ValueError(
+            f"_bootstrap_t_ci: {n_resamples - n_valid}/{n_resamples} resamples "
+            f"degenerate (single-class draws or zero jackknife variance); "
+            f"refusing to compute studentized CI on > 5% degenerate resamples"
+        )
+
+    theta_v = theta_stars[valid_mask]
+    se_v = se_stars[valid_mask]
+    pivots = (theta_v - point) / se_v
+    se_overall = float(np.std(theta_v, ddof=1))
+    alpha = (1.0 - confidence) / 2.0
+    q_lo = float(np.quantile(pivots, alpha))
+    q_hi = float(np.quantile(pivots, 1.0 - alpha))
+    # CI is asymmetric — pivot quantiles are subtracted in reverse order.
+    return point - q_hi * se_overall, point - q_lo * se_overall
 
 
 def paired_bootstrap_diff(
