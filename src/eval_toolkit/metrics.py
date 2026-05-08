@@ -27,6 +27,8 @@ __all__ = [
     "DEFAULT_ASSUMED_PRIORS",
     "OperatingPoint",
     "ThresholdResult",
+    "brier_decomposition",
+    "brier_score",
     "expected_calibration_error",
     "expected_calibration_error_equal_mass",
     "headline_metrics",
@@ -324,12 +326,18 @@ def metrics_at_threshold(
     y_pred = (np.asarray(y_score) >= threshold).astype(int)
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
     n = len(y_true)
+    n_pos = tp + fn
+    n_neg = tn + fp
+    fpr = float(fp) / max(int(n_neg), 1)
+    fnr = float(fn) / max(int(n_pos), 1)
     return {
         "threshold": float(threshold),
         "f1": float(f1_score(y_true, y_pred, zero_division=0)),
         "precision": float(precision_score(y_true, y_pred, zero_division=0)),
         "recall": float(recall_score(y_true, y_pred, zero_division=0)),
         "accuracy": float((tp + tn) / max(n, 1)),
+        "fpr": fpr,
+        "fnr": fnr,
         "tn": int(tn),
         "fp": int(fp),
         "fn": int(fn),
@@ -407,6 +415,9 @@ def stratified_recall(
     y_score: np.ndarray,
     threshold: float,
     strata: np.ndarray,
+    *,
+    with_ci: bool = False,
+    confidence: float = 0.95,
 ) -> dict[str, dict[str, float | int]]:
     """Recall (TPR) per categorical stratum.
 
@@ -424,12 +435,20 @@ def stratified_recall(
     strata : np.ndarray, shape (n,)
         Categorical labels (any hashable type; coerced to string for grouping).
         ``None`` / NaN values are coerced to the string ``"unlabeled"``.
+    with_ci : bool, optional
+        If ``True``, attach a Wilson scoring confidence interval per stratum
+        on the recall (binomial proportion). Default ``False``.
+    confidence : float, optional
+        Two-sided confidence level (default 0.95). Ignored unless
+        ``with_ci=True``.
 
     Returns
     -------
     dict
         ``{stratum_label: {"recall", "n", "tp", "fn"}}``. Strata with zero
-        positives are reported with ``recall=NaN`` and ``n=0``.
+        positives are reported with ``recall=NaN`` and ``n=0``. When
+        ``with_ci=True`` each stratum dict also contains ``"ci_low"`` and
+        ``"ci_high"`` (Wilson scoring CI).
 
     Raises
     ------
@@ -481,6 +500,9 @@ def stratified_recall(
     y_true_arr = np.asarray(y_true).astype(int)
     y_pred = (np.asarray(y_score) >= threshold).astype(int)
 
+    if with_ci and not 0.0 < confidence < 1.0:
+        raise ValueError(f"confidence must be in (0, 1), got {confidence}")
+
     out: dict[str, dict[str, float | int]] = {}
     for stratum_np in np.unique(strata_str):
         stratum = str(stratum_np)  # coerce numpy str to plain Python str
@@ -488,11 +510,69 @@ def stratified_recall(
         positives_mask = mask & (y_true_arr == 1)
         n_pos = int(positives_mask.sum())
         if n_pos == 0:
-            out[stratum] = {"recall": float("nan"), "n": 0, "tp": 0, "fn": 0}
+            entry: dict[str, float | int] = {
+                "recall": float("nan"),
+                "n": 0,
+                "tp": 0,
+                "fn": 0,
+            }
+            if with_ci:
+                entry["ci_low"] = float("nan")
+                entry["ci_high"] = float("nan")
+            out[stratum] = entry
             continue
         tp = int((y_pred[positives_mask] == 1).sum())
-        out[stratum] = {"recall": tp / n_pos, "n": n_pos, "tp": tp, "fn": n_pos - tp}
+        entry = {
+            "recall": tp / n_pos,
+            "n": n_pos,
+            "tp": tp,
+            "fn": n_pos - tp,
+        }
+        if with_ci:
+            ci_low, ci_high = _wilson_ci(tp, n_pos, confidence=confidence)
+            entry["ci_low"] = ci_low
+            entry["ci_high"] = ci_high
+        out[stratum] = entry
     return out
+
+
+def _wilson_ci(k: int, n: int, *, confidence: float = 0.95) -> tuple[float, float]:
+    """Wilson scoring confidence interval for a binomial proportion.
+
+    Closed-form 2-sided CI for ``p̂ = k/n`` at the given confidence level.
+    Wilson is preferred over the normal-approximation Wald interval for
+    small ``n`` or extreme ``p̂`` (closer to 0 or 1) — the toolkit choice
+    matches sklearn / statsmodels defaults for ``method='wilson'``.
+
+    Parameters
+    ----------
+    k : int
+        Number of successes.
+    n : int
+        Number of trials.
+    confidence : float, optional
+        Two-sided confidence level (default 0.95).
+
+    Returns
+    -------
+    tuple[float, float]
+        ``(low, high)`` Wilson CI bounds.
+
+    References
+    ----------
+    .. [1] Wilson, E. B. "Probable inference, the law of succession, and
+           statistical inference." JASA 22(158), 1927.
+    """
+    from scipy.stats import norm  # noqa: PLC0415  (scoped optional import)
+
+    if n <= 0:
+        return float("nan"), float("nan")
+    z = float(norm.ppf(0.5 + confidence / 2.0))
+    p_hat = k / n
+    denom = 1.0 + z * z / n
+    centre = (p_hat + z * z / (2 * n)) / denom
+    margin = (z * np.sqrt(p_hat * (1.0 - p_hat) / n + z * z / (4 * n * n))) / denom
+    return float(centre - margin), float(centre + margin)
 
 
 def expected_calibration_error(
@@ -642,6 +722,173 @@ def expected_calibration_error_equal_mass(
         empirical = float(np.mean(sorted_true[lo:hi]))
         ece += ((hi - lo) / n) * abs(confidence - empirical)
     return float(ece)
+
+
+def brier_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
+    r"""Brier score (mean squared error between predicted probabilities and labels).
+
+    Strictly proper scoring rule: minimized in expectation iff the forecast
+    equals the true conditional probability. Captures both calibration and
+    resolution that ECE alone misses; see :func:`brier_decomposition` for
+    the Murphy 1973 partition.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Calibrated probabilities in ``[0, 1]``.
+
+    Returns
+    -------
+    float
+        Brier score in ``[0, 1]``. ``0`` is perfect; ``0.25`` is the
+        constant-prevalence forecast; ``1`` is maximally wrong.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, NaN/Inf scores, non-binary labels, or scores
+        outside ``[0, 1]``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> y = np.array([0, 1, 0, 1])
+    >>> s = np.array([0.1, 0.9, 0.2, 0.8])
+    >>> round(brier_score(y, s), 4)
+    0.025
+
+    Notes
+    -----
+    .. math:: \mathrm{BS} = \frac{1}{n} \sum_i (p_i - y_i)^2
+
+    See Also
+    --------
+    eval_toolkit.metrics.brier_decomposition :
+        Murphy 1973 reliability/resolution/uncertainty partition.
+    eval_toolkit.metrics.expected_calibration_error :
+        Calibration-only metric; ECE = 0 does not imply BS = 0.
+
+    References
+    ----------
+    .. [1] Brier, G. W. "Verification of forecasts expressed in terms of
+           probability." Monthly Weather Review 78(1), 1950.
+    """
+    _validate_inputs(y_true, y_score)
+    _validate_calibrated_score(y_score)
+    y = np.asarray(y_true, dtype=float)
+    p = np.asarray(y_score, dtype=float)
+    return float(np.mean((p - y) ** 2))
+
+
+def brier_decomposition(
+    y_true: np.ndarray, y_score: np.ndarray, n_bins: int = 10
+) -> dict[str, float]:
+    r"""Murphy 1973 [#murphy]_ decomposition of the Brier score.
+
+    Partitions the Brier score into three additive components:
+
+    .. math:: \mathrm{BS} = \mathrm{REL} - \mathrm{RES} + \mathrm{UNC}
+
+    where:
+
+    - **REL** (reliability, lower is better) is the expected squared
+      distance between predicted probability and the empirical positive
+      rate within each bin: :math:`\sum_k \frac{n_k}{n} (\bar p_k - \bar y_k)^2`.
+    - **RES** (resolution, higher is better) is the variance of bin
+      empirical rates around the marginal: :math:`\sum_k \frac{n_k}{n} (\bar y_k - \bar y)^2`.
+    - **UNC** (uncertainty, irreducible) is the marginal variance:
+      :math:`\bar y (1 - \bar y)`.
+
+    The decomposition is exact in expectation when bin assignments are
+    independent of the labels; for finite samples the partition holds up to
+    binning approximation.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels.
+    y_score : np.ndarray, shape (n,)
+        Calibrated probabilities ``∈ [0, 1]``.
+    n_bins : int, optional
+        Number of equal-mass bins (default 10). Must be ≥ 2 and ≤ ``n``.
+
+    Returns
+    -------
+    dict
+        ``{"brier", "reliability", "resolution", "uncertainty"}``. The
+        identity ``brier ≈ reliability - resolution + uncertainty`` holds
+        to ``≈ 1e-9`` modulo binning approximation.
+
+    Raises
+    ------
+    ValueError
+        Same conditions as :func:`brier_score`, plus invalid ``n_bins``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> y = rng.integers(0, 2, size=500)
+    >>> s = (y + rng.normal(0, 0.3, size=500)).clip(0, 1)
+    >>> result = brier_decomposition(y, s, n_bins=10)
+    >>> set(result.keys()) == {"brier", "reliability", "resolution", "uncertainty"}
+    True
+    >>> # The decomposition identity holds to within binning approximation:
+    >>> approx = result["reliability"] - result["resolution"] + result["uncertainty"]
+    >>> abs(result["brier"] - approx) < 0.05
+    True
+
+    Notes
+    -----
+    Equal-mass binning is used (vs equal-width) following Nixon et al.
+    2019's recommendation; under class imbalance the equal-width variant
+    concentrates most mass in 1-2 bins and the resolution term collapses.
+
+    References
+    ----------
+    .. [#murphy] Murphy, A. H. "A new vector partition of the probability
+       score." Journal of Applied Meteorology 12, 1973.
+    """
+    _validate_inputs(y_true, y_score)
+    _validate_calibrated_score(y_score)
+    if n_bins < 2:
+        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
+    n = len(y_true)
+    if n < n_bins:
+        raise ValueError(f"n={n} smaller than n_bins={n_bins}; cannot form quantile bins")
+
+    y = np.asarray(y_true, dtype=float)
+    p = np.asarray(y_score, dtype=float)
+    bs = float(np.mean((p - y) ** 2))
+    y_bar = float(np.mean(y))
+    uncertainty = y_bar * (1.0 - y_bar)
+
+    # Equal-mass binning per Nixon 2019.
+    order = np.argsort(p, kind="stable")
+    sorted_p = p[order]
+    sorted_y = y[order]
+    edges = np.linspace(0, n, n_bins + 1, dtype=int)
+
+    reliability = 0.0
+    resolution = 0.0
+    for b in range(n_bins):
+        lo, hi = int(edges[b]), int(edges[b + 1])
+        if hi <= lo:
+            continue
+        n_k = hi - lo
+        p_bar_k = float(np.mean(sorted_p[lo:hi]))
+        y_bar_k = float(np.mean(sorted_y[lo:hi]))
+        weight = n_k / n
+        reliability += weight * (p_bar_k - y_bar_k) ** 2
+        resolution += weight * (y_bar_k - y_bar) ** 2
+    return {
+        "brier": bs,
+        "reliability": float(reliability),
+        "resolution": float(resolution),
+        "uncertainty": float(uncertainty),
+    }
 
 
 def quantile_stratified_pr_auc(

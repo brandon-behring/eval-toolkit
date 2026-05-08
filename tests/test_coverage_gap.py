@@ -689,3 +689,91 @@ def test_embedding_cosine_pairs_across_rejects_dim_mismatch() -> None:
     strat = EmbeddingCosineStrategy(buggy_embedder)
     with pytest.raises(ValueError, match="inconsistent feature dimensions"):
         strat.pairs_across(["q1", "q2"], ["r1", "r2", "r3"], k=2)
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 C5: Brier score + decomposition + FPR/FNR + stratified_recall CI
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_brier_score_perfect_calibration_zero() -> None:
+    """Brier score = 0 when predictions match labels exactly."""
+    from eval_toolkit.metrics import brier_score
+
+    y = np.array([0, 1, 0, 1])
+    p = np.array([0.0, 1.0, 0.0, 1.0])
+    assert brier_score(y, p) == 0.0
+
+
+@pytest.mark.unit
+def test_brier_score_constant_prevalence() -> None:
+    """Brier score = 0.25 for the constant-prevalence forecast at p=0.5."""
+    from eval_toolkit.metrics import brier_score
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=1000).astype(int)
+    p = np.full(1000, 0.5)
+    assert abs(brier_score(y, p) - 0.25) < 0.01
+
+
+@pytest.mark.unit
+def test_brier_decomposition_identity_holds_approximately() -> None:
+    """BS ≈ REL - RES + UNC under equal-mass binning."""
+    from eval_toolkit.metrics import brier_decomposition
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=500).astype(int)
+    s = np.clip(y * 0.5 + rng.normal(0, 0.3, 500), 0, 1)
+    out = brier_decomposition(y, s, n_bins=10)
+    approx = out["reliability"] - out["resolution"] + out["uncertainty"]
+    # Identity is approximate — bins are independent of labels in expectation,
+    # not strictly. 5% slack on n=500.
+    assert abs(out["brier"] - approx) < 0.05
+
+
+@pytest.mark.unit
+def test_brier_rejects_logits() -> None:
+    """Brier score also enforces probability range like ECE."""
+    from eval_toolkit.metrics import brier_score
+
+    with pytest.raises(ValueError, match="must be in \\[0, 1\\]"):
+        brier_score(np.array([0, 1, 0, 1]), np.array([2.0, -1.0, 0.5, 1.5]))
+
+
+@pytest.mark.unit
+def test_metrics_at_threshold_includes_fpr_fnr() -> None:
+    """v0.3.0 metrics_at_threshold dict includes fpr + fnr keys."""
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8])
+    out = metrics_at_threshold(y, s, threshold=0.5)
+    assert "fpr" in out
+    assert "fnr" in out
+    # All-correct case: fpr=0, fnr=0
+    assert out["fpr"] == 0.0
+    assert out["fnr"] == 0.0
+
+
+@pytest.mark.unit
+def test_stratified_recall_with_ci_attaches_wilson_bounds() -> None:
+    """with_ci=True attaches ci_low + ci_high (Wilson scoring CI)."""
+    y = np.array([1, 1, 1, 1, 1, 0, 0])
+    s = np.array([0.9, 0.8, 0.4, 0.7, 0.6, 0.1, 0.2])
+    strata = np.array(["A"] * 5 + ["B"] * 2)
+    out = stratified_recall(y, s, threshold=0.5, strata=strata, with_ci=True)
+    assert "ci_low" in out["A"]
+    assert "ci_high" in out["A"]
+    # Wilson CI bounds the recall point estimate.
+    rec = out["A"]["recall"]
+    assert out["A"]["ci_low"] <= rec <= out["A"]["ci_high"]
+
+
+@pytest.mark.unit
+def test_stratified_recall_no_ci_by_default() -> None:
+    """Default with_ci=False; ci_low/ci_high keys absent."""
+    y = np.array([1, 1, 0, 0])
+    s = np.array([0.9, 0.4, 0.2, 0.1])
+    strata = np.array(["A", "B", "A", "B"])
+    out = stratified_recall(y, s, threshold=0.5, strata=strata)
+    assert "ci_low" not in out["A"]
+    assert "ci_high" not in out["A"]
