@@ -98,7 +98,8 @@ def test_evaluate_paired_diffs(slice_with_data: EvalSlice) -> None:
     """paired_diffs are computed and labeled correctly."""
     rng = np.random.default_rng(42)
     s_a = rng.uniform(0, 1, size=len(slice_with_data.df))
-    s_b = s_a + 0.1 * slice_with_data.y_true
+    # Mix the signal in [0, 1]; v0.3.0 ECE validators reject out-of-range scores.
+    s_b = np.clip(s_a + 0.1 * slice_with_data.y_true, 0.0, 1.0)
     sc = {"a": _StubScorer(s_a), "b": _StubScorer(s_b)}
     result = evaluate(sc, [slice_with_data], run_id="x", n_resamples=50, paired_diffs=[("a", "b")])
     diffs = result.by_slice["test"]["paired_diffs"]

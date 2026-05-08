@@ -492,6 +492,14 @@ class EmbeddingCosineStrategy:
             )
         ref_emb = self._embed(reference_texts, "reference_texts")
         query_emb = self._embed(query_texts, "query_texts")
+        # Cross-call dimension consistency — buggy embedders that return
+        # different `d` for query vs reference would silently mis-align cosine.
+        if ref_emb.shape[1] != query_emb.shape[1]:
+            raise ValueError(
+                f"embedder returned inconsistent feature dimensions: "
+                f"reference_texts has d={ref_emb.shape[1]}, "
+                f"query_texts has d={query_emb.shape[1]}"
+            )
         k_eff = min(k, n_r)
         nn = NearestNeighbors(n_neighbors=k_eff, metric="cosine").fit(ref_emb)
         distances, indices = nn.kneighbors(query_emb)

@@ -547,8 +547,18 @@ def fit_temperature(
         raise ValueError(
             f"length mismatch: logits {val_logits.shape[0]} vs labels {val_labels.shape[0]}"
         )
+    if val_logits.shape[0] == 0:
+        raise ValueError("val_logits is empty")
+    if not np.isfinite(val_logits).all():
+        raise ValueError("val_logits contains NaN or inf")
     if not set(np.unique(val_labels).tolist()).issubset({0, 1}):
         raise ValueError("val_labels must be binary (0/1)")
+    n_pos = int(np.sum(val_labels))
+    if n_pos == 0 or n_pos == val_labels.shape[0]:
+        raise ValueError(
+            f"val_labels must contain both classes; got n={val_labels.shape[0]}, "
+            f"n_positive={n_pos}"
+        )
 
     nll_pre = _negative_log_likelihood(1.0, val_logits, val_labels)
     res = minimize_scalar(

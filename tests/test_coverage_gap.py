@@ -623,3 +623,69 @@ def test_set_global_seeds_rejects_invalid() -> None:
         set_global_seeds("42")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="non-negative"):
         set_global_seeds(-1)
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 C1: validation hardening
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_ece_rejects_out_of_range_scores() -> None:
+    """expected_calibration_error fails fast on logit-shaped input."""
+    y = np.array([0, 1, 0, 1] * 5, dtype=int)
+    s = np.array([2.0, -1.0, 0.5, 1.5] * 5, dtype=float)  # logits, not probs
+    with pytest.raises(ValueError, match="must be in \\[0, 1\\]"):
+        expected_calibration_error(y, s, n_bins=5)
+
+
+@pytest.mark.unit
+def test_ece_equal_mass_rejects_out_of_range_scores() -> None:
+    """expected_calibration_error_equal_mass fails fast on logit-shaped input."""
+    y = np.array([0, 1] * 25, dtype=int)
+    s = np.linspace(-2.0, 2.0, 50)  # logits
+    with pytest.raises(ValueError, match="must be in \\[0, 1\\]"):
+        expected_calibration_error_equal_mass(y, s, n_bins=5)
+
+
+@pytest.mark.unit
+def test_metrics_validate_inputs_rejects_nan_inf_scores() -> None:
+    """_validate_inputs (used by all metric helpers) rejects NaN/Inf in y_score."""
+    y = np.array([0, 1, 0, 1])
+    s_nan = np.array([0.1, np.nan, 0.5, 0.9])
+    with pytest.raises(ValueError, match="NaN or inf"):
+        pr_auc(y, s_nan)
+    s_inf = np.array([0.1, np.inf, 0.5, 0.9])
+    with pytest.raises(ValueError, match="NaN or inf"):
+        pr_auc(y, s_inf)
+
+
+@pytest.mark.unit
+def test_fit_temperature_rejects_single_class() -> None:
+    """fit_temperature is now consistent with peer calibrators on single-class input."""
+    from eval_toolkit.calibration import fit_temperature
+
+    rng = np.random.default_rng(0)
+    logits = rng.normal(size=(50, 2))
+    labels = np.zeros(50, dtype=int)  # single-class
+    with pytest.raises(ValueError, match="both classes"):
+        fit_temperature(logits, labels)
+
+
+@pytest.mark.unit
+def test_embedding_cosine_pairs_across_rejects_dim_mismatch() -> None:
+    """EmbeddingCosineStrategy.pairs_across catches buggy embedders that return
+    different feature dimensions for query vs reference."""
+    from eval_toolkit.text_dedup import EmbeddingCosineStrategy
+
+    call_count = {"n": 0}
+
+    def buggy_embedder(texts: list[str]) -> np.ndarray:
+        call_count["n"] += 1
+        # First call (refs) returns d=4; second call (queries) returns d=8.
+        d = 4 if call_count["n"] == 1 else 8
+        return np.zeros((len(texts), d), dtype=np.float64)
+
+    strat = EmbeddingCosineStrategy(buggy_embedder)
+    with pytest.raises(ValueError, match="inconsistent feature dimensions"):
+        strat.pairs_across(["q1", "q2"], ["r1", "r2", "r3"], k=2)

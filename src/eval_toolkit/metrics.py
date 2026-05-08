@@ -511,6 +511,7 @@ def expected_calibration_error(
            calibrated probabilities using Bayesian binning." AAAI 2015.
     """
     _validate_inputs(y_true, y_score)
+    _validate_calibrated_score(y_score)
     if n_bins < 2:
         raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
     bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
@@ -581,6 +582,7 @@ def expected_calibration_error_equal_mass(
            forecasters." The Statistician 32(1-2), 1983.
     """
     _validate_inputs(y_true, y_score)
+    _validate_calibrated_score(y_score)
     if n_bins < 2:
         raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
     n = len(y_true)
@@ -934,3 +936,25 @@ def _validate_inputs(y_true: np.ndarray, y_score: np.ndarray) -> None:
     unique = set(np.unique(y_true_arr).tolist())
     if not unique.issubset({0, 1}):
         raise ValueError(f"y_true must be binary (0/1), got values {unique}")
+    # NaN/Inf guard — silent ranking distortions if scores carry non-finite
+    # values; harmonizes with score_distribution_summary's own guard.
+    if not np.isfinite(y_score_arr).all():
+        raise ValueError("y_score contains NaN or inf")
+
+
+def _validate_calibrated_score(y_score: np.ndarray, name: str = "y_score") -> None:
+    """Probability-range validation for calibration-aware metrics.
+
+    Calibration metrics (ECE variants) are only meaningful when ``y_score``
+    is in ``[0, 1]``. Raw logits silently produce a meaningless ECE; this
+    guard fails loudly with a diagnostic.
+    """
+    arr = np.asarray(y_score)
+    if arr.size == 0:
+        return  # _validate_inputs catches empty arrays
+    if arr.min() < 0.0 or arr.max() > 1.0:
+        raise ValueError(
+            f"{name} must be in [0, 1] for calibration metrics; got "
+            f"range [{float(arr.min()):.4g}, {float(arr.max()):.4g}]. "
+            "If you have logits, apply softmax/sigmoid first."
+        )
