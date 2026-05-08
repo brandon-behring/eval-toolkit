@@ -206,6 +206,10 @@ def render_text(
     >>> errs
     []
     """
+    if not isinstance(text, str):
+        raise TypeError(f"text must be str, got {type(text).__name__}")
+    if not isinstance(metrics, dict):
+        raise TypeError(f"metrics must be a dict, got {type(metrics).__name__}")
     fmts = formatters if formatters is not None else DEFAULT_FORMATTERS
     errors: list[str] = []
 

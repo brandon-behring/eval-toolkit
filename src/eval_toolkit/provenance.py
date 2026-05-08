@@ -12,7 +12,6 @@ import subprocess
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import matplotlib as mpl
 
@@ -84,7 +83,7 @@ def make_run_dir(base: Path | str, prefix: str = "run") -> Path:
 
 
 def capture_git_sha(repo_root: Path | str | None = None) -> str | None:
-    """Current HEAD short SHA, or ``None`` if not in a git repo.
+    """Current HEAD full SHA, or ``None`` if not in a git repo.
 
     Optional and injectable: callers that want a specific SHA (e.g., from CI
     metadata) should pass it directly to whichever function consumes it
@@ -148,8 +147,3 @@ def figure_metadata(provenance: dict[str, str], dpi: int = 300) -> dict[str, str
         "matplotlib_version": str(mpl.__version__),
         "figure_dpi": str(dpi),
     }
-
-
-def _safe_serialize(value: Any) -> Any:  # noqa: ARG001
-    """Stub kept for symmetry with provenance dict helpers."""
-    return value
