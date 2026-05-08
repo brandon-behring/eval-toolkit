@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-05-07
+
+Backlog-clearance release. v0.3.0's audit document deferred 6 items to
+v0.4.0+; this release ships 5 of them (CV-CLT lands as a standalone
+helper rather than as part of a full CV runner; the CV-runner design
+is gated on a separate v0.5 conversation).
+
+### Added — methodology
+
+- **`expected_calibration_error_l2`** — equal-mass L2 ECE (RMSE form).
+  Companion to the L1 variant `expected_calibration_error_equal_mass`.
+- **`expected_calibration_error_l2_debiased`** — Kumar 2019 §3.3
+  closed-form bias-corrected L2 ECE. Removes the O(M/n) positive bias
+  of the plug-in estimator; key result for production calibration
+  measurement on small / mid datasets. arXiv:1909.10155.
+- **`bootstrap_ci(method="studentized")`** — studentized bootstrap-t
+  per Algeshiemer 2024 / Davison & Hinkley §5.2. Per-resample inner
+  jackknife → pivot → CI = θ̂ − q · SE. Best CI coverage of any
+  non-nested method at the cost of an extra factor-n compute.
+- **`cv_clt_ci(fold_metrics, *, confidence=0.95)`** — standalone
+  cross-validation CI per Bayle et al. 2020 Theorem 3.1 (Annals of
+  Statistics). Caller supplies pre-computed per-fold metric estimates;
+  this helper does NOT run the CV (gated on a separate v0.5 design
+  conversation about fold strategy).
+- **`MinHashLSHStrategy(n=3, num_perm=128, bands=16, seed=42)`** — 5th
+  similarity strategy in `text_dedup`. Pure stdlib + numpy MinHash +
+  LSH banding (Broder 1997 / Indyk-Motwani 1998); production-scale
+  alternative to JaccardNgramStrategy. ~300 LOC of pure-numpy
+  implementation; no datasketch dep.
+
+### Added — testing infrastructure
+
+- **`tests/test_plotting_visual.py`** + **`tests/baseline/`** —
+  pytest-mpl visual-regression baselines for 7 plot helpers
+  (plot_pr_curve, plot_reliability_diagram, plot_confusion_matrix_grid,
+  plot_metric_bars, plot_score_histograms, plot_lift_ci,
+  plot_bootstrap_distribution). Tolerance=15. Run with `pytest --mpl`.
+- **`tox.ini`** + **`noxfile.py`** — local-runnable multi-Python test
+  matrix (3.11/3.12/3.13). No GitHub Actions.
+
+### Changed
+
+- `bootstrap_ci` `method` Literal type extended from
+  `Literal["BCa", "percentile"]` to
+  `Literal["BCa", "percentile", "studentized"]`.
+
+### Quality gates (2026-05-07)
+
+- **352 tests passing** (was 329 in v0.3.0; +23: 4 ECE-debiased, 2
+  studentized, 3 CV-CLT, 7 MinHash, 7 visual baselines).
+- **15 doctests on math kernels** (was 13 in v0.3.0; +2 from the new
+  ECE methods + cv_clt_ci).
+- 95 symbols re-exported from top-level `eval_toolkit` (was 90 in v0.3.0;
+  +5 new public symbols).
+- ruff + black + mypy strict all clean.
+- pytest-mpl visual baselines all match at tolerance=15.
+
+### Deferred to v0.5
+
+- Full CV orchestrator (the runner that produces fold_metrics for
+  cv_clt_ci to consume) — gated on design discussion of fold strategy.
+- ECE_SWEEP estimator (Roelofs 2022) — Monte-Carlo bias correction for
+  L1 ECE; complementary to the L2 closed-form form already shipped.
+- GitHub Actions CI workflow — tox/nox configs ship in v0.4 but actual
+  CI matrix execution stays external until a public-release decision.
+
 ## [0.3.0] — 2026-05-07
 
 Audit-driven correctness + methodology hardening release. Phase A produced
