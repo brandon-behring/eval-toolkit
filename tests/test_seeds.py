@@ -52,3 +52,53 @@ def test_set_global_seeds_works_without_torch() -> None:
     # Even if torch IS installed, this confirms no exception is raised.
     set_global_seeds(0)
     assert True  # smoke check: no exception
+
+
+@pytest.mark.unit
+def test_set_global_seeds_torch_path_when_available() -> None:
+    """Cover the torch.manual_seed + cudnn flag path when torch is installed.
+
+    Skipped if torch is not present (it's an optional dep).
+    """
+    torch = pytest.importorskip("torch")
+    set_global_seeds(123)
+    # Two consecutive calls with the same seed should yield identical torch RNG.
+    a = torch.rand(5)
+    set_global_seeds(123)
+    b = torch.rand(5)
+    assert torch.allclose(a, b)
+
+
+@pytest.mark.unit
+def test_set_global_seeds_strict_torch_raises_when_torch_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """strict_torch_determinism=True without torch installed → RuntimeError.
+
+    Simulates torch-absent by injecting an ImportError in the import path.
+    """
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _fake_import(name: str, globals_=None, locals_=None, fromlist=(), level: int = 0) -> object:
+        if name == "torch":
+            raise ImportError("simulated torch-absent")
+        return real_import(name, globals_, locals_, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    with pytest.raises(RuntimeError, match="strict_torch_determinism=True"):
+        set_global_seeds(0, strict_torch_determinism=True)
+
+
+@pytest.mark.unit
+def test_set_global_seeds_strict_torch_with_torch_installed() -> None:
+    """strict mode with torch present should call torch.use_deterministic_algorithms."""
+    pytest.importorskip("torch")
+    # Should not raise; just exercise the strict-deterministic branch.
+    try:
+        set_global_seeds(0, strict_torch_determinism=True)
+    except RuntimeError as exc:
+        # Some PyTorch builds error on this path because not all ops have
+        # deterministic kernels — that's expected behavior, not a test failure.
+        assert "deterministic" in str(exc).lower() or "non-deterministic" in str(exc).lower()

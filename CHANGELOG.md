@@ -5,6 +5,132 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-05-08
+
+Post-v0.7.1 best-practices sweep. Closes one real bug (the v0.7.1
+`__version__` mismatch), formalizes the ECE input contract with
+parametric regression tests, breaks `pyarrow` out into its own
+`[parquet]` extra, adds a new helper + four methodology chapters +
+per-version migration guides + a roadmap.
+
+The behavior change (ECE functions raise `ValueError` on uncalibrated
+logits) is the reason this is v0.8.0 and not v0.7.2 — the validation
+was *already* enforced in code (the helper was wired in pre-v0.8) but
+v0.8 locks it in via parametric regression tests so the contract
+can't silently regress in future releases.
+
+### BREAKING (small)
+
+- **`__version__` mismatch fixed.** v0.7.1 shipped with
+  `pyproject.toml = "0.7.1"` but
+  `src/eval_toolkit/__init__.py:13 __version__ = "0.7.0"`. v0.8.0
+  closes the mismatch and bumps to `"0.8.0"`. Any consumer code
+  branching on `eval_toolkit.__version__` would have seen the wrong
+  value in v0.7.1.
+
+### Added
+
+- **`metrics.quantile_stratified_report`** — 10-LOC wrapper around
+  `pr_auc` + `quantile_stratified_pr_auc` returning the four-field
+  SDD reporting shape `{full, trimmed, gap, gap_flag}`. Closes
+  prompt-injection-clean Gap 2. See
+  `docs/methodology/length_stratification.md`.
+
+- **Four new methodology chapters**:
+  - `docs/methodology/bootstrap.md` — BCa derivation, paired vs
+    unpaired, MDE, two-level bootstrap, K-fold CV-CI, resample
+    budgets.
+  - `docs/methodology/text_dedup.md` — when to use each
+    `SimilarityStrategy`; threshold tuning; LSH false-negative rates;
+    composition with `LeakageCheck`.
+  - `docs/methodology/versioning.md` — the `Versioned` Protocol;
+    `lm-evaluation-harness` `VERSION`-field pattern; how to choose a
+    version string convention; threading into
+    `RunManifest.versioned_objects`.
+  - `docs/methodology/length_stratification.md` —
+    `quantile_stratified_report` motivation; McClish 1989 partial-AUC
+    framing; SDD `gap_flag` convention.
+
+- **`docs/MIGRATION.md`** + **`docs/migration/v0.7.md`** +
+  **`docs/migration/v0.8.md`** — per-version migration guides with
+  copy-pasteable before/after blocks. Index file at
+  `docs/MIGRATION.md`.
+
+- **`docs/roadmap.md`** — forward-looking tracker; v0.9 candidates;
+  v1.0.0 path with explicit gating criteria; consumer gap-doc
+  cross-links (`prompt-injection-clean/docs/eval_toolkit_gaps.md`).
+
+- **`tests/test_coverage_gap.py::test_all_ece_variants_reject_out_of_range_scores`**
+  — parametric regression test asserting all 5 ECE variants raise
+  `ValueError` on out-of-range scores. Closes v0.3 audit P1 #2.
+
+- **`tests/test_reference_equivalence.py::test_brier_score_matches_sklearn`**
+  — adds `brier_score ≡ sklearn.metrics.brier_score_loss` to the
+  existing equivalence-test sweep.
+
+- **`tests/test_seeds.py`** — three new tests covering the optional
+  torch path:
+  `test_set_global_seeds_torch_path_when_available` (skipped if torch
+  absent), `test_set_global_seeds_strict_torch_raises_when_torch_absent`
+  (mocks the import), and
+  `test_set_global_seeds_strict_torch_with_torch_installed` (skipped
+  if torch absent).
+
+### Changed
+
+- **`pyproject.toml`** — bump to `0.8.0`. Add `[parquet]` extra:
+  ```toml
+  parquet = ["pyarrow>=15.0"]
+  ```
+  Move `pyarrow` from `[dev]`-only to the new `[parquet]` extra;
+  `[dev]` continues to depend on `eval-toolkit[parquet]` so CI still
+  exercises `ParquetGlobLoader`. Consumers can now
+  `pip install eval-toolkit[parquet]` without pulling the entire
+  test/lint stack.
+
+- **`STYLE.md`** — §4 "Type hints" updated. The Protocol-seam list
+  now reflects all 7 v0.7 / v0.8 seams (`Scorer`, `SliceAwareScorer`,
+  `LeakageCheck`, `Splitter`, `ThresholdSelector`, `DatasetLoader`,
+  `SimilarityStrategy`, `Versioned`); documents the
+  `@runtime_checkable` + `frozen+slots` reference-impl convention.
+
+- **`docs/methodology/thresholds.md`** Pitfalls section — added an
+  entry explaining the `recall@p` semantics divergence (smallest- vs
+  highest-threshold-meeting-floor) for downstream migrators.
+
+- **`docs/methodology/README.md`** — index updated for the four new
+  chapters; renumbered reading-order table (now 13 chapters).
+
+- **`docs/extending.md`** — cross-link to
+  `methodology/versioning.md` from the Versioned-Protocol callout.
+
+- **`README.md`** — methodology link list expanded (13 chapters);
+  added `docs/MIGRATION.md` and `docs/roadmap.md` links.
+
+- **`tests/conftest.py` + `conftest.py` (root)** — Sybil patterns
+  expanded to include `docs/MIGRATION.md` and `docs/migration/*.md`.
+
+### Bug fixes
+
+- **`fit_platt_calibrator`** docstring confirmed accurate
+  (canonical Platt with Lin 2007 Laplace smoothing) — the v0.3
+  research audit's P1 #3 was already closed in v0.3.0; the
+  audit reported a stale state.
+
+- **`bayes_optimal_threshold`** docstring confirmed accurate (already
+  notes the prior-corrected vs prior-independent distinction) — v0.3
+  audit P1 #4 was already closed.
+
+### Migration notes for downstream consumers
+
+Most consumers pinning `eval-toolkit>=0.7.0,<0.8` should bump to
+`>=0.8.0,<0.9` and run their tests. The two changes that may surface:
+
+1. `eval_toolkit.__version__` now reads `"0.8.0"` (not `"0.7.0"`).
+2. ECE on uncalibrated logits now raises `ValueError`. Apply
+   `softmax`/`sigmoid`/`np.clip(scores, 0, 1)` first. See
+   `docs/migration/v0.8.md` for the worked example.
+
 ## [0.7.1] — 2026-05-08
 
 Property-test follow-up to v0.7.0 (PR 1.5 in the release plan).

@@ -40,6 +40,7 @@ __all__ = [
     "pr_auc",
     "precision_at_prior",
     "quantile_stratified_pr_auc",
+    "quantile_stratified_report",
     "roc_auc",
     "score_distribution_summary",
     "single_class_threshold_metrics",
@@ -1156,6 +1157,95 @@ def quantile_stratified_pr_auc(
         "stratifier_high": float(hi),
         "q_low": float(q_low),
         "q_high": float(q_high),
+    }
+
+
+def quantile_stratified_report(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    stratifier: np.ndarray,
+    *,
+    q_low: float = 0.25,
+    q_high: float = 0.75,
+    gap_threshold: float = 0.05,
+) -> dict[str, float | bool]:
+    """Full vs trimmed PR-AUC report with a gap-flag (SDD reporting convention).
+
+    Wraps :func:`pr_auc` (full) + :func:`quantile_stratified_pr_auc` (trimmed)
+    into the four-field report shape used by ``prompt-injection-sdd`` style
+    reports: a *full* PR-AUC over all rows, a *trimmed* PR-AUC over the
+    central ``[q_low, q_high]`` quantile window of ``stratifier``, the
+    arithmetic ``gap = full - trimmed``, and a boolean ``gap_flag`` set when
+    ``gap > gap_threshold``.
+
+    A positive gap means the model exploits a confounder correlated with
+    ``stratifier`` (e.g., text length, time-of-day, document source); the
+    `gap_flag` surfaces this as a single auditable bit alongside the
+    headline metric — useful for at-a-glance reviewer-friendly tables.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels.
+    y_score : np.ndarray, shape (n,)
+        Scores.
+    stratifier : np.ndarray, shape (n,)
+        Numeric values defining the quantile window.
+    q_low, q_high : float, optional
+        Quantile bounds for the trimmed window. Default ``(0.25, 0.75)``.
+    gap_threshold : float, optional
+        Threshold above which ``gap_flag`` is True. Default ``0.05``
+        (SDD convention).
+
+    Returns
+    -------
+    dict
+        Keys: ``full``, ``trimmed``, ``gap``, ``gap_flag``.
+
+    Raises
+    ------
+    ValueError
+        Forwarded from :func:`pr_auc` and :func:`quantile_stratified_pr_auc`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from eval_toolkit import quantile_stratified_report
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> y = rng.binomial(1, 0.3, size=n)
+    >>> s = np.clip(y * 0.6 + rng.normal(0, 0.3, size=n), 0, 1)
+    >>> lengths = rng.integers(10, 200, size=n)
+    >>> report = quantile_stratified_report(y, s, lengths)
+    >>> bool(report["full"] >= report["trimmed"] - 0.5)  # sanity
+    True
+    >>> isinstance(report["gap_flag"], bool | np.bool_)
+    True
+
+    See Also
+    --------
+    eval_toolkit.metrics.quantile_stratified_pr_auc :
+        The trimmed-PR-AUC primitive this report wraps.
+    eval_toolkit.metrics.pr_auc :
+        The full-PR-AUC primitive.
+
+    Notes
+    -----
+    See ``docs/methodology/length_stratification.md`` for the methodology
+    motivation (McClish 1989 partial-AUC framing; when stratified vs.
+    global PR-AUC).
+    """
+    full = float(pr_auc(y_true, y_score))
+    trimmed_block = quantile_stratified_pr_auc(
+        y_true, y_score, stratifier, q_low=q_low, q_high=q_high
+    )
+    trimmed = float(trimmed_block["pr_auc"])
+    gap = full - trimmed
+    return {
+        "full": full,
+        "trimmed": trimmed,
+        "gap": gap,
+        "gap_flag": gap > gap_threshold,
     }
 
 

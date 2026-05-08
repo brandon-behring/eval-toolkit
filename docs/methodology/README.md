@@ -23,15 +23,19 @@ underlying canon.
 | 3 | [thresholds.md](thresholds.md) | Picking an operating point, migrating from the v0.6 string `criterion` API, fitting cost-sensitive thresholds, deciding whether to refit thresholds per bootstrap resample. |
 | 4 | [calibration.md](calibration.md) | Reporting calibration error, interpreting reliability diagrams, deciding *whether* to recalibrate, working with PyTorch logits. |
 | 5 | [comparison.md](comparison.md) | Computing CIs, comparing two models, reporting "we couldn't detect a difference" claims (MDE), deciding bootstrap method (BCa vs percentile). |
-| 6 | [fairness.md](fairness.md) | Auditing per-subgroup metrics, computing demographic parity / equalized odds on top of the toolkit's primitives, picking a fairness criterion. |
-| 7 | [reproducibility.md](reproducibility.md) | Setting up a reproducible run, mapping to the NeurIPS Reproducibility Checklist, navigating PyTorch determinism, replaying an old result from its manifest. |
-| 8 | [testing.md](testing.md) | Testing your *own* evaluation code — property / reference-equivalence / golden / visual-regression patterns. |
-| 9 | [reading_list.md](reading_list.md) | Citation lookup, future-work pointers, cross-link to the v0.3 research audit. |
+| 6 | [bootstrap.md](bootstrap.md) | Going deeper on the resampling theory underlying §5: BCa derivation, paired vs unpaired, two-level bootstrap, K-fold CV-CI, resample budgets. |
+| 7 | [length_stratification.md](length_stratification.md) | Auditing whether a confounder (text length, time, source) inflates the headline PR-AUC; reading the `gap_flag` from `quantile_stratified_report`. |
+| 8 | [text_dedup.md](text_dedup.md) | Picking a `SimilarityStrategy` (TF-IDF / embedding / MinHash-LSH / exact-hash); tuning thresholds; understanding LSH false-negative rates. |
+| 9 | [versioning.md](versioning.md) | Adopting the `Versioned` Protocol on consumer Scorers so `RunManifest.versioned_objects` auto-collects per-object versions. |
+| 10 | [fairness.md](fairness.md) | Auditing per-subgroup metrics, computing demographic parity / equalized odds on top of the toolkit's primitives, picking a fairness criterion. |
+| 11 | [reproducibility.md](reproducibility.md) | Setting up a reproducible run, mapping to the NeurIPS Reproducibility Checklist, navigating PyTorch determinism, replaying an old result from its manifest. |
+| 12 | [testing.md](testing.md) | Testing your *own* evaluation code — property / reference-equivalence / golden / visual-regression patterns. |
+| 13 | [reading_list.md](reading_list.md) | Citation lookup, future-work pointers, cross-link to the v0.3 research audit. |
 
 ## Reading paths
 
 - **"I'm new to eval-toolkit and want the conceptual map."** Read in
-  order 1 → 9 above; ~3 hours total. Skip the *Background* admonitions
+  order 1 → 13 above; ~4 hours total. Skip the *Background* admonitions
   if you're sklearn-fluent.
 
 - **"I'm migrating prompt_injection_detector / -showcase / -sdd to

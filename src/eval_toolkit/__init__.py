@@ -10,7 +10,7 @@ See ``STYLE.md`` for coding standards and ``CHANGELOG.md`` for version history.
 
 from __future__ import annotations
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 from eval_toolkit.bootstrap import (
     DEFAULT_CONFIDENCE,
@@ -109,6 +109,7 @@ from eval_toolkit.metrics import (
     pr_auc,
     precision_at_prior,
     quantile_stratified_pr_auc,
+    quantile_stratified_report,
     roc_auc,
     score_distribution_summary,
     single_class_threshold_metrics,
@@ -292,6 +293,7 @@ __all__ = [
     "pr_auc",
     "precision_at_prior",
     "quantile_stratified_pr_auc",
+    "quantile_stratified_report",
     "reliability_curve",
     "render_files",
     "render_text",

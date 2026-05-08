@@ -42,16 +42,25 @@ run: capture the manifest.
 What good binary-classification evaluation looks like, with each
 concern mapped to the toolkit primitive that operationalizes it.
 
-- [`docs/methodology/`](docs/methodology/README.md) — the curriculum.
-  Read [`leakage`](docs/methodology/leakage.md) →
+- [`docs/methodology/`](docs/methodology/README.md) — the curriculum
+  (12 chapters). Recommended reading order:
+  [`leakage`](docs/methodology/leakage.md) →
   [`splits`](docs/methodology/splits.md) →
   [`thresholds`](docs/methodology/thresholds.md) →
   [`calibration`](docs/methodology/calibration.md) →
   [`comparison`](docs/methodology/comparison.md) →
+  [`bootstrap`](docs/methodology/bootstrap.md) →
+  [`length_stratification`](docs/methodology/length_stratification.md) →
+  [`text_dedup`](docs/methodology/text_dedup.md) →
+  [`versioning`](docs/methodology/versioning.md) →
   [`fairness`](docs/methodology/fairness.md) →
   [`reproducibility`](docs/methodology/reproducibility.md) →
   [`testing`](docs/methodology/testing.md) →
   [`reading_list`](docs/methodology/reading_list.md).
+- [`docs/MIGRATION.md`](docs/MIGRATION.md) — per-version migration
+  guides (v0.6→v0.7, v0.7→v0.8).
+- [`docs/roadmap.md`](docs/roadmap.md) — forward-looking tracker;
+  v1.0.0 path; consumer gap-doc cross-links.
 
 ## Extending eval-toolkit
 

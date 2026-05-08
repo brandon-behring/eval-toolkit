@@ -238,6 +238,23 @@ print(f"Δ F1: {diff.delta:.3f}  CI [{diff.ci_low:.3f}, {diff.ci_high:.3f}]")
   two-level bootstrap if production retunes the threshold on each new
   batch. The narrower fixed-threshold CI is overconfident.
 
+- **`recall@p` semantics divergence on migration.** If you migrated
+  from a code base where `recall@p` (or `"recall_0.90"` in the v0.6
+  string API) picked the *smallest* threshold meeting the recall floor
+  — i.e., the *highest-recall* feasible point — eval-toolkit's
+  [`TargetRecallSelector(p)`](../../src/eval_toolkit/thresholds.py)
+  picks the *highest* threshold meeting the floor — i.e., the
+  *most-precise* feasible point. Both are valid operating points; we
+  standardize on the most-precise convention because it matches
+  Lipton-Elkan 2014 §3 and the canonical "least-aggressive predictor
+  that still meets the recall floor" framing. *Numerical effect*: same
+  recall (≥ p), but the toolkit's threshold is ≥ the legacy
+  threshold — and therefore precision is ≥ the legacy precision. If
+  you have a golden fixture pinned to the legacy convention, you'll
+  see threshold differences but recall ≥ p still holds. See the
+  `prompt-injection-sdd` v0.7.0 migration commit for a worked example
+  (its `recall@0.90` golden case is now skipped with this rationale).
+
 ## Putting it all together
 
 Compare four selectors side-by-side:

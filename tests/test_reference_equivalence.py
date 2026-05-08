@@ -23,7 +23,7 @@ from eval_toolkit.calibration import (
     fit_platt_calibrator,
     reliability_curve,
 )
-from eval_toolkit.metrics import pr_auc, roc_auc
+from eval_toolkit.metrics import brier_score, pr_auc, roc_auc
 
 # ---------------------------------------------------------------------------
 # Synthetic data: 5 datasets covering balanced, imbalanced, and small-n cases
@@ -88,6 +88,29 @@ def test_roc_auc_matches_sklearn(labeled_dataset: tuple[np.ndarray, np.ndarray])
     np.testing.assert_allclose(
         roc_auc(y, s),
         roc_auc_score(y, s),
+        atol=1e-12,
+        rtol=1e-12,
+    )
+
+
+# ---------------------------------------------------------------------------
+# brier_score ≡ sklearn.metrics.brier_score_loss
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_brier_score_matches_sklearn(labeled_dataset: tuple[np.ndarray, np.ndarray]) -> None:
+    """eval_toolkit.metrics.brier_score agrees with sklearn.metrics.brier_score_loss.
+
+    Both are mean-squared probability error; the toolkit implementation is a
+    direct numpy expression, so equivalence is essentially a regression test.
+    """
+    from sklearn.metrics import brier_score_loss  # noqa: PLC0415
+
+    y, s = labeled_dataset
+    np.testing.assert_allclose(
+        brier_score(y, s),
+        brier_score_loss(y, s),
         atol=1e-12,
         rtol=1e-12,
     )

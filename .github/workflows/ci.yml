@@ -40,15 +40,34 @@ jobs:
         run: .venv/bin/python -m mypy src
 
       - name: Run tests with coverage
-        run: .venv/bin/python -m pytest --cov=eval_toolkit --cov-fail-under=85
+        run: .venv/bin/python -m pytest --cov=eval_toolkit --cov-fail-under=90
 
-      - name: Run doctests on math kernels
+      - name: Run doctests on math kernels + utility modules
         run: |
           .venv/bin/python -m pytest --doctest-modules \
             src/eval_toolkit/metrics.py \
             src/eval_toolkit/bootstrap.py \
             src/eval_toolkit/calibration.py \
-            src/eval_toolkit/text_dedup.py
+            src/eval_toolkit/text_dedup.py \
+            src/eval_toolkit/thresholds.py \
+            src/eval_toolkit/leakage.py \
+            src/eval_toolkit/manifest.py \
+            src/eval_toolkit/paths.py \
+            src/eval_toolkit/provenance.py
+
+      - name: Validate JSON Schemas (jsonschema)
+        run: |
+          .venv/bin/python -c "
+          import json
+          from pathlib import Path
+          from jsonschema import Draft202012Validator
+          import eval_toolkit
+          schemas_dir = Path(eval_toolkit.__file__).parent / 'schemas'
+          for schema_file in sorted(schemas_dir.glob('*.json')):
+              schema = json.loads(schema_file.read_text())
+              Draft202012Validator(schema)  # constructor validates against meta-schema
+              print(f'  {schema_file.name}: OK')
+          "
 
       - name: Visual regression (pytest-mpl)
         run: .venv/bin/python -m pytest --mpl tests/test_plotting_visual.py

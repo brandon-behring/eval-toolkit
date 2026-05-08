@@ -654,6 +654,32 @@ def test_ece_equal_mass_rejects_out_of_range_scores() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "ece_fn_name",
+    [
+        "expected_calibration_error",
+        "expected_calibration_error_debiased",
+        "expected_calibration_error_l2",
+        "expected_calibration_error_l2_debiased",
+        "expected_calibration_error_equal_mass",
+    ],
+)
+def test_all_ece_variants_reject_out_of_range_scores(ece_fn_name: str) -> None:
+    """v0.8.0 regression: every ECE variant raises ValueError on uncalibrated logits.
+
+    Closes v0.3 audit P1 #2 — silent meaningless ECE on logit input was the
+    dominant historical failure mode for the calibration-aware metrics.
+    """
+    import eval_toolkit.metrics as _metrics
+
+    fn = getattr(_metrics, ece_fn_name)
+    y = np.array([0, 1] * 25, dtype=int)
+    s_logits = np.linspace(-3.0, 4.0, 50)  # uncalibrated logits
+    with pytest.raises(ValueError, match=r"must be in \[0, 1\]"):
+        fn(y, s_logits, n_bins=5)
+
+
+@pytest.mark.unit
 def test_metrics_validate_inputs_rejects_nan_inf_scores() -> None:
     """_validate_inputs (used by all metric helpers) rejects NaN/Inf in y_score."""
     y = np.array([0, 1, 0, 1])

@@ -40,7 +40,9 @@ pytest_collect_file = Sybil(
     patterns=_existing(
         "README.md",
         "docs/extending.md",
+        "docs/MIGRATION.md",
         "docs/methodology/*.md",
         "docs/examples/*.md",
+        "docs/migration/*.md",
     ),
 ).pytest()

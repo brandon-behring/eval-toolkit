@@ -93,7 +93,10 @@ print(f"first 5 scores: {preds.round(3)}")
 Note the `version` attribute — implementing the
 [`Versioned`](../src/eval_toolkit/leakage.py) opt-in Protocol means
 `build_manifest(versioned={...})` auto-captures it, so cross-version
-metric comparisons can be invalidated.
+metric comparisons can be invalidated. See
+[`methodology/versioning.md`](methodology/versioning.md) for the full
+story (when to expose `version`, how to choose a version string, the
+lm-evaluation-harness pattern this mirrors).
 
 ### LLM-judge with cost control
 

@@ -63,7 +63,30 @@ Run via `make lint` (= `ruff check + black --check + mypy`) and `make test`.
   required.
 - `from __future__ import annotations` only when forward refs require it.
 - `Protocol` only at "real seams" — where two or more concrete implementations
-  exist or are planned. Today's seams: `Scorer` (in `harness.py`).
+  exist or are planned. Current seams (as of v0.8.0):
+  - `Scorer` + `SliceAwareScorer` (`harness.py`) — anything with
+    `predict_proba(X) -> np.ndarray`. `SliceAwareScorer` adds opt-in
+    `should_score_slice(name)` for cost-controlled skipping.
+  - `LeakageCheck` (`leakage.py`) — uniform `validate(splits) -> LeakageFinding`
+    contract for 7 reference impls (exact / near / encoding-obfuscated /
+    cross-split / label-conflict / group / temporal).
+  - `Splitter` (`splits.py`) — `iter_folds(slice) -> Iterator[dict[str, EvalSlice]]`
+    + `get_n_splits` for 5 reference impls.
+  - `ThresholdSelector` (`thresholds.py`) — `select(y_true, y_score) ->
+    ThresholdResult` for 6 reference impls.
+  - `DatasetLoader` (`loaders.py`) — HF-`DatasetDict`-shaped
+    `load_splits() -> dict[str, EvalSlice]` + Croissant-compatible `describe()`
+    for 4 reference impls.
+  - `SimilarityStrategy` (`text_dedup.py`) — pluggable similarity backend for
+    `near_dedup` / `cross_dedup` / `NearDuplicateCheck` / `CrossSplitLeakageCheck`.
+  - `Versioned` (`leakage.py`) — opt-in single-attribute Protocol; any Tier-2
+    implementation may expose `version: str`. `RunManifest.versioned_objects`
+    auto-collects them. Mirrors the `lm-evaluation-harness` task `VERSION`
+    pattern. See `docs/methodology/versioning.md`.
+- All seams are `@runtime_checkable` so callers can `isinstance(obj, Protocol)`.
+- Reference impls are `@dataclass(frozen=True, slots=True)` with config in the
+  constructor (`TargetRecallSelector(recall=0.90)`) and the Protocol method as
+  the only behavior.
 - `NamedTuple` for stable public records that benefit from positional access;
   frozen dataclasses with `slots=True` otherwise.
 
