@@ -45,6 +45,7 @@ __all__ = [
     "DEFAULT_STRATEGY",
     "CostMatrix",
     "bayes_optimal_threshold",
+    "fit_beta_calibrator",
     "fit_isotonic_calibrator",
     "fit_platt_calibrator",
     "fit_temperature",
@@ -320,6 +321,54 @@ class CostMatrix:
         """Compose :func:`bayes_optimal_threshold` using this matrix's fields."""
         return bayes_optimal_threshold(self.prior, self.fp_cost, self.fn_cost)
 
+    def expected_cost(
+        self, y_true: np.ndarray, y_score: np.ndarray, threshold: float | None = None
+    ) -> float:
+        r"""Empirical expected cost on labeled data at a given (or Bayes-optimal) threshold.
+
+        For each row, the cost of the prediction at ``threshold`` is:
+
+        - True positive (y=1, pred=1): 0
+        - True negative (y=0, pred=0): 0
+        - False positive (y=0, pred=1): ``fp_cost``
+        - False negative (y=1, pred=0): ``fn_cost``
+
+        Returns the mean cost across the dataset, weighted equally per row.
+
+        Parameters
+        ----------
+        y_true : np.ndarray, shape (n,)
+            Binary labels in {0, 1}.
+        y_score : np.ndarray, shape (n,)
+            Predicted probabilities in [0, 1].
+        threshold : float or None, optional
+            Decision threshold; if ``None``, uses :attr:`bayes_threshold`.
+
+        Returns
+        -------
+        float
+            Mean cost per row.
+
+        Examples
+        --------
+        >>> cm = CostMatrix(prior=0.5, fp_cost=1.0, fn_cost=10.0)
+        >>> y = np.array([0, 1, 0, 1])
+        >>> s = np.array([0.6, 0.4, 0.1, 0.9])  # 1 FP, 1 FN
+        >>> # At threshold=0.5: pred = [1, 0, 0, 1]; FP at idx 0, FN at idx 1
+        >>> cm.expected_cost(y, s, threshold=0.5)
+        2.75
+        """
+        t = threshold if threshold is not None else self.bayes_threshold
+        y_arr = np.asarray(y_true).astype(int)
+        s_arr = np.asarray(y_score, dtype=float)
+        if y_arr.shape != s_arr.shape:
+            raise ValueError(f"y_true shape {y_arr.shape} != y_score shape {s_arr.shape}")
+        y_pred = (s_arr >= t).astype(int)
+        fp = ((y_pred == 1) & (y_arr == 0)).sum()
+        fn = ((y_pred == 0) & (y_arr == 1)).sum()
+        n = max(len(y_arr), 1)
+        return float((fp * self.fp_cost + fn * self.fn_cost) / n)
+
     def to_dict(self) -> dict[str, object]:
         """JSON-serializable form with the derived threshold."""
         return {
@@ -559,6 +608,103 @@ def fit_platt_calibrator(
             raise ValueError("scores contains NaN or inf")
         z = a_fit * arr + b_fit
         out: np.ndarray = (1.0 / (1.0 + np.exp(-z))).astype(float)
+        return out
+
+    return apply
+
+
+def fit_beta_calibrator(
+    y_true: np.ndarray, y_score: np.ndarray
+) -> Callable[[np.ndarray], np.ndarray]:
+    r"""Beta calibration per Kull et al. 2017 [#kull]_.
+
+    Three-parameter generalization of Platt scaling using the Beta family:
+
+    .. math::
+
+        P(y=1 \mid s) = \frac{1}{1 + \exp(-(a \log s - b \log (1 - s) + c))}
+
+    Equivalently, fit a logistic regression on the 2-feature transform
+    :math:`(\log s, \log(1 - s))`. The slope coefficient on :math:`\log s`
+    is ``a``; the (negated) slope on :math:`\log(1-s)` is ``b``; the
+    intercept is ``c``.
+
+    Beta calibration empirically dominates Platt scaling on most
+    real-world classifiers (Kull et al. 2017 §5), at the cost of one
+    extra parameter and a slightly more complex feature transform. It
+    is *not* monotone in the score (unlike Platt and isotonic) — for
+    that, use :func:`fit_isotonic_calibrator`.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Predicted probabilities in (0, 1). Scores at the extremes
+        ``{0, 1}`` are clipped to ``[1e-7, 1 - 1e-7]`` so the log-link
+        is finite.
+
+    Returns
+    -------
+    callable
+        Maps raw scores to calibrated probabilities via the fitted
+        3-parameter Beta sigmoid.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, empty input, non-finite scores, or
+        single-class ``y_true``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(42)
+    >>> y = rng.integers(0, 2, size=300)
+    >>> s = (y + rng.normal(0, 0.4, size=300)).clip(0.01, 0.99)
+    >>> g = fit_beta_calibrator(y, s)
+    >>> out = g(s)
+    >>> bool(out.min() >= 0.0 and out.max() <= 1.0)
+    True
+
+    See Also
+    --------
+    eval_toolkit.calibration.fit_platt_calibrator :
+        2-parameter sigmoid; Beta is a strict generalization.
+    eval_toolkit.calibration.fit_isotonic_calibrator :
+        Non-parametric monotone alternative.
+
+    Notes
+    -----
+    Implementation: build features ``(log s, log(1 - s))`` and fit
+    sklearn ``LogisticRegression`` with no regularization (``C=1e9``)
+    to recover the Beta-calibration MLE. This matches the reference
+    `betacal <https://github.com/betacal/python>`_ implementation up to
+    optimizer tolerance for typical data.
+
+    References
+    ----------
+    .. [#kull] Kull, M., Filho, T. S., & Flach, P. "Beta calibration: a
+       well-founded and easily implemented improvement on logistic
+       calibration for binary classifiers." AISTATS 2017.
+       arXiv:1607.06770.
+    """
+    from sklearn.linear_model import LogisticRegression  # noqa: PLC0415
+
+    y_true_arr, y_score_arr = _validate_calibrator_inputs(y_true, y_score)
+    s_clipped = np.clip(y_score_arr, _SCORE_CLIP_LO, _SCORE_CLIP_HI)
+    features = np.column_stack([np.log(s_clipped), np.log(1.0 - s_clipped)])
+    # Effectively unregularized (C very large) — matches Kull 2017 MLE.
+    lr = LogisticRegression(C=1e9, solver="lbfgs", max_iter=2000)
+    lr.fit(features, y_true_arr)
+
+    def apply(scores: np.ndarray) -> np.ndarray:
+        arr = np.asarray(scores, dtype=float).ravel()
+        if not np.isfinite(arr).all():
+            raise ValueError("scores contains NaN or inf")
+        clipped = np.clip(arr, _SCORE_CLIP_LO, _SCORE_CLIP_HI)
+        f = np.column_stack([np.log(clipped), np.log(1.0 - clipped)])
+        out: np.ndarray = lr.predict_proba(f)[:, 1].astype(float)
         return out
 
     return apply

@@ -777,3 +777,68 @@ def test_stratified_recall_no_ci_by_default() -> None:
     out = stratified_recall(y, s, threshold=0.5, strata=strata)
     assert "ci_low" not in out["A"]
     assert "ci_high" not in out["A"]
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 C6: expected_cost + Beta calibration
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_cost_matrix_expected_cost_known_value() -> None:
+    """expected_cost on a fixed scenario."""
+    from eval_toolkit.calibration import CostMatrix
+
+    cm = CostMatrix(prior=0.5, fp_cost=1.0, fn_cost=10.0)
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.6, 0.4, 0.1, 0.9])
+    # At threshold=0.5: pred = [1, 0, 0, 1]; FP at idx 0, FN at idx 1
+    # Cost = (1*1.0 + 1*10.0) / 4 = 2.75
+    assert cm.expected_cost(y, s, threshold=0.5) == 2.75
+
+
+@pytest.mark.unit
+def test_cost_matrix_expected_cost_uses_bayes_threshold_by_default() -> None:
+    from eval_toolkit.calibration import CostMatrix
+
+    cm = CostMatrix(prior=0.01, fp_cost=1.0, fn_cost=10.0)
+    rng = np.random.default_rng(0)
+    y = rng.binomial(1, 0.01, size=200)
+    s = np.clip(y * 0.5 + rng.normal(0, 0.3, 200), 0, 1)
+    cost_default = cm.expected_cost(y, s)
+    cost_explicit = cm.expected_cost(y, s, threshold=cm.bayes_threshold)
+    assert cost_default == cost_explicit
+
+
+@pytest.mark.unit
+def test_fit_beta_calibrator_returns_unit_interval() -> None:
+    from eval_toolkit.calibration import fit_beta_calibrator
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=300).astype(int)
+    s = (y + rng.normal(0, 0.4, 300)).clip(0.01, 0.99)
+    g = fit_beta_calibrator(y, s)
+    out = g(s)
+    assert (out >= 0.0).all() and (out <= 1.0).all()
+
+
+@pytest.mark.unit
+def test_fit_beta_calibrator_validates_single_class() -> None:
+    from eval_toolkit.calibration import fit_beta_calibrator
+
+    y = np.zeros(50, dtype=int)
+    s = np.linspace(0.1, 0.9, 50)
+    with pytest.raises(ValueError, match="both classes"):
+        fit_beta_calibrator(y, s)
+
+
+@pytest.mark.unit
+def test_fit_beta_calibrator_apply_rejects_nan() -> None:
+    from eval_toolkit.calibration import fit_beta_calibrator
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=50)
+    s = (y + rng.normal(0, 0.3, 50)).clip(0.01, 0.99)
+    g = fit_beta_calibrator(y, s)
+    with pytest.raises(ValueError, match="NaN"):
+        g(np.array([np.nan, 0.5]))
