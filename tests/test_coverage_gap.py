@@ -896,3 +896,60 @@ def test_save_figure_rejects_unknown_suffix(tmp_path: Path) -> None:
     fig, _ = plt.subplots()
     with pytest.raises(ValueError, match=r"\.png|\.pdf|\.svg|sorted"):
         save_figure(fig, tmp_path / "fig.jpg")
+
+
+# ---------------------------------------------------------------------------
+# v0.4.0 C1: bias-corrected L2 ECE (Kumar 2019)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_l2_ece_bounded() -> None:
+    """L2 ECE is in [0, 1] for any valid input."""
+    from eval_toolkit.metrics import expected_calibration_error_l2
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=200).astype(int)
+    s = rng.uniform(0, 1, 200)
+    out = expected_calibration_error_l2(y, s)
+    assert 0.0 <= out <= 1.0
+
+
+@pytest.mark.unit
+def test_l2_debiased_smaller_than_plug_in_on_calibrated_data() -> None:
+    """On well-calibrated data, the debiased estimate is ≤ plug-in (Kumar 2019)."""
+    from eval_toolkit.metrics import (
+        expected_calibration_error_l2,
+        expected_calibration_error_l2_debiased,
+    )
+
+    rng = np.random.default_rng(0)
+    n = 5000
+    s = rng.uniform(0, 1, size=n)
+    y = (rng.uniform(0, 1, size=n) < s).astype(int)  # perfectly calibrated
+    plug_in = expected_calibration_error_l2(y, s)
+    debiased = expected_calibration_error_l2_debiased(y, s)
+    # The debiased estimator must remove positive bias on calibrated data.
+    assert debiased <= plug_in + 1e-9
+
+
+@pytest.mark.unit
+def test_l2_debiased_zero_on_well_calibrated_large_n() -> None:
+    """On n=10K perfectly-calibrated data, debiased L2 ECE is near zero."""
+    from eval_toolkit.metrics import expected_calibration_error_l2_debiased
+
+    rng = np.random.default_rng(42)
+    n = 10000
+    s = rng.uniform(0, 1, size=n)
+    y = (rng.uniform(0, 1, size=n) < s).astype(int)
+    debiased = expected_calibration_error_l2_debiased(y, s, n_bins=10)
+    # 3σ tail: with bias removed, residual should be within sampling noise.
+    assert debiased < 0.05
+
+
+@pytest.mark.unit
+def test_l2_ece_rejects_logits() -> None:
+    from eval_toolkit.metrics import expected_calibration_error_l2
+
+    with pytest.raises(ValueError, match="must be in \\[0, 1\\]"):
+        expected_calibration_error_l2(np.array([0, 1, 0, 1] * 5), np.linspace(-2, 2, 20))

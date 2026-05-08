@@ -31,6 +31,8 @@ __all__ = [
     "brier_score",
     "expected_calibration_error",
     "expected_calibration_error_equal_mass",
+    "expected_calibration_error_l2",
+    "expected_calibration_error_l2_debiased",
     "headline_metrics",
     "metrics_at_threshold",
     "pr_auc",
@@ -722,6 +724,164 @@ def expected_calibration_error_equal_mass(
         empirical = float(np.mean(sorted_true[lo:hi]))
         ece += ((hi - lo) / n) * abs(confidence - empirical)
     return float(ece)
+
+
+def expected_calibration_error_l2(
+    y_true: np.ndarray, y_score: np.ndarray, n_bins: int = 10
+) -> float:
+    r"""Equal-mass L2 ECE — root mean squared bin-level miscalibration.
+
+    .. math::
+
+        \mathrm{ECE}_2 = \sqrt{\sum_k \frac{n_k}{n} (\bar p_k - \bar y_k)^2}
+
+    Companion to :func:`expected_calibration_error_equal_mass` (which uses L1
+    on the absolute difference). The L2 form is what Kumar 2019 [#kumar]_
+    proves admits a clean closed-form bias correction —
+    see :func:`expected_calibration_error_l2_debiased`.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels.
+    y_score : np.ndarray, shape (n,)
+        Calibrated probabilities ∈ [0, 1].
+    n_bins : int, optional
+        Number of equal-mass bins (default 10).
+
+    Returns
+    -------
+    float
+        L2 ECE in [0, 1]. 0 = perfectly calibrated.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> y = rng.integers(0, 2, size=500)
+    >>> s = (y + rng.normal(0, 0.3, 500)).clip(0, 1)
+    >>> 0.0 <= expected_calibration_error_l2(y, s) <= 1.0
+    True
+
+    References
+    ----------
+    .. [#kumar] Kumar, A., Liang, P. S., & Ma, T. "Verified uncertainty
+       calibration." NeurIPS 2019. arXiv:1909.10155.
+    """
+    _validate_inputs(y_true, y_score)
+    _validate_calibrated_score(y_score)
+    if n_bins < 2:
+        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
+    n = len(y_true)
+    if n < n_bins:
+        raise ValueError(f"n={n} smaller than n_bins={n_bins}; cannot form quantile bins")
+    order = np.argsort(np.asarray(y_score), kind="stable")
+    sorted_score = np.asarray(y_score)[order]
+    sorted_true = np.asarray(y_true)[order]
+    edges = np.linspace(0, n, n_bins + 1, dtype=int)
+    sq_err = 0.0
+    for b in range(n_bins):
+        lo, hi = int(edges[b]), int(edges[b + 1])
+        if hi <= lo:
+            continue
+        n_k = hi - lo
+        p_bar_k = float(np.mean(sorted_score[lo:hi]))
+        y_bar_k = float(np.mean(sorted_true[lo:hi]))
+        sq_err += (n_k / n) * (p_bar_k - y_bar_k) ** 2
+    return float(np.sqrt(sq_err))
+
+
+def expected_calibration_error_l2_debiased(
+    y_true: np.ndarray, y_score: np.ndarray, n_bins: int = 10
+) -> float:
+    r"""Bias-corrected L2 ECE per Kumar 2019 [#kumar]_ §3.3.
+
+    The plug-in L2 ECE estimator is positively biased: random
+    miscalibration "noise" inflates the squared error term by
+    :math:`\bar p_k (1 - \bar p_k) / n_k` per bin even when the true
+    calibration error is zero. Kumar 2019 proves the bias is
+    closed-form-removable for the L2 (squared) ECE:
+
+    .. math::
+
+        \widehat{\mathrm{ECE}}_2^{\,2,\, \text{deb}} =
+            \widehat{\mathrm{ECE}}_2^{\,2} -
+            \sum_k \frac{n_k}{n} \cdot \frac{\bar p_k (1 - \bar p_k)}{n_k}
+
+    The result is then square-rooted (clipped at 0 if the bias correction
+    drives the estimate negative on well-calibrated data).
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels.
+    y_score : np.ndarray, shape (n,)
+        Calibrated probabilities ∈ [0, 1].
+    n_bins : int, optional
+        Number of equal-mass bins (default 10).
+
+    Returns
+    -------
+    float
+        Debiased L2 ECE in [0, 1]. The bias correction can drive the
+        estimate to exactly 0 on well-calibrated data; this is correct
+        Kumar 2019 behavior, not a bug.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> # Perfectly calibrated synthetic data: y ~ Bernoulli(s)
+    >>> n = 5000
+    >>> s = rng.uniform(0, 1, size=n)
+    >>> y = (rng.uniform(0, 1, size=n) < s).astype(int)
+    >>> # Plug-in ECE has positive bias; debiased should be ~0.
+    >>> plug_in = expected_calibration_error_l2(y, s)
+    >>> debiased = expected_calibration_error_l2_debiased(y, s)
+    >>> debiased <= plug_in + 1e-9
+    True
+
+    See Also
+    --------
+    eval_toolkit.metrics.expected_calibration_error_l2 :
+        Plug-in L2 ECE without bias correction.
+    eval_toolkit.metrics.expected_calibration_error_equal_mass :
+        L1 (absolute-deviation) ECE — no closed-form bias correction.
+
+    References
+    ----------
+    .. [#kumar] Kumar, A., Liang, P. S., & Ma, T. "Verified uncertainty
+       calibration." NeurIPS 2019. arXiv:1909.10155. (§3.3 closed-form
+       debiased L2 ECE.)
+    .. [1] Roelofs, R., Cain, N., Shlens, J., & Mozer, M. "Mitigating bias
+       in calibration error estimation." AISTATS 2022.
+    """
+    _validate_inputs(y_true, y_score)
+    _validate_calibrated_score(y_score)
+    if n_bins < 2:
+        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
+    n = len(y_true)
+    if n < n_bins:
+        raise ValueError(f"n={n} smaller than n_bins={n_bins}; cannot form quantile bins")
+    order = np.argsort(np.asarray(y_score), kind="stable")
+    sorted_score = np.asarray(y_score)[order]
+    sorted_true = np.asarray(y_true)[order]
+    edges = np.linspace(0, n, n_bins + 1, dtype=int)
+    sq_err = 0.0
+    bias = 0.0
+    for b in range(n_bins):
+        lo, hi = int(edges[b]), int(edges[b + 1])
+        if hi <= lo:
+            continue
+        n_k = hi - lo
+        p_bar_k = float(np.mean(sorted_score[lo:hi]))
+        y_bar_k = float(np.mean(sorted_true[lo:hi]))
+        sq_err += (n_k / n) * (p_bar_k - y_bar_k) ** 2
+        # Kumar 2019 bias correction: per-bin variance of a Bernoulli with
+        # mean p_bar_k (≈ true bin mean), divided by n_k samples.
+        bias += (n_k / n) * (p_bar_k * (1.0 - p_bar_k) / n_k)
+    debiased_sq = max(sq_err - bias, 0.0)
+    return float(np.sqrt(debiased_sq))
 
 
 def brier_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
