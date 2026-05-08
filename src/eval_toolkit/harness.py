@@ -5,13 +5,26 @@ Public surface:
 - :class:`Scorer` Protocol — anything with ``predict_proba(X) -> np.ndarray``
 - :class:`SliceAwareScorer` Protocol — optional ``should_score_slice(name)`` hook
 - :class:`EvalSlice` — DataFrame wrapper with configurable column names
-- :class:`RunResult` — JSON-serializable run container
+- :class:`RunResult` — JSON-serializable run container (versioned schema)
 - :func:`evaluate_scorer_on_slice` — score one model on one slice
 - :func:`evaluate` — pure orchestrator: scores × slices → RunResult (no IO)
-- :func:`write_run_result` — IO wrapper: write RunResult to ``run_dir/results.json`` (and a full variant)
+- :func:`evaluate_folded` — fold aggregator: Splitter × seeds → RunResult
+  with ``by_fold`` and auto-CV-CI ``fold_summary``
+- :func:`write_run_result` — IO wrapper: write RunResult to ``run_dir/results.json``
 
-The pure/IO split lets callers test ``evaluate(...)`` deterministically without
-touching the filesystem; ``write_run_result(...)`` is the only IO sink.
+The pure/IO split lets callers test :func:`evaluate` deterministically without
+touching the filesystem; :func:`write_run_result` is the only IO sink.
+
+v0.7.0 additions:
+
+- ``leakage_checks`` / ``on_leakage`` params on :func:`evaluate`: run a
+  sequence of :class:`~eval_toolkit.leakage.LeakageCheck` over the input
+  slices before evaluation; raise on error-severity findings by default.
+- ``on_scorer_error`` param: when ``"record"``, captures any
+  ``Scorer.predict_proba`` exception per (slice, scorer) instead of failing
+  the whole run.
+- ``RunResult.by_fold`` / ``fold_summary`` / ``schema_version="v1"`` fields
+  (additive; defaults preserve backward compat).
 """
 
 from __future__ import annotations
@@ -19,29 +32,42 @@ from __future__ import annotations
 import json
 import logging
 import time
+import traceback
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 import numpy as np
 import pandas as pd
 
-from eval_toolkit.bootstrap import bootstrap_ci, mde_from_ci, paired_bootstrap_diff
+from eval_toolkit.bootstrap import (
+    bootstrap_ci,
+    cv_clt_ci,
+    mde_from_ci,
+    paired_bootstrap_diff,
+)
 from eval_toolkit.metrics import headline_metrics, pr_auc
+
+if TYPE_CHECKING:
+    from eval_toolkit.leakage import LeakageCheck
+    from eval_toolkit.splits import Splitter
 
 __all__ = [
     "DEFAULT_BOOTSTRAP_RESAMPLES",
+    "RUN_RESULT_SCHEMA_VERSION",
     "EvalSlice",
     "RunResult",
     "Scorer",
     "SliceAwareScorer",
     "evaluate",
+    "evaluate_folded",
     "evaluate_scorer_on_slice",
     "write_run_result",
 ]
 
 DEFAULT_BOOTSTRAP_RESAMPLES = 1000
+RUN_RESULT_SCHEMA_VERSION = "v1"
 
 _logger = logging.getLogger(__name__)
 
@@ -136,23 +162,57 @@ class EvalSlice:
 class RunResult:
     """Outcome of a full evaluation run.
 
-    Frozen dataclass: ``by_slice`` must be fully populated before
-    construction. Callers building results incrementally should
-    accumulate into a local dict and pass it to the constructor.
+    Frozen dataclass: result fields must be fully populated before construction.
+    Callers building results incrementally should accumulate into local dicts
+    and pass them to the constructor.
+
+    Parameters
+    ----------
+    run_id : str
+        Caller-supplied run identifier (timestamp / UUID).
+    git_sha : str or None
+        Repo HEAD commit SHA at run time, or ``None``.
+    config : dict[str, object]
+        Eval-time configuration (n_resamples, seed, scorer / slice names,
+        paired_diffs). Distinct from :class:`~eval_toolkit.manifest.RunManifest`
+        which captures *environment* fingerprint.
+    by_slice : dict[str, dict[str, object]]
+        Per-slice results. Empty for fold-aggregated runs (see ``by_fold``).
+    by_fold : dict[str, "RunResult"], optional
+        Per-fold raw :class:`RunResult` keyed by composite ID
+        (``"seed=42/fold=0"``). Populated by :func:`evaluate_folded`;
+        empty for non-folded runs (backward compat).
+    fold_summary : dict[str, dict[str, object]], optional
+        Auto-computed CV-CI summary per (slice, scorer, metric), keyed
+        ``[slice_name][scorer_name][metric] = {"mean", "ci_low", "ci_high",
+        "n_folds"}``. Populated by :func:`evaluate_folded`; empty otherwise.
+    schema_version : str
+        JSON schema version. ``"v1"`` for v0.7.0+; downstream parsers gate
+        on this.
+
+    .. versionchanged:: 0.7.0
+        Added ``by_fold``, ``fold_summary``, ``schema_version`` (additive,
+        defaults empty / ``"v1"`` — backward compatible).
     """
 
     run_id: str
     git_sha: str | None
     config: dict[str, object]
     by_slice: dict[str, dict[str, object]] = field(default_factory=dict)
+    by_fold: dict[str, RunResult] = field(default_factory=dict)
+    fold_summary: dict[str, dict[str, object]] = field(default_factory=dict)
+    schema_version: str = RUN_RESULT_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, object]:
-        """Serialize using the stable JSON schema."""
+        """Serialize using the stable JSON schema (v1 — see ``schema_version``)."""
         return {
+            "schema_version": self.schema_version,
             "run_id": self.run_id,
             "git_sha": self.git_sha,
             "config": self.config,
             "by_slice": self.by_slice,
+            "by_fold": {k: v.to_dict() for k, v in self.by_fold.items()},
+            "fold_summary": self.fold_summary,
         }
 
 
@@ -186,6 +246,7 @@ def evaluate_scorer_on_slice(
     *,
     n_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
     seed: int = 42,
+    on_scorer_error: Literal["raise", "record"] = "raise",
 ) -> dict[str, object]:
     """Score one scorer on one slice; return headline + bootstrap CI on PR-AUC.
 
@@ -201,14 +262,33 @@ def evaluate_scorer_on_slice(
         Bootstrap resamples for PR-AUC CI. Default 1000.
     seed : int, optional
         RNG seed. Default 42.
+    on_scorer_error : {"raise", "record"}, optional
+        v0.7.0 — when ``"record"``, catch any ``Scorer.predict_proba``
+        exception and return a ``{"error", "exc_type", "traceback"}`` dict
+        instead of failing. Default ``"raise"`` (loud during dev/CI).
 
     Returns
     -------
     dict
-        Headline metrics + ``pr_auc_ci`` + raw scores.
+        Headline metrics + ``pr_auc_ci`` + raw scores. On caught error
+        (``on_scorer_error="record"``), the dict carries
+        ``{"error", "exc_type", "traceback", "n", "n_positive", "scores": []}``
+        — same shape downstream consumers expect, plus the error fields.
     """
-    y_score = scorer.predict_proba(slice_.features)
     y_true = slice_.y_true
+    try:
+        y_score = scorer.predict_proba(slice_.features)
+    except Exception as exc:
+        if on_scorer_error == "raise":
+            raise
+        return {
+            "error": str(exc),
+            "exc_type": type(exc).__name__,
+            "traceback": traceback.format_exc(),
+            "n": int(len(slice_.df)),
+            "n_positive": int(y_true.sum()),
+            "scores": [],
+        }
     metrics = headline_metrics(y_true, y_score, strata=slice_.strata)
     is_single_class = len({int(v) for v in y_true}) == 1
     metrics["is_single_class"] = is_single_class
@@ -240,6 +320,9 @@ def evaluate(
     paired_diffs: list[tuple[str, str]] | None = None,
     seed: int = 42,
     extra_config: Mapping[str, object] | None = None,
+    leakage_checks: Sequence[LeakageCheck] = (),
+    on_leakage: Literal["raise", "record", "skip"] = "raise",
+    on_scorer_error: Literal["raise", "record"] = "raise",
 ) -> RunResult:
     """Run every scorer on every slice; return a pure :class:`RunResult` (no IO).
 
@@ -263,6 +346,20 @@ def evaluate(
         RNG seed. Default 42.
     extra_config : Mapping or None, optional
         Additional config keys to record in the result.
+    leakage_checks : sequence of LeakageCheck, optional
+        v0.7.0 — Sequence of pluggable leakage validators run over the
+        slices before evaluation. Slices are exposed to the checks as a
+        ``{slice.name: slice}`` mapping. Default empty (skip).
+    on_leakage : {"raise", "record", "skip"}, optional
+        v0.7.0 — Behavior when ``leakage_checks`` produces error-severity
+        findings. ``"raise"`` (default) raises ``RuntimeError`` listing the
+        findings; ``"record"`` records the report in
+        ``RunResult.config["leakage_report"]`` and continues; ``"skip"``
+        records nothing and continues.
+    on_scorer_error : {"raise", "record"}, optional
+        v0.7.0 — Threaded into every :func:`evaluate_scorer_on_slice` call.
+        ``"record"`` captures Scorer exceptions per (slice, scorer) instead
+        of failing the whole run.
 
     Returns
     -------
@@ -274,6 +371,9 @@ def evaluate(
     ------
     ValueError
         If ``scorers`` or ``slices`` is empty.
+    RuntimeError
+        If ``on_leakage="raise"`` and any leakage check produced an
+        error-severity finding.
     """
     if not scorers:
         raise ValueError("at least one scorer required")
@@ -286,9 +386,29 @@ def evaluate(
         "scorers": list(scorers.keys()),
         "slices": [s.name for s in slices],
         "paired_diffs": paired_diffs or [],
+        "on_scorer_error": on_scorer_error,
     }
     if extra_config:
         config.update(dict(extra_config))
+
+    # Run leakage checks before any scoring (per Q2 decision).
+    if leakage_checks:
+        # Late import to avoid circular dependency: leakage.py imports EvalSlice.
+        from eval_toolkit.leakage import run_leakage_checks
+
+        slices_dict = {s.name: s for s in slices}
+        report = run_leakage_checks(list(leakage_checks), slices_dict)
+        config["on_leakage"] = on_leakage
+        if on_leakage != "skip":
+            config["leakage_report"] = report.to_dict()
+        if on_leakage == "raise" and report.has_errors():
+            errors_summary = "; ".join(f"{f.check_name}: {f.message}" for f in report.errors())
+            raise RuntimeError(
+                f"Leakage checks produced {len(report.errors())} error finding(s): "
+                f"{errors_summary}. Pass on_leakage='record' to continue with the "
+                "report captured in RunResult.config, or 'skip' to drop the report."
+            )
+
     by_slice: dict[str, dict[str, object]] = {}
 
     for slice_ in slices:
@@ -308,11 +428,19 @@ def evaluate(
                 continue
             t0 = time.time()
             slice_data[sname] = evaluate_scorer_on_slice(
-                scorer, slice_, n_resamples=n_resamples, seed=seed
+                scorer,
+                slice_,
+                n_resamples=n_resamples,
+                seed=seed,
+                on_scorer_error=on_scorer_error,
             )
+            # If the scorer raised under on_scorer_error="record", scores is [].
+            # Subsequent paired-diff machinery sees the empty array and will
+            # short-circuit on the same len-check it already does for skipped
+            # scorers; no special-case needed.
             scores_by_scorer[sname] = np.asarray(slice_data[sname]["scores"], dtype=np.float64)
             elapsed = time.time() - t0
-            pr = slice_data[sname]["pr_auc"]
+            pr = slice_data[sname].get("pr_auc")
             pr_display = f"{pr:.4f}" if isinstance(pr, float) else "N/A"
             _logger.info("    %s: PR-AUC=%s (%.1fs)", sname, pr_display, elapsed)
 
@@ -356,6 +484,196 @@ def evaluate(
         }
 
     return RunResult(run_id=run_id, git_sha=git_sha, config=config, by_slice=by_slice)
+
+
+def _extract_metric_value(slice_dict: object, metric: str) -> float | None:
+    """Pull a numeric metric from one ``by_slice[scorer]`` dict, or ``None``."""
+    if not isinstance(slice_dict, dict):
+        return None
+    val = slice_dict.get(metric)
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        return float(val)
+    return None
+
+
+def _build_fold_summary(
+    by_fold: Mapping[str, RunResult],
+    slice_names: Sequence[str],
+    scorer_names: Sequence[str],
+    summary_metrics: Sequence[str] = ("pr_auc", "roc_auc"),
+) -> dict[str, dict[str, object]]:
+    """Aggregate per-fold metrics into ``[slice][scorer][metric] = CV-CI dict``.
+
+    For each (slice, scorer, metric) triple, collect the per-fold values and
+    pass them to :func:`eval_toolkit.bootstrap.cv_clt_ci`. Folds where the
+    scorer was skipped or errored contribute ``np.nan`` (graceful per-fold
+    degradation) and ``cv_clt_ci`` failures (fewer than 2 numeric folds, etc.)
+    degrade to ``{"skipped": "<reason>"}``.
+    """
+    summary: dict[str, dict[str, object]] = {}
+    for slice_name in slice_names:
+        per_scorer: dict[str, object] = {}
+        for scorer_name in scorer_names:
+            per_metric: dict[str, object] = {}
+            for metric in summary_metrics:
+                fold_values: list[float] = []
+                for fold_result in by_fold.values():
+                    slice_block = fold_result.by_slice.get(slice_name, {})
+                    if not isinstance(slice_block, dict):
+                        continue
+                    by_scorer = slice_block.get("by_scorer", {})
+                    if not isinstance(by_scorer, dict):
+                        continue
+                    value = _extract_metric_value(by_scorer.get(scorer_name), metric)
+                    fold_values.append(value if value is not None else float("nan"))
+                arr = np.asarray(fold_values, dtype=np.float64)
+                numeric = arr[~np.isnan(arr)]
+                if len(numeric) < 2:
+                    per_metric[metric] = {
+                        "skipped": f"only {len(numeric)} numeric fold(s); CV-CI needs >=2"
+                    }
+                    continue
+                try:
+                    ci = cv_clt_ci(arr)
+                    per_metric[metric] = {
+                        "mean": ci.point_estimate,
+                        "ci_low": ci.ci_low,
+                        "ci_high": ci.ci_high,
+                        "n_folds": int(len(numeric)),
+                    }
+                except (ValueError, RuntimeError) as exc:
+                    per_metric[metric] = {"skipped": str(exc)}
+            per_scorer[scorer_name] = per_metric
+        summary[slice_name] = per_scorer
+    return summary
+
+
+def evaluate_folded(
+    scorers: dict[str, Scorer],
+    splitter: Splitter,
+    slice_: EvalSlice,
+    *,
+    run_id: str,
+    git_sha: str | None = None,
+    seeds: Sequence[int] = (42,),
+    n_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
+    paired_diffs: list[tuple[str, str]] | None = None,
+    leakage_checks: Sequence[LeakageCheck] = (),
+    on_leakage: Literal["raise", "record", "skip"] = "raise",
+    on_scorer_error: Literal["raise", "record"] = "raise",
+    eval_split_names: Sequence[str] = ("test",),
+    summary_metrics: Sequence[str] = ("pr_auc", "roc_auc"),
+) -> RunResult:
+    """Run a fold aggregator: ``Splitter × seeds → RunResult`` with CV-CI summary.
+
+    For each ``seed`` in ``seeds``, iterate ``splitter.iter_folds(slice_)``,
+    delegate to :func:`evaluate` per fold (passing only the splits named in
+    ``eval_split_names``), and aggregate. Both raw per-fold results and an
+    auto-computed CV-CI summary land on the returned :class:`RunResult`:
+
+    - ``RunResult.by_fold[fold_id]`` — raw :class:`RunResult` per
+      (seed, fold), keyed ``"seed=<seed>/fold=<i>"``.
+    - ``RunResult.fold_summary[slice_name][scorer_name][metric]`` —
+      ``{mean, ci_low, ci_high, n_folds}`` from
+      :func:`eval_toolkit.bootstrap.cv_clt_ci`. Falls back to
+      ``{"skipped": "<reason>"}`` when fewer than 2 numeric folds.
+
+    Parameters
+    ----------
+    scorers : dict[str, Scorer]
+    splitter : Splitter
+        Any object implementing
+        :meth:`~eval_toolkit.splits.Splitter.iter_folds`.
+    slice_ : EvalSlice
+        Parent dataset; the splitter partitions it.
+    run_id : str
+    git_sha : str or None
+    seeds : sequence of int, optional
+        RNG seeds for multi-seed × CV. Default ``(42,)`` (single seed).
+    n_resamples, paired_diffs, leakage_checks, on_leakage, on_scorer_error :
+        Forwarded to :func:`evaluate` per fold.
+    eval_split_names : sequence of str, optional
+        Subset of each fold-dict's keys to actually evaluate. Default
+        ``("test",)`` — train sets are skipped (eval-only K-fold). Pass
+        ``("val", "test")`` to evaluate both.
+    summary_metrics : sequence of str, optional
+        Metrics aggregated into :attr:`RunResult.fold_summary`. Default
+        ``("pr_auc", "roc_auc")``.
+
+    Returns
+    -------
+    RunResult
+        ``by_slice`` empty (per-fold details live in ``by_fold``);
+        ``fold_summary`` populated.
+
+    Raises
+    ------
+    ValueError
+        If ``scorers`` is empty or no ``eval_split_names`` are present in
+        any fold.
+
+    Notes
+    -----
+    Eval-only K-fold semantics: the same scorer instance runs on each fold's
+    test partition. For "different trained model per fold" workflows, train
+    K models externally and wrap each as a :class:`Scorer` whose
+    ``predict_proba`` dispatches to the right underlying model based on
+    the slice's content.
+    """
+    if not scorers:
+        raise ValueError("at least one scorer required")
+
+    by_fold: dict[str, RunResult] = {}
+    fold_slice_names_seen: set[str] = set()
+    for seed in seeds:
+        for fold_idx, fold_dict in enumerate(splitter.iter_folds(slice_)):
+            fold_id = f"seed={seed}/fold={fold_idx}"
+            eval_slices = [fold_dict[name] for name in eval_split_names if name in fold_dict]
+            if not eval_slices:
+                raise ValueError(
+                    f"fold {fold_id}: none of eval_split_names={list(eval_split_names)} "
+                    f"present in fold keys={list(fold_dict.keys())}"
+                )
+            for s in eval_slices:
+                fold_slice_names_seen.add(s.name)
+            fold_result = evaluate(
+                scorers,
+                eval_slices,
+                run_id=fold_id,
+                git_sha=git_sha,
+                n_resamples=n_resamples,
+                paired_diffs=paired_diffs,
+                seed=seed,
+                leakage_checks=leakage_checks,
+                on_leakage=on_leakage,
+                on_scorer_error=on_scorer_error,
+            )
+            by_fold[fold_id] = fold_result
+
+    fold_summary = _build_fold_summary(
+        by_fold,
+        slice_names=sorted(fold_slice_names_seen),
+        scorer_names=list(scorers.keys()),
+        summary_metrics=summary_metrics,
+    )
+
+    config: dict[str, object] = {
+        "n_resamples": n_resamples,
+        "seeds": list(seeds),
+        "scorers": list(scorers.keys()),
+        "splitter": type(splitter).__name__,
+        "eval_split_names": list(eval_split_names),
+        "summary_metrics": list(summary_metrics),
+        "n_folds": int(len(by_fold)),
+    }
+    return RunResult(
+        run_id=run_id,
+        git_sha=git_sha,
+        config=config,
+        by_slice={},
+        by_fold=by_fold,
+        fold_summary=fold_summary,
+    )
 
 
 def write_run_result(result: RunResult, run_dir: Path) -> tuple[Path, Path]:

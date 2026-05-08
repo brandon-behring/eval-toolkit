@@ -18,8 +18,8 @@ from eval_toolkit.metrics import (
     pr_auc,
     precision_at_prior,
     roc_auc,
-    select_threshold,
 )
+from eval_toolkit.thresholds import MaxF1Selector, TargetRecallSelector, select_threshold
 from tests.strategies import balanced_binary_array, score_array
 
 # Local aliases preserve the existing naming throughout the file.
@@ -89,7 +89,7 @@ def test_ece_bounded(y: np.ndarray, s: np.ndarray, n_bins: int) -> None:
 def test_select_threshold_max_f1_is_optimal(y: np.ndarray, s: np.ndarray) -> None:
     """max_f1 threshold's F1 ≥ F1 at any other PR-curve threshold."""
     try:
-        result = select_threshold(y, s, criterion="max_f1")
+        result = select_threshold(y, s, criterion=MaxF1Selector())
     except RuntimeError:
         # constant scores: PR-curve has no thresholds. Skip.
         return
@@ -114,10 +114,9 @@ def test_select_threshold_recall_target_satisfied(
 ) -> None:
     """recall_X criterion gives a threshold whose recall ≥ X."""
     # Map target to one of the supported criteria
-    crit = "recall_0.90" if target_recall < 0.925 else "recall_0.95"
-    expected_target = 0.90 if crit == "recall_0.90" else 0.95
+    expected_target = 0.90 if target_recall < 0.925 else 0.95
     try:
-        result = select_threshold(y, s, criterion=crit)  # type: ignore[arg-type]
+        result = select_threshold(y, s, criterion=TargetRecallSelector(expected_target))
     except (RuntimeError, ValueError):
         return  # skip degenerate cases (constant scores; target unreachable)
     actual_recall = metrics_at_threshold(y, s, result.threshold)["recall"]

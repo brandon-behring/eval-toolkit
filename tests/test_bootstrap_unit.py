@@ -26,8 +26,8 @@ from eval_toolkit.metrics import (
     expected_calibration_error,
     metrics_at_threshold,
     pr_auc,
-    select_threshold,
 )
+from eval_toolkit.thresholds import MaxF1Selector
 
 
 @pytest.fixture
@@ -152,7 +152,7 @@ def test_paired_bootstrap_op_point_diff_runs(
     y_test, s_test = informative_signal
 
     def threshold_fn(yt: np.ndarray, ys: np.ndarray) -> float:
-        return select_threshold(yt, ys, criterion="max_f1").threshold
+        return MaxF1Selector().select(yt, ys).threshold
 
     def metric_fn(yt: np.ndarray, ys: np.ndarray, t: float) -> float:
         return float(metrics_at_threshold(yt, ys, t)["f1"])

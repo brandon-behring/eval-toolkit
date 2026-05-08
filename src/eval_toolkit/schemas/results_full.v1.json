@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eval-toolkit/schemas/results_full.v1.json",
+  "title": "eval-toolkit RunResult (full)",
+  "description": "Schema for run_dir/results_full.json (includes per-row scores). Same top-level shape as results.v1; differs only in that by_slice[*].by_scorer[*].scores arrays are retained.",
+  "type": "object",
+  "required": ["schema_version", "run_id", "config", "by_slice"],
+  "properties": {
+    "schema_version": {
+      "const": "v1"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "git_sha": {
+      "type": ["string", "null"]
+    },
+    "config": {
+      "type": "object"
+    },
+    "by_slice": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "by_fold": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "fold_summary": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

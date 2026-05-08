@@ -10,14 +10,16 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from eval_toolkit.thresholds import ThresholdSelector
 from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
     f1_score,
-    precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -25,7 +27,6 @@ from sklearn.metrics import (
 
 __all__ = [
     "DEFAULT_ASSUMED_PRIORS",
-    "OperatingPoint",
     "ThresholdResult",
     "brier_decomposition",
     "brier_score",
@@ -41,12 +42,9 @@ __all__ = [
     "quantile_stratified_pr_auc",
     "roc_auc",
     "score_distribution_summary",
-    "select_threshold",
     "single_class_threshold_metrics",
     "stratified_recall",
 ]
-
-OperatingPoint = Literal["max_f1", "recall_0.90", "recall_0.95"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,97 +199,6 @@ def roc_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     """
     _validate_inputs(y_true, y_score)
     return float(roc_auc_score(y_true, y_score))
-
-
-def select_threshold(
-    y_true: np.ndarray,
-    y_score: np.ndarray,
-    criterion: OperatingPoint = "max_f1",
-) -> ThresholdResult:
-    """Pick a threshold per the named operating-point rule.
-
-    Parameters
-    ----------
-    y_true : np.ndarray, shape (n,)
-        Binary labels in {0, 1}.
-    y_score : np.ndarray, shape (n,)
-        Real-valued scores.
-    criterion : {"max_f1", "recall_0.90", "recall_0.95"}, optional
-        - ``max_f1``: argmax F1 over the PR-curve thresholds.
-        - ``recall_0.90``: **highest** threshold achieving recall ≥ 0.90 —
-          the most-precise operating point that still satisfies the recall
-          constraint. (Higher threshold → fewer positive predictions → higher
-          precision; the algorithm picks the largest threshold consistent
-          with the recall floor.)
-        - ``recall_0.95``: highest threshold achieving recall ≥ 0.95.
-
-    Returns
-    -------
-    ThresholdResult
-        Frozen dataclass with ``threshold``, ``f1``, ``precision``, ``recall``, ``criterion``.
-
-    Raises
-    ------
-    ValueError
-        If ``criterion`` is not recognized.
-    RuntimeError
-        If ``y_score`` is constant (no PR-curve thresholds) or no threshold
-        achieves the recall target.
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> y = np.array([0, 0, 1, 1, 0, 1])
-    >>> s = np.array([0.1, 0.2, 0.7, 0.9, 0.3, 0.8])
-    >>> tr = select_threshold(y, s, criterion="max_f1")
-    >>> tr.f1
-    1.0
-
-    See Also
-    --------
-    eval_toolkit.calibration.bayes_optimal_threshold :
-        Closed-form Bayes-optimal threshold from cost matrix + prior;
-        complements the empirical max-F1 / recall-target rules here.
-    eval_toolkit.metrics.metrics_at_threshold :
-        Compute metrics at a *given* threshold (after selecting one).
-
-    References
-    ----------
-    .. [1] Lipton, Z., Elkan, C., & Naryanaswamy, B. "Optimal thresholding
-           of classifiers to maximize F1 measure." ECML PKDD 2014.
-           arXiv:1402.1892. (Optimality analysis of max-F1 selection.)
-    """
-    _validate_inputs(y_true, y_score)
-    precisions, recalls, thresholds = precision_recall_curve(y_true, y_score)
-    # `precision_recall_curve` returns N+1 precision/recall but N thresholds.
-    precisions, recalls = precisions[:-1], recalls[:-1]
-    if len(thresholds) == 0:
-        raise RuntimeError("PR curve has no thresholds — y_score may be constant")
-
-    if criterion == "max_f1":
-        f1s = 2 * precisions * recalls / np.clip(precisions + recalls, 1e-12, None)
-        idx = int(np.argmax(f1s))
-    elif criterion in ("recall_0.90", "recall_0.95"):
-        target = float(criterion.split("_")[1])
-        # PR-curve thresholds are sorted ascending, recall decreases monotonically
-        # with threshold; eligible[-1] is therefore the *highest* threshold
-        # (most precise operating point) still satisfying recall ≥ target.
-        eligible = np.where(recalls >= target)[0]
-        if len(eligible) == 0:
-            raise RuntimeError(
-                f"No threshold achieves recall ≥ {target}; max recall = {recalls.max():.3f}"
-            )
-        idx = int(eligible[-1])
-    else:
-        raise ValueError(f"unknown criterion: {criterion!r}")
-
-    return ThresholdResult(
-        threshold=float(thresholds[idx]),
-        f1=float(2 * precisions[idx] * recalls[idx] / max(precisions[idx] + recalls[idx], 1e-12)),
-        precision=float(precisions[idx]),
-        recall=float(recalls[idx]),
-        criterion=criterion,
-    )
 
 
 def metrics_at_threshold(
@@ -1448,19 +1355,28 @@ def headline_metrics(
     else:
         out["pr_auc"] = pr_auc(y_true, y_score)
         out["roc_auc"] = roc_auc(y_true, y_score)
+    # Late import: thresholds.py imports ThresholdResult / metrics_at_threshold
+    # from this module, so module-level imports would be circular.
+    from eval_toolkit.thresholds import MaxF1Selector, TargetRecallSelector
+
     operating_points: dict[str, Mapping[str, object]] = {}
-    criteria: tuple[OperatingPoint, ...] = ("max_f1", "recall_0.90", "recall_0.95")
-    for crit in criteria:
+    selectors_for_headline: list[ThresholdSelector] = [
+        MaxF1Selector(),
+        TargetRecallSelector(0.90),
+        TargetRecallSelector(0.95),
+    ]
+    for selector in selectors_for_headline:
+        label = selector.criterion
         if is_single_class:
-            operating_points[crit] = {
+            operating_points[label] = {
                 "skipped": "single-class slice; threshold must be selected on a mixed-class slice"
             }
             continue
         try:
-            tr = select_threshold(y_true, y_score, criterion=crit)
-            operating_points[crit] = metrics_at_threshold(y_true, y_score, tr.threshold)
+            tr = selector.select(y_true, y_score)
+            operating_points[label] = metrics_at_threshold(y_true, y_score, tr.threshold)
         except RuntimeError as exc:
-            operating_points[crit] = {"error": str(exc)}
+            operating_points[label] = {"error": str(exc)}
     out["operating_points"] = operating_points
 
     # Stratified recall reported at max-F1 threshold (when strata provided)
@@ -1471,7 +1387,7 @@ def headline_metrics(
             }
         else:
             try:
-                mf1_thresh = select_threshold(y_true, y_score, criterion="max_f1").threshold
+                mf1_thresh = MaxF1Selector().select(y_true, y_score).threshold
                 out["per_stratum_recall_at_max_f1"] = stratified_recall(
                     y_true, y_score, mf1_thresh, strata
                 )
@@ -1496,7 +1412,7 @@ def headline_metrics(
     n_neg = int(len(y_true) - n_pos)
     if n_pos > 0 and n_neg > 0:
         try:
-            mf1_thresh = select_threshold(y_true, y_score, criterion="max_f1").threshold
+            mf1_thresh = MaxF1Selector().select(y_true, y_score).threshold
             out["precision_at_prior"] = {
                 f"{p:g}": precision_at_prior(y_true, y_score, mf1_thresh, p) for p in assumed_priors
             }

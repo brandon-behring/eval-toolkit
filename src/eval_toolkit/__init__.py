@@ -10,7 +10,7 @@ See ``STYLE.md`` for coding standards and ``CHANGELOG.md`` for version history.
 
 from __future__ import annotations
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 from eval_toolkit.bootstrap import (
     DEFAULT_CONFIDENCE,
@@ -57,17 +57,45 @@ from eval_toolkit.docs import (
 )
 from eval_toolkit.harness import (
     DEFAULT_BOOTSTRAP_RESAMPLES,
+    RUN_RESULT_SCHEMA_VERSION,
     EvalSlice,
     RunResult,
     Scorer,
     SliceAwareScorer,
     evaluate,
+    evaluate_folded,
     evaluate_scorer_on_slice,
     write_run_result,
 )
+from eval_toolkit.leakage import (
+    CrossSplitLeakageCheck,
+    ExactDuplicateCheck,
+    GroupLeakageCheck,
+    LabelConflictCheck,
+    LeakageCheck,
+    LeakageFinding,
+    LeakageReport,
+    NearDuplicateCheck,
+    NormalizedFormLeakageCheck,
+    TemporalLeakageCheck,
+    Versioned,
+    run_leakage_checks,
+)
+from eval_toolkit.loaders import (
+    DataFrameLoader,
+    DatasetLoader,
+    HFDatasetsLoader,
+    ParquetGlobLoader,
+    SingleSliceLoader,
+)
+from eval_toolkit.manifest import (
+    MANIFEST_SCHEMA_VERSION,
+    RunManifest,
+    build_manifest,
+    write_manifest,
+)
 from eval_toolkit.metrics import (
     DEFAULT_ASSUMED_PRIORS,
-    OperatingPoint,
     ThresholdResult,
     brier_decomposition,
     brier_score,
@@ -83,7 +111,6 @@ from eval_toolkit.metrics import (
     quantile_stratified_pr_auc,
     roc_auc,
     score_distribution_summary,
-    select_threshold,
     single_class_threshold_metrics,
     stratified_recall,
 )
@@ -114,6 +141,14 @@ from eval_toolkit.provenance import (
     make_run_dir,
 )
 from eval_toolkit.seeds import set_global_seeds
+from eval_toolkit.splits import (
+    GroupKFoldSplitter,
+    HoldoutSplitter,
+    SourceDisjointKFoldSplitter,
+    Splitter,
+    StratifiedKFoldSplitter,
+    TimeSeriesSplitter,
+)
 from eval_toolkit.text_dedup import (
     DEFAULT_DEDUP_THRESHOLD,
     DedupReport,
@@ -127,6 +162,16 @@ from eval_toolkit.text_dedup import (
     near_dedup,
     normalize_text_for_dedup,
     sha256_text,
+)
+from eval_toolkit.thresholds import (
+    CostSensitiveSelector,
+    MaxF1Selector,
+    TargetFPRSelector,
+    TargetPrecisionSelector,
+    TargetRecallSelector,
+    ThresholdSelector,
+    YoudenJSelector,
+    select_threshold,
 )
 
 __all__ = [
@@ -145,28 +190,59 @@ __all__ = [
     "DEFAULT_PRIOR",
     "DEFAULT_SEED",
     "DEFAULT_STRATEGY",
+    "MANIFEST_SCHEMA_VERSION",
     "PALETTE",
     "PLOT_STYLE",
+    "RUN_RESULT_SCHEMA_VERSION",
     "BootstrapCI",
     "CostMatrix",
+    "CostSensitiveSelector",
+    "CrossSplitLeakageCheck",
+    "DataFrameLoader",
+    "DatasetLoader",
     "DedupReport",
     "EmbeddingCosineStrategy",
     "EvalSlice",
+    "ExactDuplicateCheck",
     "ExactNormalizedHashStrategy",
+    "GroupKFoldSplitter",
+    "GroupLeakageCheck",
+    "HFDatasetsLoader",
+    "HoldoutSplitter",
     "JaccardNgramStrategy",
+    "LabelConflictCheck",
+    "LeakageCheck",
+    "LeakageFinding",
+    "LeakageReport",
     "MDEEstimate",
+    "MaxF1Selector",
     "MinHashLSHStrategy",
     "MetricFn",
-    "OperatingPoint",
+    "NearDuplicateCheck",
+    "NormalizedFormLeakageCheck",
     "PairedBootstrapCI",
+    "ParquetGlobLoader",
+    "RunManifest",
     "RunResult",
     "Scorer",
     "SimilarityStrategy",
+    "SingleSliceLoader",
     "SliceAwareScorer",
+    "SourceDisjointKFoldSplitter",
+    "Splitter",
+    "StratifiedKFoldSplitter",
+    "TargetFPRSelector",
+    "TargetPrecisionSelector",
+    "TargetRecallSelector",
+    "TemporalLeakageCheck",
     "TfidfCosineStrategy",
     "ThresholdResult",
+    "ThresholdSelector",
     "ThresholdedMetricFn",
     "ThresholdFn",
+    "TimeSeriesSplitter",
+    "Versioned",
+    "YoudenJSelector",
     "__version__",
     "bayes_optimal_threshold",
     "bootstrap_ci",
@@ -176,7 +252,9 @@ __all__ = [
     "cross_dedup",
     "cross_validate_metric",
     "cv_clt_ci",
+    "build_manifest",
     "evaluate",
+    "evaluate_folded",
     "evaluate_scorer_on_slice",
     "expected_calibration_error",
     "expected_calibration_error_debiased",
@@ -229,5 +307,7 @@ __all__ = [
     "split_provenance_config",
     "stratified_recall",
     "walk_path",
+    "run_leakage_checks",
+    "write_manifest",
     "write_run_result",
 ]

@@ -40,7 +40,6 @@ from eval_toolkit.metrics import (
     pr_auc,
     precision_at_prior,
     quantile_stratified_pr_auc,
-    select_threshold,
     single_class_threshold_metrics,
     stratified_recall,
 )
@@ -53,6 +52,7 @@ from eval_toolkit.plotting import (
     plot_score_histograms,
     save_figure,
 )
+from eval_toolkit.thresholds import select_threshold
 
 
 @pytest.fixture(autouse=True)
@@ -102,10 +102,15 @@ def test_pr_auc_rejects_non_binary_labels() -> None:
 
 
 @pytest.mark.unit
-def test_select_threshold_rejects_unknown_criterion() -> None:
+def test_select_threshold_rejects_non_selector_criterion() -> None:
+    """v0.7.0 BREAKING — string criterion form is removed. Must pass a
+    ThresholdSelector instance; anything else raises TypeError with a
+    migration message."""
     y = np.array([0, 0, 1, 1])
     s = np.array([0.1, 0.2, 0.7, 0.9])
-    with pytest.raises(ValueError, match="unknown"):
+    with pytest.raises(TypeError, match="ThresholdSelector instance"):
+        select_threshold(y, s, criterion="max_f1")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="ThresholdSelector instance"):
         select_threshold(y, s, criterion="bogus")  # type: ignore[arg-type]
 
 

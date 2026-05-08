@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eval-toolkit/schemas/results.v1.json",
+  "title": "eval-toolkit RunResult (compact)",
+  "description": "Schema for run_dir/results.json (per-row scores stripped). Produced by eval_toolkit.harness.write_run_result.",
+  "type": "object",
+  "required": ["schema_version", "run_id", "config", "by_slice"],
+  "properties": {
+    "schema_version": {
+      "const": "v1",
+      "description": "Stable schema version. Bumps on breaking output changes."
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "git_sha": {
+      "type": ["string", "null"]
+    },
+    "config": {
+      "type": "object",
+      "description": "Eval-time config (n_resamples, seed, scorers, slices, paired_diffs, on_scorer_error, optional leakage_report)."
+    },
+    "by_slice": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "description": "Per-slice block: n, n_positive, by_scorer, paired_diffs."
+      }
+    },
+    "by_fold": {
+      "type": "object",
+      "description": "Per-fold raw RunResults (populated by evaluate_folded). Empty for non-folded runs.",
+      "additionalProperties": true
+    },
+    "fold_summary": {
+      "type": "object",
+      "description": "CV-CI summary [slice][scorer][metric] = {mean, ci_low, ci_high, n_folds}. Empty for non-folded runs.",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

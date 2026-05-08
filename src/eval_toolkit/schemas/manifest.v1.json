@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eval-toolkit/schemas/manifest.v1.json",
+  "title": "eval-toolkit RunManifest",
+  "description": "Schema for run_dir/manifest.json. Produced by eval_toolkit.manifest.write_manifest. NeurIPS Reproducibility Checklist-aligned.",
+  "type": "object",
+  "required": ["schema_version", "run_id", "code_versions", "env"],
+  "properties": {
+    "schema_version": {
+      "const": "v1"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "git_sha": {
+      "type": ["string", "null"]
+    },
+    "dirty_flag": {
+      "type": "boolean",
+      "description": "True iff the working tree had uncommitted changes at run time (NeurIPS clean-replay concern)."
+    },
+    "code_versions": {
+      "type": "object",
+      "description": "{package_name: version_string} — at minimum eval_toolkit.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "seeds": {
+      "type": "object",
+      "description": "{source: seed} for global / bootstrap / torch / dataloader RNGs.",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "data_hashes": {
+      "type": "object",
+      "description": "{logical_name: 'sha256:...'} for input artifacts.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "config_hash": {
+      "type": "string",
+      "description": "SHA-256 over the canonical-JSON encoding of the eval config."
+    },
+    "env": {
+      "type": "object",
+      "description": "Environment fingerprint (python, platform, key dep versions).",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "gpu_info": {
+      "type": "object",
+      "description": "{name, count, memory_gb} from nvidia-smi (empty dict if unavailable).",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "cuda_version": {
+      "type": ["string", "null"]
+    },
+    "wall_clock_seconds": {
+      "type": ["number", "null"]
+    },
+    "versioned_objects": {
+      "type": "object",
+      "description": "{name: version} for any Tier-2 implementation exposing a `version` attribute.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "leakage_report": {
+      "type": ["object", "null"],
+      "description": "Serialized LeakageReport (or null if no leakage checks ran).",
+      "properties": {
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["check_name", "severity", "drop_indices", "evidence", "message", "n_affected"],
+            "properties": {
+              "check_name": {"type": "string"},
+              "severity": {"enum": ["error", "warning", "info"]},
+              "drop_indices": {"type": "object"},
+              "evidence": {"type": "object"},
+              "message": {"type": "string"},
+              "n_affected": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

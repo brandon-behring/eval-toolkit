@@ -5,6 +5,242 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] — 2026-05-08
+
+Property-test follow-up to v0.7.0 (PR 1.5 in the release plan).
+Restores the 90 % coverage gate after the new v0.7.0 modules
+(thresholds / leakage / splits / loaders / manifest) ship with full
+Hypothesis property-test suites. No API changes.
+
+### Added
+
+- **`tests/test_thresholds_props.py`** — invariants for every
+  `ThresholdSelector` reference impl: `MaxF1Selector` returns
+  F1-optimal, `TargetRecallSelector` / `TargetPrecisionSelector` /
+  `TargetFPRSelector` meet their constraint, `CostSensitiveSelector`
+  matches the closed-form Bayes-optimal threshold, constructors reject
+  out-of-range parameters.
+
+- **`tests/test_leakage_props.py`** — invariants for `LeakageReport`
+  (empty checks → clean report, merged_drop_indices = union),
+  `NormalizedFormLeakageCheck` (zero-width-injected variants always
+  flagged), `_aggressive_normalize` is idempotent, `LeakageFinding`
+  to_dict round-trip, `GroupLeakageCheck` cross-split detection.
+
+- **`tests/test_splits_props.py`** — Splitter Protocol invariants:
+  HoldoutSplitter yields exactly 1 fold; StratifiedKFoldSplitter test
+  partitions are pairwise disjoint and union to the full slice;
+  GroupKFoldSplitter / SourceDisjointKFoldSplitter keep groups /
+  sources train↔test-disjoint per fold; TimeSeriesSplitter respects
+  max(train_t) < min(test_t); k-fold constructors reject k < 2.
+
+- **`tests/test_loaders_props.py`** — DataFrameLoader split keys match
+  unique split_col values + total rows preserved; describe() always
+  returns the Croissant key set; SingleSliceLoader emits only "all";
+  constructor rejects missing columns.
+
+- **`tests/test_manifest_props.py`** — config_hash invariant to dict
+  key order; changes when any value mutates; schema_version always
+  "v1"; data_hashes always sha256-prefixed; JSON round-trip preserves
+  run_id / schema_version / seeds; Versioned-protocol opt-in pattern
+  collects only objects exposing `version`.
+
+### Changed
+
+- **`[tool.coverage.report] fail_under` 85 → 90** restored. The
+  v0.7.0 release temporarily relaxed the gate while smoke tests
+  shipped without property coverage; this restores the historical
+  gate.
+
+- **`pyarrow >= 15.0` added to `[dev]`** so `ParquetGlobLoader`'s
+  load + hash path is exercised in CI (gated 90 % coverage on
+  `loaders.py` requires it).
+
+## [0.7.0] — 2026-05-08
+
+Methodology-aware harness release. Promotes eval-toolkit from a
+"library of metrics" to an opinionated **evaluation harness for binary
+classification**. Adds five new Protocol-based extension surfaces
+(`LeakageCheck`, `Splitter`, `ThresholdSelector`, `DatasetLoader`,
+`Versioned`), a NeurIPS-aligned `RunManifest`, versioned JSON
+schemas, and a multi-file consumer-facing methodology curriculum.
+
+The four `prompt_injection_*` consumer projects (PRs 2–4 in the
+release plan) migrate atomically once v0.7.0 is on PyPI.
+
+### BREAKING
+
+- **`metrics.select_threshold(criterion=str)` removed.** The string
+  form (`"max_f1"` / `"recall_0.90"` / `"recall_0.95"`) is gone.
+  `criterion` now requires a `ThresholdSelector` instance. Passing a
+  string raises `TypeError` with the migration mapping in the message.
+
+  Migration:
+
+  | v0.6 | v0.7 |
+  |---|---|
+  | `criterion="max_f1"` | `criterion=MaxF1Selector()` |
+  | `criterion="recall_0.90"` | `criterion=TargetRecallSelector(0.90)` |
+  | `criterion="recall_0.95"` | `criterion=TargetRecallSelector(0.95)` |
+  | `criterion="precision@0.90"` *(prompt-injection-sdd local fork)* | `criterion=TargetPrecisionSelector(0.90)` *(new)* |
+  | `criterion="recall@0.90"` *(prompt-injection-sdd local fork)* | `criterion=TargetRecallSelector(0.90)` |
+
+  `select_threshold` itself moved from `eval_toolkit.metrics` to
+  `eval_toolkit.thresholds`; it remains re-exported at the package
+  level (`from eval_toolkit import select_threshold` keeps working).
+  The `OperatingPoint` Literal alias is removed.
+
+- Internal callers in `eval_toolkit.metrics.headline_metrics` and the
+  toolkit's own test suite migrated atomically in this commit.
+
+### Added — new modules
+
+- **`eval_toolkit.thresholds`** — `ThresholdSelector` Protocol +
+  reference impls: `MaxF1Selector`, `TargetRecallSelector(recall)`,
+  `TargetPrecisionSelector(precision)` (new), `TargetFPRSelector(fpr)`,
+  `YoudenJSelector`, `CostSensitiveSelector(cost_matrix)`. All return
+  the existing `ThresholdResult` dataclass; all are
+  `runtime_checkable` and dataclass-frozen-with-slots.
+
+- **`eval_toolkit.leakage`** — `LeakageCheck` Protocol + uniform
+  `validate(splits: Mapping[str, EvalSlice]) -> LeakageFinding`
+  contract; two-tier `LeakageReport` with severity gating
+  (`error` / `warning` / `info`); `Versioned` opt-in Protocol mirroring
+  `lm-evaluation-harness`'s task `VERSION` field; `run_leakage_checks`
+  aggregator. Reference impls: `ExactDuplicateCheck`,
+  `NearDuplicateCheck`, `NormalizedFormLeakageCheck` (NEW: NFKC +
+  zero-width / Symbol-Other strip — catches the encoding-obfuscation
+  attack class documented in PI_HackAPrompt_SQuAD 2025 at 21.3 %
+  detection / 76.2 % ASR), `CrossSplitLeakageCheck`,
+  `LabelConflictCheck`, `GroupLeakageCheck`, `TemporalLeakageCheck`.
+
+- **`eval_toolkit.splits`** — `Splitter` Protocol with
+  `iter_folds(slice, *, groups=None) -> Iterator[dict[str, EvalSlice]]`
+  + `get_n_splits`. Reference impls: `HoldoutSplitter` (k=1 unifies
+  holdout into the same iterator shape as K-fold),
+  `StratifiedKFoldSplitter`, `GroupKFoldSplitter`,
+  `SourceDisjointKFoldSplitter` (generalizes the source-disjoint
+  pattern that `prompt-injection-sdd` hand-rolled), `TimeSeriesSplitter`.
+
+- **`eval_toolkit.loaders`** — `DatasetLoader` Protocol with HF-
+  `DatasetDict`-shaped `load_splits() -> dict[str, EvalSlice]` +
+  Croissant-compatible `describe()`. Reference impls:
+  `DataFrameLoader`, `SingleSliceLoader`, `ParquetGlobLoader`,
+  `HFDatasetsLoader` (soft-imports `datasets` only if installed).
+
+- **`eval_toolkit.manifest`** — `RunManifest` dataclass aligned with
+  the [NeurIPS Reproducibility Checklist](https://neurips.cc/public/guides/PaperChecklist):
+  `run_id`, `git_sha`, `dirty_flag`, `code_versions`, `seeds`,
+  `data_hashes` (sha256-prefixed), `config_hash`, `env`, `gpu_info`
+  (via `nvidia-smi --query-gpu`, graceful fallback), `cuda_version`,
+  `wall_clock_seconds`, `versioned_objects` (auto-collected from any
+  Tier-2 instance exposing a `version` attribute), `leakage_report`,
+  `schema_version="v1"`. `build_manifest` (pure builder) +
+  `write_manifest` (sole IO sink) mirror the existing
+  `harness.evaluate` / `write_run_result` pure/IO split.
+
+- **`eval_toolkit.schemas/`** — versioned JSON Schemas
+  (`results.v1.json`, `results_full.v1.json`, `manifest.v1.json`,
+  draft 2020-12). `tests/test_schemas.py` validates every JSON
+  output against the schemas; a breaking shape change without a
+  `schema_version` bump fails CI.
+
+### Added — `harness` extensions (additive; backward-compatible)
+
+- **`evaluate(..., leakage_checks: Sequence[LeakageCheck] = (),
+  on_leakage: Literal["raise", "record", "skip"] = "raise")`** —
+  inline leakage validation. Default fail-fast on error-severity
+  findings; `"record"` captures the report in `RunResult.config`;
+  `"skip"` runs checks without recording. Mirrors the DVC / Great
+  Expectations declarative pattern.
+
+- **`evaluate(..., on_scorer_error: Literal["raise", "record"] =
+  "raise")`** — catch `Scorer.predict_proba` exceptions per (slice,
+  scorer) when `"record"`; the run completes with `{"error",
+  "exc_type", "traceback"}` in the per-scorer block. Subsumes the
+  `_safe_select_threshold` workaround pattern from
+  `prompt-injection-sdd`.
+
+- **`evaluate_folded(scorers, splitter, slice_, ...)`** — fold
+  aggregator. Loops `splitter.iter_folds(slice_)` × seeds, calls
+  `evaluate(...)` per fold, populates `RunResult.by_fold` (raw per-
+  fold results) and `RunResult.fold_summary` (auto-computed
+  `cv_clt_ci` per `(slice, scorer, metric)` triple, with graceful
+  `{"skipped": ...}` fallback for degenerate folds).
+
+- **`RunResult.by_fold` / `fold_summary` / `schema_version="v1"`** —
+  additive fields; default empty / `"v1"` so existing `evaluate(...)`
+  callers see no behavior change.
+
+- **`RUN_RESULT_SCHEMA_VERSION = "v1"`** + **`MANIFEST_SCHEMA_VERSION
+  = "v1"`** module-level constants.
+
+### Added — docs
+
+- **`docs/methodology/`** — multi-file consumer-facing methodology
+  curriculum: `README.md` (index), `leakage.md`, `splits.md`,
+  `thresholds.md`, `calibration.md`, `comparison.md`, `fairness.md`,
+  `reproducibility.md`, `testing.md`, `reading_list.md`. Hybrid
+  expert + learner audience with collapsible *Background*
+  admonitions and explicit *Pitfalls / Common mistakes* sections per
+  chapter. All Python code blocks runnable end-to-end under
+  [Sybil](https://sybil.readthedocs.io/); PyTorch / HuggingFace
+  blocks marked `<!-- skip: next -->` with explicit rationale.
+
+- **`docs/extending.md`** — Protocol-by-Protocol guide for plugging
+  custom Scorers / LeakageChecks / Splitters / ThresholdSelectors /
+  DatasetLoaders into the harness. ~50-line full-harness recipe;
+  project-layout pointer to the showcase repo.
+
+- **`docs/examples/prompt_injection_walkthrough.md`** — end-to-end
+  prompt-injection eval on a synthetic 12-prompt OWASP LLM01:2025
+  fixture (direct, indirect, encoded/obfuscated, system-prompt-leak,
+  multi-stage). Cross-links to the showcase repo.
+
+- **`docs/examples/pytorch_scorer_example.md`** — HuggingFace
+  transformer + LoRA `Scorer` adapter. Marked `<!-- skip: next -->`
+  since `torch` is consumer-side.
+
+- **`README.md` reframed** — three-tier architecture diagram,
+  Methodology / Extending / Examples link blocks, expanded module
+  table.
+
+### Changed — testing infrastructure
+
+- **Sybil 10.x added to `[dev]`** (and a root-level `conftest.py`
+  registering `pytest_collect_file`) so every `python` doc-block
+  under `docs/` and `README.md` runs in CI as part of `pytest`.
+
+- **`jsonschema 4.21+` added to `[dev]`** for
+  `tests/test_schemas.py`.
+
+- **80+ new smoke / Protocol-instanceof tests** across the new
+  modules.
+
+- **Coverage gate temporarily lowered to 85 %** (was 90 %) for this
+  release. Property tests for the new modules — and the gate
+  restoration to 90 % — land in v0.7.1 (PR 1.5 in the release plan).
+
+### Migration notes for downstream consumers
+
+- **eval-toolkit-pinning consumers** (the four `prompt_injection_*`
+  repos): bump pin to `eval-toolkit>=0.7.0,<0.8`. The breaking
+  `select_threshold` change has a mechanical migration; a
+  `TypeError` at runtime points at the exact mapping.
+
+- **Consumers carrying their own `select_threshold` /
+  `_safe_select_threshold` / `data.py` (loader+leakage) shims**
+  (especially `prompt-injection-sdd`): delete the local copies, use
+  the toolkit's reference impls. The new `NormalizedFormLeakageCheck`
+  + `LabelConflictCheck` + `SourceDisjointKFoldSplitter` cover the
+  ~200 LOC duplicated across consumer repos today.
+
+- **Consumers building bespoke fairness / drift / McNemar / DeLong
+  metrics**: still consumer-side. eval-toolkit deliberately does not
+  ship these; `docs/methodology/fairness.md` and
+  `docs/methodology/comparison.md` document the conventions and point
+  to `fairlearn` / `scipy.stats`.
+
 ## [0.6.0] — 2026-05-08
 
 Downstream-extensibility release. Surfaces three previously hard-coded

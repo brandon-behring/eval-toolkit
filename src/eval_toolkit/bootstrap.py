@@ -599,7 +599,8 @@ def paired_bootstrap_op_point_diff(
     test_y, test_score_a, test_score_b : np.ndarray
         Test labels and scores for both scorers.
     threshold_fn : callable ``(y_true, y_score) -> threshold``
-        Typically wraps ``select_threshold(..., criterion=...).threshold``.
+        Typically wraps ``ThresholdSelector.select(...).threshold`` (e.g.
+        ``lambda y, s: MaxF1Selector().select(y, s).threshold``).
     metric_fn : callable ``(y_true, y_score, threshold) -> float``
         Operating-point metric (e.g., F1, precision) at the given threshold.
     n_resamples, confidence, seed : standard bootstrap params.

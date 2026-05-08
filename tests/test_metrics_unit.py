@@ -20,10 +20,10 @@ from eval_toolkit.metrics import (
     quantile_stratified_pr_auc,
     roc_auc,
     score_distribution_summary,
-    select_threshold,
     single_class_threshold_metrics,
     stratified_recall,
 )
+from eval_toolkit.thresholds import MaxF1Selector, TargetRecallSelector, select_threshold
 
 
 @pytest.fixture
@@ -57,7 +57,7 @@ def test_roc_auc_in_unit_interval(synthetic_data: tuple[np.ndarray, np.ndarray])
 def test_threshold_tuning_max_f1(synthetic_data: tuple[np.ndarray, np.ndarray]) -> None:
     """max_f1 threshold's F1 ≥ F1 at any other PR-curve threshold."""
     y_true, y_score = synthetic_data
-    result = select_threshold(y_true, y_score, criterion="max_f1")
+    result = select_threshold(y_true, y_score, criterion=MaxF1Selector())
     assert result.criterion == "max_f1"
     metrics = metrics_at_threshold(y_true, y_score, result.threshold)
     for cand in np.linspace(0.05, 0.95, 19):
@@ -69,7 +69,7 @@ def test_threshold_tuning_max_f1(synthetic_data: tuple[np.ndarray, np.ndarray]) 
 def test_threshold_recall_target(synthetic_data: tuple[np.ndarray, np.ndarray]) -> None:
     """recall_0.90 threshold actually achieves recall ≥ 0.90."""
     y_true, y_score = synthetic_data
-    result = select_threshold(y_true, y_score, criterion="recall_0.90")
+    result = select_threshold(y_true, y_score, criterion=TargetRecallSelector(0.90))
     metrics = metrics_at_threshold(y_true, y_score, result.threshold)
     assert metrics["recall"] >= 0.90 - 1e-6
 
@@ -209,7 +209,7 @@ def test_precision_at_prior_matches_eval_when_prior_eq_eval() -> None:
     n = 500
     y_true = rng.binomial(1, 0.3, size=n).astype(int)
     y_score = np.clip(y_true * 0.6 + rng.normal(0, 0.25, n), 0, 1)
-    tr = select_threshold(y_true, y_score, criterion="max_f1")
+    tr = select_threshold(y_true, y_score, criterion=MaxF1Selector())
     out = precision_at_prior(y_true, y_score, tr.threshold, assumed_prior=0.3)
     assert out["precision_at_assumed_prior"] == pytest.approx(
         out["precision_at_eval_prior"], rel=0.05
@@ -223,7 +223,7 @@ def test_precision_at_prior_drops_when_prior_drops() -> None:
     n = 500
     y_true = rng.binomial(1, 0.3, size=n).astype(int)
     y_score = np.clip(y_true * 0.6 + rng.normal(0, 0.25, n), 0, 1)
-    tr = select_threshold(y_true, y_score, criterion="max_f1")
+    tr = select_threshold(y_true, y_score, criterion=MaxF1Selector())
     eval_p = precision_at_prior(y_true, y_score, tr.threshold, assumed_prior=0.30)
     deploy_p = precision_at_prior(y_true, y_score, tr.threshold, assumed_prior=0.001)
     assert deploy_p["precision_at_assumed_prior"] < eval_p["precision_at_assumed_prior"] / 2
