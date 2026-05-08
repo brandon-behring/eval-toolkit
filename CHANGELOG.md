@@ -5,6 +5,123 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-05-07
+
+Audit-driven correctness + methodology hardening release. Phase A produced
+a literature-grounded research audit at `docs/v0.3_research_audit.md`
+(696 lines + 33 per-method literature notes in
+`~/Claude/research-kb/eval-toolkit-audit/`). Phase B locked the broad
+v0.3.0 scope. Phase C executed across 12 per-category commits (this
+release). 
+
+### Added
+
+- **`brier_score`** + **`brier_decomposition`** — Brier 1950 +
+  Murphy 1973 reliability/resolution/uncertainty decomposition. Strictly
+  proper scoring rule capturing what ECE alone misses.
+- **`fit_beta_calibrator`** — Kull et al. 2017 Beta calibration; 3-parameter
+  generalization of Platt that empirically dominates it on most real
+  classifiers.
+- **`CostMatrix.expected_cost(...)`** — composes the matrix's bayes_threshold
+  with empirical FP/FN counts to evaluate cost-sensitive deployments.
+- **`plot_bootstrap_distribution(deltas, *, ci_low=, ci_high=, ...)`** —
+  histogram of bootstrap-sampled deltas with optional CI overlay; useful
+  for diagnosing CI shape / normality assumption violations.
+- **`fpr` and `fnr` keys** in `metrics_at_threshold` return dict
+  (backwards-compatible).
+- **`stratified_recall(..., *, with_ci=True, confidence=0.95)`** — opt-in
+  Wilson scoring CI per stratum.
+- **`set_global_seeds(..., *, strict_torch_determinism=False)`** — opt-in
+  `torch.use_deterministic_algorithms(True)` matching PyTorch Lightning.
+  Also sets `PYTHONHASHSEED` (with warning if pre-set).
+- **`tests/test_reference_equivalence.py`** — 15 sklearn / scipy
+  value-equality tests pushing the test methodology grade from B+ to A−
+  (`pr_auc ≡ sklearn`, `roc_auc ≡ sklearn`, `bootstrap_ci ≡ scipy.stats.bootstrap`,
+  `reliability_curve ≡ sklearn.calibration`, `fit_isotonic ≡ sklearn`,
+  `fit_platt ≡ sklearn._SigmoidCalibration` post-rewrite).
+- **`tests/strategies.py`** — consolidated Hypothesis strategies
+  (`balanced_binary_array`, `score_array`) shared across property test
+  files.
+
+### Changed
+
+- **`fit_platt_calibrator` rewritten to canonical Platt** (Platt 1999 §2.2
+  + Lin et al. 2007). Source-verified to match
+  `sklearn.calibration._SigmoidCalibration` to ~1e-6 on imbalanced data.
+  Empirical delta vs v0.2.0: ~1–3% ECE on imbalanced (n ≥ 200) data.
+  v0.2.0 wrapped `LogisticRegression(C=1)` which was sklearn-flavored
+  logistic, NOT canonical Platt.
+- **`bayes_optimal_threshold` docstring**: added qualifying paragraph
+  distinguishing the prior-corrected formula from Elkan 2001 §4's
+  prior-independent posterior-formula.
+- **`fit_temperature_oracle`**: `.. warning::` admonition + runtime
+  `warnings.warn(UserWarning)` flagging fit-on-test pitfall (Vaicenavicius
+  2019, Kumar 2019, Roelofs 2022). Suite tests opt-in to suppression.
+- **`save_figure`**: now supports `.pdf` and `.svg` in addition to `.png`
+  (sidecar JSON written for all three; iTXt embedded metadata is
+  PNG-only). Provenance JSON now built via `provenance.figure_metadata()`
+  instead of inline dict.
+- **`PALETTE` is now `Mapping[str, str]`** wrapped in
+  `types.MappingProxyType`; mutation raises TypeError.
+- **`Scorer` and `SliceAwareScorer` are `@runtime_checkable`** —
+  `isinstance(obj, Scorer)` works.
+- **`RunResult` is `frozen=True`** — `evaluate()` builds `by_slice`
+  before construction.
+
+### Fixed (P1 audit gaps)
+
+- **ECE methods** (`expected_calibration_error` +
+  `expected_calibration_error_equal_mass`) now reject scores outside
+  `[0, 1]` with diagnostic message. Previously silently produced
+  meaningless ECE on logits.
+- **`metrics._validate_inputs`** now rejects NaN/Inf in `y_score`
+  (harmonizes 7 metric helpers).
+- **`fit_temperature`** now applies the same NaN/Inf + single-class
+  validation pattern as peer calibrator fitters.
+- **`EmbeddingCosineStrategy.pairs_across`** now rejects buggy embedders
+  that return inconsistent feature dimensions for query vs reference.
+- **`paired_bootstrap_diff`** now catches per-resample metric exceptions
+  (single-class draws on rare-positive data); raises only if > 5%
+  failure rate.
+- **`select_threshold:205` docstring bug**: "smallest threshold" →
+  "highest threshold" (returns the most precise operating point still
+  meeting the recall floor).
+
+### Breaking
+
+- **Kwarg-only break across 6 signatures**: `bootstrap_ci`,
+  `paired_bootstrap_diff`, `paired_bootstrap_op_point_diff`,
+  `mde_from_ci`, `paired_mde`, and `harness.evaluate_scorer_on_slice` now
+  require keyword arguments after the first positional break. Migration:
+  use `bootstrap_ci(y, s, metric, n_resamples=1000, ...)` instead of
+  `bootstrap_ci(y, s, metric, 1000, ...)`. sklearn made this exact change
+  in 0.23 / 2020.
+- **`BootstrapCI.to_dict()` JSON key rename**: `"mean"` →
+  `"point_estimate"` to match the dataclass field. Trips downstream JSON
+  consumers; `git grep '"mean"'` to find call sites.
+
+### Quality gates (2026-05-07)
+
+- 329 tests passing (was 290 in v0.2.0; +39 across new validation,
+  Brier, expected_cost, Beta, plotting, sklearn-equivalence,
+  strategies-refactor).
+- 13 doctests on math kernels (was 9 in v0.2.0; +4 from Brier,
+  brier_decomposition, expected_cost, fit_beta_calibrator).
+- ruff + black + mypy strict all clean.
+- Coverage maintained.
+- 90 symbols re-exported from top-level `eval_toolkit` (was 89; +5 from
+  new public symbols, −4 deduplicated).
+
+### Deferred to v0.3.1 / v0.4.0
+
+- pytest-mpl visual-regression baselines for plot helpers (audit gap
+  #27; baseline-image generation workflow needs dedicated round)
+- Bias-corrected ECE (Roelofs 2022 / Kumar 2019) as opt-in `estimator=`
+  kwarg
+- MinHashLSHStrategy (audit §3.4; gated on user signal)
+- Studentized bootstrap-t (Algeshiemer 2024)
+- CV-CLT (Bayle 2020)
+
 ## [0.2.0] — 2026-05-07
 
 ### Added
