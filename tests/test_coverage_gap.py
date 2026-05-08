@@ -1031,3 +1031,100 @@ def test_cv_clt_ci_widens_with_variance() -> None:
     tight = cv_clt_ci(np.array([0.80, 0.81, 0.79, 0.80, 0.81]))
     wide = cv_clt_ci(np.array([0.70, 0.90, 0.60, 0.95, 0.80]))
     assert (wide.ci_high - wide.ci_low) > (tight.ci_high - tight.ci_low)
+
+
+# ---------------------------------------------------------------------------
+# v0.4.0 C4: MinHashLSHStrategy
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_minhash_lsh_satisfies_protocol() -> None:
+    """MinHashLSHStrategy is a runtime-checkable SimilarityStrategy."""
+    from eval_toolkit.text_dedup import MinHashLSHStrategy, SimilarityStrategy
+
+    strat = MinHashLSHStrategy(n=2, num_perm=64, bands=16)
+    assert isinstance(strat, SimilarityStrategy)
+
+
+@pytest.mark.unit
+def test_minhash_lsh_pairs_within_shape() -> None:
+    from eval_toolkit.text_dedup import MinHashLSHStrategy
+
+    strat = MinHashLSHStrategy(n=2, num_perm=64, bands=16, seed=0)
+    texts = ["alpha bravo", "alpha bravo charlie", "delta echo", "foxtrot golf"]
+    sims, idx = strat.pairs_within(texts, k=3)
+    assert sims.shape == idx.shape == (4, 3)
+
+
+@pytest.mark.unit
+def test_minhash_lsh_self_similarity_is_one() -> None:
+    """For pairs_within, each text's most-similar neighbor is itself with sim=1."""
+    from eval_toolkit.text_dedup import MinHashLSHStrategy
+
+    strat = MinHashLSHStrategy(n=2, num_perm=64, bands=16, seed=0)
+    texts = ["alpha bravo charlie", "delta echo foxtrot"]
+    sims, idx = strat.pairs_within(texts, k=2)
+    for i in range(2):
+        assert int(idx[i, 0]) == i
+        assert sims[i, 0] == pytest.approx(1.0, abs=1e-9)
+
+
+@pytest.mark.unit
+def test_minhash_lsh_finds_near_duplicate() -> None:
+    """Near-duplicate pair should be discovered + scored ≥ 0.5 Jaccard."""
+    from eval_toolkit.text_dedup import MinHashLSHStrategy
+
+    strat = MinHashLSHStrategy(n=3, num_perm=128, bands=16, seed=0)
+    texts = [
+        "the quick brown fox jumps over the lazy dog",
+        "the quick brown fox jumps over the lazy doggo!",  # near-dup
+        "completely unrelated lorem ipsum text content",
+    ]
+    sims, idx = strat.pairs_within(texts, k=2)
+    # Top-1 (other than self) for text 0 should be text 1
+    assert int(idx[0, 1]) == 1
+    assert sims[0, 1] > 0.5  # high Jaccard between the near-dups
+
+
+@pytest.mark.unit
+def test_minhash_lsh_validates_args() -> None:
+    from eval_toolkit.text_dedup import MinHashLSHStrategy
+
+    with pytest.raises(ValueError, match="n must be"):
+        MinHashLSHStrategy(n=0)
+    with pytest.raises(ValueError, match="num_perm"):
+        MinHashLSHStrategy(num_perm=4)
+    with pytest.raises(ValueError, match="bands"):
+        MinHashLSHStrategy(num_perm=128, bands=0)
+    with pytest.raises(ValueError, match="bands"):
+        MinHashLSHStrategy(num_perm=128, bands=200)
+    with pytest.raises(ValueError, match="divisible"):
+        MinHashLSHStrategy(num_perm=128, bands=15)  # 128 not divisible by 15
+
+
+@pytest.mark.unit
+def test_minhash_lsh_handles_empty_input() -> None:
+    from eval_toolkit.text_dedup import MinHashLSHStrategy
+
+    strat = MinHashLSHStrategy(n=2, num_perm=64, bands=16)
+    sims_w, idx_w = strat.pairs_within([], k=5)
+    assert sims_w.shape == idx_w.shape == (0, 0)
+    sims_a, idx_a = strat.pairs_across([], ["a"], k=5)
+    assert sims_a.shape == idx_a.shape == (0, 0)
+
+
+@pytest.mark.unit
+def test_minhash_lsh_in_near_dedup_orchestrator() -> None:
+    """Plug-in contract: near_dedup accepts MinHashLSHStrategy via strategy=."""
+    from eval_toolkit.text_dedup import MinHashLSHStrategy, near_dedup
+
+    texts = [
+        "the quick brown fox",
+        "the quick brown fox!",  # near-dup
+        "lorem ipsum dolor sit amet",
+    ]
+    strat = MinHashLSHStrategy(n=3, num_perm=128, bands=16, seed=0)
+    report = near_dedup(texts, threshold=0.5, strategy=strat)
+    # The near-dup pair should collapse to 1 entry
+    assert report.n_kept == 2

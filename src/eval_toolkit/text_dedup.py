@@ -67,6 +67,7 @@ __all__ = [
     "EmbeddingCosineStrategy",
     "ExactNormalizedHashStrategy",
     "JaccardNgramStrategy",
+    "MinHashLSHStrategy",
     "SimilarityStrategy",
     "TfidfCosineStrategy",
     "cross_dedup",
@@ -658,6 +659,283 @@ class JaccardNgramStrategy:
         r_ngs = [self._ngrams(t) for t in reference_texts]
         k_eff = min(k, n_r)
         return self._topk(self._pairwise(q_ngs, r_ngs), k_eff)
+
+
+# ---------------------------------------------------------------------------
+# MinHash + LSH: production-scale approximate Jaccard
+# ---------------------------------------------------------------------------
+
+
+# Mersenne prime > 2**32 — used for the universal hash family in MinHash.
+_MINHASH_PRIME: int = (1 << 61) - 1
+_MINHASH_MAX_HASH: int = (1 << 32) - 1
+
+
+@dataclass(frozen=True, slots=True)
+class MinHashLSHStrategy:
+    r"""Approximate Jaccard via MinHash + LSH banding (Broder 1997, Indyk-Motwani 1998).
+
+    Production-scale alternative to :class:`JaccardNgramStrategy`. Computes
+    MinHash signatures of length ``num_perm`` for each text using a
+    universal hash family, then Locality-Sensitive Hashing (LSH) with
+    ``bands × rows = num_perm`` partitions the signature space so any two
+    texts with high Jaccard similarity probably collide in at least one
+    band. For each query, we expand its candidate set from the LSH
+    buckets, compute exact Jaccard on the surviving candidates, and
+    return the top-``k`` by similarity.
+
+    .. note::
+
+        This is an *approximate* Jaccard. Two texts with true Jaccard ≥
+        threshold are *probably* (not certainly) discovered as
+        candidates; the false-negative probability decreases with the
+        ``num_perm`` × bands tuning. See Indyk & Motwani 1998 for the
+        analysis of the LSH band-curve.
+
+    Parameters
+    ----------
+    n : int, optional
+        Character n-gram size for shingling. Default ``3``.
+    num_perm : int, optional
+        Number of MinHash permutations / signature length. Default
+        ``128``. Larger num_perm → more accurate Jaccard estimate, more
+        compute. ``num_perm`` must equal ``bands × rows_per_band``.
+    bands : int, optional
+        Number of LSH bands. Default ``16``. With default ``num_perm=128``
+        this gives ``rows_per_band = 8``. The LSH probability of two
+        texts with true Jaccard :math:`s` colliding in at least one band
+        is :math:`1 - (1 - s^r)^b`. Tune ``(bands, rows_per_band)`` to
+        the threshold you care about; e.g. ``(20, 5)`` flips around
+        :math:`s = 0.5`, ``(16, 8)`` flips around :math:`s ≈ 0.74`.
+    seed : int, optional
+        Deterministic seed for the universal-hash coefficients. Default
+        ``42``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> strat = MinHashLSHStrategy(n=2, num_perm=64, bands=16, seed=0)
+    >>> texts = ["the quick brown fox", "the quick brown fox!", "lorem ipsum"]
+    >>> sims, idx = strat.pairs_within(texts, k=2)
+    >>> sims.shape, idx.shape
+    ((3, 2), (3, 2))
+
+    Notes
+    -----
+    Scaling: ``num_perm × n_texts`` MinHash work for signatures, then
+    LSH bucketing is O(bands · n_texts) hashing + O(candidates per query)
+    Jaccard recomputation. For ``n_texts = 100K`` with default params,
+    this is dramatically faster than :class:`JaccardNgramStrategy`'s
+    O(n²) brute-force.
+
+    The "fillers" returned for queries with fewer than ``k`` candidates
+    are filled in with arbitrary indices and similarity ``0.0``;
+    downstream callers (``near_dedup``, ``cross_dedup``) only act on
+    similarities ``≥ threshold`` so the fillers are correctly ignored.
+
+    References
+    ----------
+    .. [1] Broder, A. "On the resemblance and containment of documents."
+           Compression and Complexity of Sequences, 1997.
+    .. [2] Indyk, P. & Motwani, R. "Approximate nearest neighbors:
+           Towards removing the curse of dimensionality." STOC 1998.
+    """
+
+    n: int = 3
+    num_perm: int = 128
+    bands: int = 16
+    seed: int = 42
+
+    def __post_init__(self) -> None:
+        """Validate constructor arguments."""
+        if self.n < 1:
+            raise ValueError(f"n must be ≥ 1, got {self.n}")
+        if self.num_perm < 8:
+            raise ValueError(f"num_perm must be ≥ 8, got {self.num_perm}")
+        if self.bands < 1 or self.bands > self.num_perm:
+            raise ValueError(f"bands must be in [1, num_perm={self.num_perm}], got {self.bands}")
+        if self.num_perm % self.bands != 0:
+            raise ValueError(
+                f"num_perm ({self.num_perm}) must be divisible by bands "
+                f"({self.bands}) for evenly-sized rows"
+            )
+
+    @property
+    def rows_per_band(self) -> int:
+        """Rows per LSH band; equals ``num_perm // bands``."""
+        return self.num_perm // self.bands
+
+    def _hash_coefs(self) -> tuple[np.ndarray, np.ndarray]:
+        """Build (a, b) coefficients for the universal hash family.
+
+        The hash is :math:`h_i(x) = ((a_i x + b_i) \\mod p) \\mod 2^{32}`,
+        a 4-universal hash family per Carter & Wegman 1979.
+        """
+        rng = np.random.default_rng(self.seed)
+        a = rng.integers(1, _MINHASH_PRIME, size=self.num_perm, dtype=np.int64)
+        b = rng.integers(0, _MINHASH_PRIME, size=self.num_perm, dtype=np.int64)
+        return a, b
+
+    def _shingles(self, text: str) -> set[str]:
+        """Char n-gram set for ``text`` (matches JaccardNgramStrategy.char-mode)."""
+        if len(text) < self.n:
+            return {text} if text else set()
+        return {text[i : i + self.n] for i in range(len(text) - self.n + 1)}
+
+    def _signature(self, shingle_set: set[str], a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        """MinHash signature of length ``num_perm`` for one shingle set."""
+        if not shingle_set:
+            return np.full(self.num_perm, _MINHASH_MAX_HASH, dtype=np.int64)
+        # Hash each shingle to a 32-bit integer (deterministic via SHA-256).
+        shingle_hashes = np.fromiter(
+            (
+                int.from_bytes(
+                    hashlib.sha256(s.encode("utf-8")).digest()[:4],
+                    "big",
+                )
+                for s in shingle_set
+            ),
+            dtype=np.int64,
+            count=len(shingle_set),
+        )
+        # For each of the num_perm permutations, take the min over the shingle hashes.
+        # h_i(x) = ((a_i * x + b_i) mod prime) mod 2^32 — universal hash.
+        permuted = (
+            (np.outer(shingle_hashes, a) + b[np.newaxis, :])
+            % _MINHASH_PRIME
+            % (_MINHASH_MAX_HASH + 1)
+        )
+        sig: np.ndarray = permuted.min(axis=0).astype(np.int64)
+        return sig
+
+    def _signatures_for(self, texts: Sequence[str]) -> np.ndarray:
+        """Stack of MinHash signatures of shape ``(len(texts), num_perm)``."""
+        a, b = self._hash_coefs()
+        n = len(texts)
+        sigs = np.zeros((n, self.num_perm), dtype=np.int64)
+        for i, t in enumerate(texts):
+            sigs[i] = self._signature(self._shingles(t), a, b)
+        return sigs
+
+    def _build_lsh_index(self, sigs: np.ndarray) -> list[dict[bytes, list[int]]]:
+        """Bucket signatures into ``self.bands`` band-keyed dicts."""
+        rows = self.rows_per_band
+        indices: list[dict[bytes, list[int]]] = [{} for _ in range(self.bands)]
+        for i in range(sigs.shape[0]):
+            for band in range(self.bands):
+                start = band * rows
+                key = sigs[i, start : start + rows].tobytes()
+                indices[band].setdefault(key, []).append(i)
+        return indices
+
+    def _query_lsh(
+        self,
+        sigs_query: np.ndarray,
+        sigs_ref: np.ndarray,
+        ref_index: list[dict[bytes, list[int]]],
+    ) -> list[set[int]]:
+        """Per-query candidate set: ref indices sharing ≥ 1 band hash."""
+        rows = self.rows_per_band
+        candidates: list[set[int]] = [set() for _ in range(sigs_query.shape[0])]
+        for i in range(sigs_query.shape[0]):
+            for band in range(self.bands):
+                start = band * rows
+                key = sigs_query[i, start : start + rows].tobytes()
+                if key in ref_index[band]:
+                    candidates[i].update(ref_index[band][key])
+        return candidates
+
+    @staticmethod
+    def _exact_jaccard(a: set[str], b: set[str]) -> float:
+        """Standard Jaccard; matches :meth:`JaccardNgramStrategy._jaccard`."""
+        if not a and not b:
+            return 1.0
+        union = a | b
+        if not union:
+            return 0.0
+        return len(a & b) / len(union)
+
+    def pairs_within(self, texts: Sequence[str], k: int) -> tuple[np.ndarray, np.ndarray]:
+        n = len(texts)
+        if n == 0:
+            return np.zeros((0, 0), dtype=np.float64), np.zeros((0, 0), dtype=np.int64)
+        sigs = self._signatures_for(texts)
+        index = self._build_lsh_index(sigs)
+        shingles_per_text = [self._shingles(t) for t in texts]
+        return self._compute_topk(
+            list(range(n)),
+            shingles_per_text,
+            shingles_per_text,
+            self._query_lsh(sigs, sigs, index),
+            k_eff=min(k, n),
+            n_ref=n,
+            include_self=True,
+        )
+
+    def pairs_across(
+        self,
+        query_texts: Sequence[str],
+        reference_texts: Sequence[str],
+        k: int,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        n_q, n_r = len(query_texts), len(reference_texts)
+        if n_q == 0 or n_r == 0:
+            return (
+                np.zeros((n_q, 0), dtype=np.float64),
+                np.zeros((n_q, 0), dtype=np.int64),
+            )
+        sigs_ref = self._signatures_for(reference_texts)
+        sigs_query = self._signatures_for(query_texts)
+        index = self._build_lsh_index(sigs_ref)
+        ref_shingles = [self._shingles(t) for t in reference_texts]
+        query_shingles = [self._shingles(t) for t in query_texts]
+        return self._compute_topk(
+            list(range(n_q)),
+            query_shingles,
+            ref_shingles,
+            self._query_lsh(sigs_query, sigs_ref, index),
+            k_eff=min(k, n_r),
+            n_ref=n_r,
+            include_self=False,
+        )
+
+    def _compute_topk(
+        self,
+        query_idx: list[int],
+        query_shingles: Sequence[set[str]],
+        ref_shingles: Sequence[set[str]],
+        candidate_sets: list[set[int]],
+        k_eff: int,
+        n_ref: int,
+        include_self: bool,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Compute exact Jaccard on LSH candidates and return top-k per query."""
+        n_q = len(query_idx)
+        sims = np.zeros((n_q, k_eff), dtype=np.float64)
+        indices = np.zeros((n_q, k_eff), dtype=np.int64)
+        for i, qi in enumerate(query_idx):
+            cands = candidate_sets[i]
+            if include_self:
+                cands = cands | {qi}
+            scored: list[tuple[float, int]] = [
+                (self._exact_jaccard(query_shingles[i], ref_shingles[j]), j) for j in cands
+            ]
+            # Stable descending sort: highest similarity first; on ties, lower index first.
+            scored.sort(key=lambda t: (-t[0], t[1]))
+            chosen = scored[:k_eff]
+            for slot, (sim, j) in enumerate(chosen):
+                sims[i, slot] = sim
+                indices[i, slot] = j
+            # Pad with arbitrary fillers if fewer than k_eff candidates.
+            if len(chosen) < k_eff:
+                seen = {j for _, j in chosen}
+                fillers = [j for j in range(n_ref) if j not in seen]
+                for slot in range(len(chosen), k_eff):
+                    if not fillers:
+                        break
+                    indices[i, slot] = fillers.pop(0)
+                    # sims[i, slot] stays 0.0 — filler.
+        return sims, indices
 
 
 # ---------------------------------------------------------------------------
