@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Create venv + install (with dev extras)
+        run: |
+          uv venv --python ${{ matrix.python-version }} .venv
+          uv pip install --python .venv/bin/python -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: .venv/bin/python -m ruff check src tests
+
+      - name: Format check (black)
+        run: .venv/bin/python -m black --check src tests
+
+      - name: Type check (mypy strict)
+        run: .venv/bin/python -m mypy src
+
+      - name: Run tests with coverage
+        run: .venv/bin/python -m pytest --cov=eval_toolkit --cov-fail-under=85
+
+      - name: Run doctests on math kernels
+        run: |
+          .venv/bin/python -m pytest --doctest-modules \
+            src/eval_toolkit/metrics.py \
+            src/eval_toolkit/bootstrap.py \
+            src/eval_toolkit/calibration.py \
+            src/eval_toolkit/text_dedup.py
+
+      - name: Visual regression (pytest-mpl)
+        run: .venv/bin/python -m pytest --mpl tests/test_plotting_visual.py
