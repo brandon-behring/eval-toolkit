@@ -22,7 +22,7 @@ import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 import pandas as pd
@@ -46,8 +46,15 @@ DEFAULT_BOOTSTRAP_RESAMPLES = 1000
 _logger = logging.getLogger(__name__)
 
 
+@runtime_checkable
 class Scorer(Protocol):
-    """Anything exposing ``predict_proba(X) -> np.ndarray of P(positive)``."""
+    """Anything exposing ``predict_proba(X) -> np.ndarray of P(positive)``.
+
+    Runtime-checkable: ``isinstance(obj, Scorer)`` returns True for any object
+    that exposes ``predict_proba``. Mirrors the
+    :class:`eval_toolkit.text_dedup.SimilarityStrategy` Protocol pattern from
+    v0.2.0.
+    """
 
     def predict_proba(  # pragma: no cover
         self, X: list[str] | pd.Series | np.ndarray
@@ -56,6 +63,7 @@ class Scorer(Protocol):
         ...
 
 
+@runtime_checkable
 class SliceAwareScorer(Scorer, Protocol):
     """Optional scorer contract for cost-controlled slice skipping."""
 
@@ -124,9 +132,14 @@ class EvalSlice:
         return out
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class RunResult:
-    """Outcome of a full evaluation run."""
+    """Outcome of a full evaluation run.
+
+    Frozen dataclass: ``by_slice`` must be fully populated before
+    construction. Callers building results incrementally should
+    accumulate into a local dict and pass it to the constructor.
+    """
 
     run_id: str
     git_sha: str | None
@@ -170,6 +183,7 @@ def _skipped_scorer_result(slice_: EvalSlice, reason: str) -> dict[str, object]:
 def evaluate_scorer_on_slice(
     scorer: Scorer,
     slice_: EvalSlice,
+    *,
     n_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
     seed: int = 42,
 ) -> dict[str, object]:
@@ -275,7 +289,7 @@ def evaluate(
     }
     if extra_config:
         config.update(dict(extra_config))
-    result = RunResult(run_id=run_id, git_sha=git_sha, config=config)
+    by_slice: dict[str, dict[str, object]] = {}
 
     for slice_ in slices:
         _logger.info(
@@ -334,14 +348,14 @@ def evaluate(
                     pdiff_dict["mde_at_80_power"] = {"error": str(exc)}
                 diffs[f"{b}_minus_{a}"] = pdiff_dict
 
-        result.by_slice[slice_.name] = {
+        by_slice[slice_.name] = {
             "n": int(len(slice_.df)),
             "n_positive": int(slice_.y_true.sum()),
             "by_scorer": slice_data,
             "paired_diffs": diffs,
         }
 
-    return result
+    return RunResult(run_id=run_id, git_sha=git_sha, config=config, by_slice=by_slice)
 
 
 def write_run_result(result: RunResult, run_dir: Path) -> tuple[Path, Path]:

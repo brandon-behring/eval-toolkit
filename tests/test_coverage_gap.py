@@ -329,7 +329,7 @@ def test_paired_mde_returns_estimate(
 def test_bootstrap_ci_to_dict_schema() -> None:
     ci = BootstrapCI(0.5, 0.4, 0.6, 0.95, 100, "BCa")
     d = ci.to_dict()
-    assert set(d.keys()) == {"mean", "ci_95", "confidence", "n_resamples", "method"}
+    assert set(d.keys()) == {"point_estimate", "ci_95", "confidence", "n_resamples", "method"}
 
 
 @pytest.mark.unit

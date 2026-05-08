@@ -105,7 +105,7 @@ class BootstrapCI:
     def to_dict(self) -> dict[str, object]:
         """Serialize to a stable dict schema for JSON output."""
         return {
-            "mean": self.point_estimate,
+            "point_estimate": self.point_estimate,
             "ci_95": [self.ci_low, self.ci_high],
             "confidence": self.confidence,
             "n_resamples": self.n_resamples,
@@ -182,6 +182,7 @@ def bootstrap_ci(
     y_true: np.ndarray,
     y_score: np.ndarray,
     metric: MetricFn,
+    *,
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
     method: Literal["BCa", "percentile"] = DEFAULT_METHOD,
@@ -281,6 +282,7 @@ def paired_bootstrap_diff(
     y_score_a: np.ndarray,
     y_score_b: np.ndarray,
     metric: MetricFn,
+    *,
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
     seed: int = DEFAULT_SEED,
@@ -464,6 +466,7 @@ def paired_bootstrap_op_point_diff(
     test_score_b: np.ndarray,
     threshold_fn: ThresholdFn,
     metric_fn: ThresholdedMetricFn,
+    *,
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
     seed: int = DEFAULT_SEED,
@@ -672,6 +675,7 @@ class MDEEstimate:
 
 def mde_from_ci(
     paired: PairedBootstrapCI,
+    *,
     alpha: float = 0.05,
     power: float = 0.80,
 ) -> MDEEstimate:
@@ -743,6 +747,7 @@ def paired_mde(
     y_score_a: np.ndarray,
     y_score_b: np.ndarray,
     metric: MetricFn,
+    *,
     alpha: float = 0.05,
     power: float = 0.80,
     n_resamples: int = DEFAULT_N_RESAMPLES,

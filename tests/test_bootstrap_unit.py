@@ -129,7 +129,7 @@ def test_bootstrap_ci_to_dict_schema(informative_signal: tuple[np.ndarray, np.nd
     y_true, y_score = informative_signal
     ci = bootstrap_ci(y_true, y_score, pr_auc, n_resamples=200, seed=42)
     d = ci.to_dict()
-    assert set(d.keys()) == {"mean", "ci_95", "confidence", "n_resamples", "method"}
+    assert set(d.keys()) == {"point_estimate", "ci_95", "confidence", "n_resamples", "method"}
     assert isinstance(d["ci_95"], list)
 
 
