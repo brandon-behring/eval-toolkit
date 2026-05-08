@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-05-07
+
+Closes the v0.4 deferral list: cross-validation orchestrator,
+debiased L1 ECE, and GitHub Actions CI.
+
+### Added
+
+- **`cross_validate_metric(y_true, y_score, *, metric, k=5, stratified=True, seed=42)`**
+  — eval-only K-fold orchestrator. Uses sklearn `StratifiedKFold` by
+  default for class-balance preservation; computes the metric per fold;
+  returns shape-(K,) array (NaN for single-class folds). Pairs with
+  `cv_clt_ci` (v0.4) for end-to-end CV inference. Eval-only by design;
+  the toolkit does not own model training.
+- **`expected_calibration_error_debiased(y_true, y_score, n_bins=10, *, n_sweep=200, seed=42)`**
+  — Monte-Carlo simulated-H0 bias correction for L1 ECE. Companion to
+  v0.4's closed-form `expected_calibration_error_l2_debiased` (Kumar
+  2019); the L1 form has no closed-form correction so we estimate the
+  bias by drawing y_b ~ Bernoulli(s) under H0, computing plug-in ECE_b,
+  averaging over `n_sweep` resamples. Same conceptual move as Roelofs
+  2022's ECE_SWEEP estimator (which uses CV instead of simulated-H0);
+  trades fidelity to the literal SWEEP construction for substantial
+  implementation simplicity.
+- **`.github/workflows/ci.yml`** — GitHub Actions CI on push + PR to
+  main. Matrix Python 3.11/3.12/3.13. Steps: ruff + black + mypy strict
+  + pytest with coverage gate + doctests on math kernels + pytest-mpl
+  visual regression.
+
+### Quality gates (2026-05-07)
+
+- 357 tests passing (was 352 in v0.4.0; +5 new C1+C2 tests).
+- 22 doctests across math kernels (was 15 in v0.4.0; +7 across new
+  functions and updated examples).
+- ruff + black + mypy strict all clean.
+- 99 symbols re-exported from top-level `eval_toolkit` (was 97 in
+  v0.4.0; +2 new public symbols).
+- Visual baselines (pytest-mpl) all pass at tolerance=15.
+
+### Deferred (no remaining v0.4 backlog)
+
+The v0.4 deferral list is now complete. Future enhancements
+(no concrete commitment): full train+eval CV (caller-supplied
+`fit_fn`); literal Roelofs 2022 ECE_SWEEP via cross-validation;
+PyPI publication.
+
 ## [0.4.0] — 2026-05-07
 
 Backlog-clearance release. v0.3.0's audit document deferred 6 items to
