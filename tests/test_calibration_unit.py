@@ -125,12 +125,30 @@ def test_fit_isotonic_clips_to_unit_interval(
 
 
 @pytest.mark.unit
-def test_fit_platt_strict_bounds(well_separated: tuple[np.ndarray, np.ndarray]) -> None:
-    """Platt outputs are in (0, 1) strictly."""
+def test_fit_platt_in_unit_interval(well_separated: tuple[np.ndarray, np.ndarray]) -> None:
+    """Canonical Platt outputs are in [0, 1].
+
+    Note: canonical Platt (Lin 2007) does NOT clip; large |z| values saturate
+    σ(z) → 0 or 1 in floating-point. Previous (≤ v0.2.0) implementation
+    used L2-regularized LogisticRegression which kept the slope smaller and
+    avoided saturation; the saturation here is canonical-Platt-correct.
+    """
     y, s = well_separated
     g = fit_platt_calibrator(y, s)
     out = g(np.linspace(-2.0, 3.0, 50))
-    assert (out > 0.0).all() and (out < 1.0).all()
+    assert (out >= 0.0).all() and (out <= 1.0).all()
+
+
+@pytest.mark.unit
+def test_fit_platt_monotonic(well_separated: tuple[np.ndarray, np.ndarray]) -> None:
+    """Platt is a strictly monotonic transform on the score."""
+    y, s = well_separated
+    g = fit_platt_calibrator(y, s)
+    grid = np.linspace(-2.0, 3.0, 50)
+    out = g(grid)
+    diffs = np.diff(out)
+    # Either monotone increasing or monotone decreasing, depending on data direction.
+    assert (diffs >= 0).all() or (diffs <= 0).all()
 
 
 @pytest.mark.unit
@@ -192,3 +210,27 @@ def test_calibrator_rejects_single_class() -> None:
         fit_isotonic_calibrator(y_all_pos, s)
     with pytest.raises(ValueError, match="both classes"):
         fit_platt_calibrator(y_all_pos, s)
+
+
+@pytest.mark.unit
+def test_fit_platt_matches_sklearn_canonical() -> None:
+    """fit_platt_calibrator now matches sklearn's _SigmoidCalibration to <1e-6.
+
+    Canonical Platt + Lin 2007 is implemented in
+    sklearn.calibration._SigmoidCalibration; v0.3.0 reproduces it directly
+    rather than wrapping LogisticRegression.
+    """
+    from sklearn.calibration import _SigmoidCalibration  # noqa: PLC0415
+
+    rng = np.random.default_rng(0)
+    n = 300
+    y = rng.binomial(1, 0.3, size=n).astype(int)  # imbalanced; Lin 2007 matters most here
+    s = y + rng.normal(0, 1.0, size=n)
+
+    ours = fit_platt_calibrator(y, s)
+    sk_cal = _SigmoidCalibration().fit(s, y)
+
+    grid = np.linspace(s.min(), s.max(), 100)
+    ours_out = ours(grid)
+    sk_out = sk_cal.predict(grid)
+    np.testing.assert_allclose(ours_out, sk_out, atol=1e-6, rtol=1e-6)
