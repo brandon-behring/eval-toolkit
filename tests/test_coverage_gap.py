@@ -842,3 +842,57 @@ def test_fit_beta_calibrator_apply_rejects_nan() -> None:
     g = fit_beta_calibrator(y, s)
     with pytest.raises(ValueError, match="NaN"):
         g(np.array([np.nan, 0.5]))
+
+
+# ---------------------------------------------------------------------------
+# v0.3.0 C8: plot_bootstrap_distribution + pdf/svg + immutable PALETTE
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.smoke
+def test_plot_bootstrap_distribution_runs() -> None:
+    from eval_toolkit.plotting import plot_bootstrap_distribution
+
+    rng = np.random.default_rng(0)
+    deltas = rng.normal(0.05, 0.02, size=500)
+    fig = plot_bootstrap_distribution(deltas, ci_low=0.01, ci_high=0.09, title="lift dist")
+    assert fig.axes
+
+
+@pytest.mark.smoke
+def test_plot_bootstrap_distribution_validates() -> None:
+    from eval_toolkit.plotting import plot_bootstrap_distribution
+
+    with pytest.raises(ValueError, match="empty"):
+        plot_bootstrap_distribution(np.array([], dtype=float))
+    with pytest.raises(ValueError, match="NaN"):
+        plot_bootstrap_distribution(np.array([0.1, np.nan, 0.2]))
+    with pytest.raises(ValueError, match="must both"):
+        plot_bootstrap_distribution(np.array([0.1, 0.2]), ci_low=0.0)
+
+
+@pytest.mark.smoke
+def test_palette_is_immutable() -> None:
+    from eval_toolkit.plotting import PALETTE
+
+    with pytest.raises(TypeError):
+        PALETTE["new_role"] = "#000000"  # type: ignore[index]
+
+
+@pytest.mark.smoke
+def test_save_figure_supports_pdf_svg(tmp_path: Path) -> None:
+    fig, _ = plt.subplots()
+    out_pdf = save_figure(fig, tmp_path / "fig.pdf", provenance={"git_sha": "abc"})
+    assert out_pdf.suffix == ".pdf"
+    sidecar_pdf = (tmp_path / "fig.pdf").with_suffix(".meta.json")
+    assert sidecar_pdf.exists()
+
+    out_svg = save_figure(fig, tmp_path / "fig.svg", provenance={"git_sha": "abc"})
+    assert out_svg.suffix == ".svg"
+
+
+@pytest.mark.smoke
+def test_save_figure_rejects_unknown_suffix(tmp_path: Path) -> None:
+    fig, _ = plt.subplots()
+    with pytest.raises(ValueError, match=r"\.png|\.pdf|\.svg|sorted"):
+        save_figure(fig, tmp_path / "fig.jpg")

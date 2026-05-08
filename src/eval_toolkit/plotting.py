@@ -21,12 +21,11 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable
-from datetime import UTC, datetime
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, cast
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from cycler import cycler
@@ -44,6 +43,7 @@ __all__ = [
     "DEFAULT_FIGSIZE",
     "PALETTE",
     "PLOT_STYLE",
+    "plot_bootstrap_distribution",
     "plot_confusion_matrix_grid",
     "plot_lift_ci",
     "plot_metric_bars",
@@ -56,12 +56,16 @@ __all__ = [
 
 # Semantic palette roles per Decision (palette role rename from PID's
 # benign/injection to generic negative/positive/baseline/accent).
-PALETTE: dict[str, str] = {
-    "negative": "#004488",  # navy   — negative / "good outcome" / TN/TP diagonal in confusion
-    "positive": "#BB5566",  # rose   — positive / alert / FP/FN off-diagonal in confusion
-    "accent": "#DDAA33",  # gold   — emphasis / threshold marker
-    "baseline": "#999999",  # gray   — reference line / calibration diagonal / zero line
-}
+# Wrapped in MappingProxyType to prevent inadvertent caller mutation;
+# downstream code can still read all entries normally.
+PALETTE: Mapping[str, str] = MappingProxyType(
+    {
+        "negative": "#004488",  # navy   — negative / "good outcome" / TN/TP diagonal
+        "positive": "#BB5566",  # rose   — positive / alert / FP/FN off-diagonal
+        "accent": "#DDAA33",  # gold   — emphasis / threshold marker
+        "baseline": "#999999",  # gray   — reference line / calibration diagonal
+    }
+)
 
 PLOT_STYLE: dict[str, Any] = {
     "axes.prop_cycle": cycler(
@@ -151,10 +155,19 @@ def save_figure(
     Raises
     ------
     ValueError
-        If path doesn't end in ``.png`` or ``dpi`` is non-positive.
+        If path doesn't end in ``.png``, ``.pdf``, or ``.svg``, or if
+        ``dpi`` is non-positive.
+
+    Notes
+    -----
+    PNG sidecar JSON is always written when ``provenance`` is supplied;
+    iTXt embedded metadata is added for ``.png`` only (matplotlib supports
+    iTXt natively via ``metadata=`` kwarg). ``.pdf`` and ``.svg`` ship the
+    same sidecar JSON without embedded metadata.
     """
-    if path.suffix != ".png":
-        raise ValueError(f"path must end in .png, got {path.suffix!r}")
+    allowed_suffixes = {".png", ".pdf", ".svg"}
+    if path.suffix not in allowed_suffixes:
+        raise ValueError(f"path must end in {sorted(allowed_suffixes)}, got {path.suffix!r}")
     if dpi <= 0:
         raise ValueError(f"dpi must be positive, got {dpi}")
 
@@ -165,13 +178,17 @@ def save_figure(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     if provenance is not None:
-        combined: dict[str, str] = {
-            **provenance,
-            "timestamp_utc": datetime.now(UTC).isoformat(timespec="seconds"),
-            "matplotlib_version": str(mpl.__version__),
-            "figure_dpi": str(dpi),
-        }
-        fig.savefig(path, dpi=dpi, metadata=combined)
+        # Use the canonical figure_metadata helper from provenance.py for the
+        # sidecar payload — keeps the provenance schema consistent across
+        # save_figure / make_run_dir / file_sha256 callers.
+        from eval_toolkit.provenance import figure_metadata  # noqa: PLC0415
+
+        combined = figure_metadata(dict(provenance), dpi=dpi)
+        # iTXt embedded metadata only supported for PNG.
+        if path.suffix == ".png":
+            fig.savefig(path, dpi=dpi, metadata=combined)
+        else:
+            fig.savefig(path, dpi=dpi)
         sidecar = path.with_suffix(".meta.json")
         sidecar.write_text(json.dumps(combined, indent=2, sort_keys=True))
     else:
@@ -746,6 +763,99 @@ def plot_lift_ci(
     axes.set_yticks(y_positions)
     axes.set_yticklabels(keys)
     axes.set_xlabel(xlabel)
+    if title is not None:
+        axes.set_title(title)
+    fig.tight_layout()
+    return fig
+
+
+def plot_bootstrap_distribution(
+    deltas: np.ndarray,
+    *,
+    ci_low: float | None = None,
+    ci_high: float | None = None,
+    bins: int = 30,
+    title: str | None = None,
+    xlabel: str = "Δ (bootstrap-sampled)",
+    figsize: tuple[float, float] | None = None,
+    ax: Axes | None = None,
+) -> Figure:
+    """Histogram of bootstrap-sampled deltas with optional CI overlay.
+
+    Useful for diagnosing CI shape (skew, multimodality, normality
+    assumption violations) that the scalar ``(ci_low, ci_high)`` summary
+    hides. If ``ci_low`` and ``ci_high`` are supplied, vertical lines
+    are drawn at the CI bounds plus a reference at zero.
+
+    Parameters
+    ----------
+    deltas : np.ndarray, shape (n_resamples,)
+        1-D array of bootstrap-sampled deltas.
+    ci_low, ci_high : float or None, optional
+        CI bounds to overlay as vertical lines. Both must be supplied
+        together or left as ``None``.
+    bins : int, optional
+        Histogram bin count. Default 30.
+    title, xlabel : optional
+    figsize : tuple, optional
+    ax : matplotlib.axes.Axes, optional
+        Reuse caller's axes.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+
+    Raises
+    ------
+    ValueError
+        If ``deltas`` is empty / non-1-D / contains NaN/Inf, or if exactly
+        one of ``ci_low`` / ``ci_high`` is supplied.
+
+    Notes
+    -----
+    Skewed distributions visible in this plot indicate that the
+    half-width-derived ``σ̂`` in :func:`eval_toolkit.bootstrap.mde_from_ci`
+    is biased; in that case prefer :func:`eval_toolkit.bootstrap.paired_mde`
+    which computes ``σ`` from the deltas directly.
+
+    See Also
+    --------
+    eval_toolkit.plotting.plot_lift_ci :
+        Forest plot of multiple CI summaries (when shape diagnostics are
+        not needed).
+    """
+    deltas_arr = _ensure_ndarray("deltas", deltas)
+    if deltas_arr.ndim != 1:
+        raise ValueError(f"deltas must be 1-D, got shape {deltas_arr.shape}")
+    if deltas_arr.size == 0:
+        raise ValueError("deltas is empty")
+    if not np.isfinite(deltas_arr).all():
+        raise ValueError("deltas contains NaN or inf")
+    if (ci_low is None) != (ci_high is None):
+        raise ValueError("ci_low and ci_high must both be supplied or both None")
+
+    fig, axes = _resolve_axes(ax, figsize)
+    axes.hist(
+        deltas_arr,
+        bins=bins,
+        color=PALETTE["negative"],
+        edgecolor="black",
+        linewidth=0.4,
+        alpha=0.85,
+    )
+    axes.axvline(0.0, color=PALETTE["baseline"], linestyle="--", linewidth=0.8, alpha=0.7)
+    if ci_low is not None and ci_high is not None:
+        for x in (ci_low, ci_high):
+            axes.axvline(
+                x,
+                color=PALETTE["accent"],
+                linestyle="-",
+                linewidth=1.2,
+                label=f"CI bound: {x:+.4f}",
+            )
+        _maybe_add_legend(axes)
+    axes.set_xlabel(xlabel)
+    axes.set_ylabel("count")
     if title is not None:
         axes.set_title(title)
     fig.tight_layout()
