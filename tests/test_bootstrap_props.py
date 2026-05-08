@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-from hypothesis.extra.numpy import arrays
 
 from eval_toolkit.bootstrap import (
     bootstrap_ci,
@@ -18,22 +17,11 @@ from eval_toolkit.bootstrap import (
     paired_mde,
 )
 from eval_toolkit.metrics import pr_auc, roc_auc
+from tests.strategies import balanced_binary_array, score_array
 
-
-def _balanced_binary_array(n: int) -> st.SearchStrategy[np.ndarray]:
-    return arrays(
-        dtype=np.int64,
-        shape=n,
-        elements=st.integers(0, 1),
-    ).filter(lambda y: 5 <= int(y.sum()) <= n - 5)
-
-
-def _score_array(n: int) -> st.SearchStrategy[np.ndarray]:
-    return arrays(
-        dtype=np.float64,
-        shape=n,
-        elements=st.floats(0.0, 1.0, allow_nan=False, allow_infinity=False),
-    )
+# Local aliases preserve the existing naming throughout the file.
+_balanced_binary_array = balanced_binary_array
+_score_array = score_array
 
 
 @pytest.mark.property
