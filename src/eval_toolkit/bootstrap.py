@@ -338,21 +338,40 @@ def paired_bootstrap_diff(
 
     delta_point = float(metric(y_true_arr, b)) - float(metric(y_true_arr, a))
     rng = np.random.default_rng(seed)
-    deltas = np.empty(n_resamples, dtype=np.float64)
-    for r in range(n_resamples):
+    deltas: list[float] = []
+    failures = 0
+    for _ in range(n_resamples):
         idx = rng.integers(0, n, size=n)
-        deltas[r] = metric(y_true_arr[idx], b[idx]) - metric(y_true_arr[idx], a[idx])
+        try:
+            metric_b = float(metric(y_true_arr[idx], b[idx]))
+            metric_a = float(metric(y_true_arr[idx], a[idx]))
+        except (ValueError, RuntimeError):
+            # Single-class resamples raise ValueError on PR/ROC-AUC; rare-positive
+            # data can also trigger sklearn's UndefinedMetric. Skip + audit.
+            failures += 1
+            continue
+        deltas.append(metric_b - metric_a)
 
+    if failures > 0.05 * n_resamples:
+        raise ValueError(
+            f"paired_bootstrap_diff: {failures}/{n_resamples} resamples raised "
+            "the metric function (likely single-class draws on rare-positive "
+            "data); refusing to compute CI on > 5% degenerate resamples"
+        )
+    if not deltas:
+        raise ValueError("paired_bootstrap_diff: no usable resamples")
+
+    deltas_arr = np.asarray(deltas, dtype=np.float64)
     alpha = (1.0 - confidence) / 2.0
-    ci_low = float(np.quantile(deltas, alpha))
-    ci_high = float(np.quantile(deltas, 1.0 - alpha))
+    ci_low = float(np.quantile(deltas_arr, alpha))
+    ci_high = float(np.quantile(deltas_arr, 1.0 - alpha))
     return PairedBootstrapCI(
         delta=delta_point,
         ci_low=ci_low,
         ci_high=ci_high,
         overlaps_zero=ci_low <= 0.0 <= ci_high,
         confidence=confidence,
-        n_resamples=n_resamples,
+        n_resamples=int(len(deltas_arr)),
     )
 
 
