@@ -1128,3 +1128,88 @@ def test_minhash_lsh_in_near_dedup_orchestrator() -> None:
     report = near_dedup(texts, threshold=0.5, strategy=strat)
     # The near-dup pair should collapse to 1 entry
     assert report.n_kept == 2
+
+
+# ---------------------------------------------------------------------------
+# v0.5.0 C1: cross_validate_metric eval-only orchestrator
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_cross_validate_metric_returns_per_fold_values() -> None:
+    from eval_toolkit.bootstrap import cross_validate_metric
+    from eval_toolkit.metrics import pr_auc
+
+    rng = np.random.default_rng(42)
+    n = 200
+    y = rng.binomial(1, 0.3, size=n).astype(int)
+    s = np.clip(y * 0.6 + rng.normal(0, 0.3, n), 0, 1)
+    folds = cross_validate_metric(y, s, metric=pr_auc, k=5, seed=42)
+    assert folds.shape == (5,)
+    valid = folds[~np.isnan(folds)]
+    assert (valid >= 0.0).all() and (valid <= 1.0).all()
+
+
+@pytest.mark.unit
+def test_cross_validate_metric_pairs_with_cv_clt_ci() -> None:
+    """End-to-end: cross_validate_metric → cv_clt_ci."""
+    from eval_toolkit.bootstrap import cross_validate_metric, cv_clt_ci
+    from eval_toolkit.metrics import pr_auc
+
+    rng = np.random.default_rng(0)
+    n = 300
+    y = rng.binomial(1, 0.4, size=n).astype(int)
+    s = np.clip(y * 0.5 + rng.normal(0, 0.3, n), 0, 1)
+    folds = cross_validate_metric(y, s, metric=pr_auc, k=5, seed=0)
+    valid = folds[~np.isnan(folds)]
+    assert valid.size >= 2  # Need ≥ 2 folds for cv_clt_ci
+    ci = cv_clt_ci(valid)
+    assert ci.method == "cv_clt"
+    assert ci.ci_low <= ci.point_estimate <= ci.ci_high
+
+
+@pytest.mark.unit
+def test_cross_validate_metric_validates() -> None:
+    from eval_toolkit.bootstrap import cross_validate_metric
+    from eval_toolkit.metrics import pr_auc
+
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8])
+    with pytest.raises(ValueError, match="shape"):
+        cross_validate_metric(y, np.array([0.5]), metric=pr_auc)
+    with pytest.raises(ValueError, match="k must be"):
+        cross_validate_metric(y, s, metric=pr_auc, k=1)
+    with pytest.raises(ValueError, match="exceeds n"):
+        cross_validate_metric(y, s, metric=pr_auc, k=10)
+
+
+# ---------------------------------------------------------------------------
+# v0.5.0 C2: expected_calibration_error_debiased
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_ece_debiased_smaller_than_plug_in_on_calibrated() -> None:
+    """On well-calibrated data, simulated-H0 debiased L1 ECE ≤ plug-in."""
+    from eval_toolkit.metrics import (
+        expected_calibration_error_debiased,
+        expected_calibration_error_equal_mass,
+    )
+
+    rng = np.random.default_rng(0)
+    n = 2000
+    s = rng.uniform(0, 1, size=n)
+    y = (rng.uniform(0, 1, size=n) < s).astype(int)
+    plug_in = expected_calibration_error_equal_mass(y, s)
+    debiased = expected_calibration_error_debiased(y, s, n_sweep=100, seed=0)
+    assert debiased <= plug_in + 1e-9
+
+
+@pytest.mark.unit
+def test_ece_debiased_validates() -> None:
+    from eval_toolkit.metrics import expected_calibration_error_debiased
+
+    y = np.array([0, 1] * 5)
+    s = np.linspace(0, 1, 10)
+    with pytest.raises(ValueError, match="n_sweep"):
+        expected_calibration_error_debiased(y, s, n_sweep=5)

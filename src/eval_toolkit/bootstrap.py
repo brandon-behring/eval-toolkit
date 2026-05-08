@@ -40,6 +40,7 @@ __all__ = [
     "ThresholdFn",
     "ThresholdedMetricFn",
     "bootstrap_ci",
+    "cross_validate_metric",
     "cv_clt_ci",
     "mde_from_ci",
     "paired_bootstrap_diff",
@@ -1013,3 +1014,112 @@ def cv_clt_ci(
         n_resamples=K,
         method="cv_clt",
     )
+
+
+def cross_validate_metric(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    metric: MetricFn,
+    k: int = 5,
+    stratified: bool = True,
+    seed: int = DEFAULT_SEED,
+) -> np.ndarray:
+    r"""K-fold cross-validation of a metric on caller-supplied scores.
+
+    Eval-only flavor: caller has ``(y_true, y_score)`` for the whole
+    dataset (typically from a model that has already been trained); this
+    helper just slices into K folds, computes ``metric`` on each, and
+    returns the per-fold values. Pairs with :func:`cv_clt_ci` for valid
+    Bayle 2020 confidence intervals on the CV mean.
+
+    .. note::
+
+        This does NOT re-train a model per fold. The toolkit is a pure
+        eval-methodology library; for train+eval cross-validation use
+        :func:`sklearn.model_selection.cross_validate` directly and feed
+        the per-fold metric values to :func:`cv_clt_ci`.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Scores aligned with ``y_true``.
+    metric : callable ``(y_true, y_score) -> float``
+        Any metric. Single-class folds are skipped (NaN in result) — the
+        caller filters NaNs before passing to ``cv_clt_ci`` if needed.
+    k : int, optional
+        Number of folds. Default ``5``. Must be ≥ 2.
+    stratified : bool, optional
+        If ``True`` (default), use ``StratifiedKFold`` so each fold
+        preserves the class balance. Recommended for binary
+        classification under class imbalance.
+    seed : int, optional
+        Shuffle seed for fold assignment.
+
+    Returns
+    -------
+    np.ndarray, shape (k,)
+        Per-fold metric values. NaN entries indicate folds where the
+        metric raised (e.g., single-class draw on rare-positive data).
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, ``k < 2``, ``k > n``, or > 50% NaN folds
+        (which would make the CI uninterpretable).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from eval_toolkit.metrics import pr_auc
+    >>> rng = np.random.default_rng(42)
+    >>> n = 200
+    >>> y = rng.binomial(1, 0.3, size=n).astype(int)
+    >>> s = np.clip(y * 0.6 + rng.normal(0, 0.3, n), 0, 1)
+    >>> folds = cross_validate_metric(y, s, metric=pr_auc, k=5, seed=42)
+    >>> folds.shape
+    (5,)
+    >>> bool(np.all(0.0 <= folds[~np.isnan(folds)]))
+    True
+
+    See Also
+    --------
+    eval_toolkit.bootstrap.cv_clt_ci :
+        Compute a CV-corrected confidence interval from the per-fold
+        values returned here.
+    """
+    from sklearn.model_selection import KFold, StratifiedKFold  # noqa: PLC0415
+
+    y_arr = np.asarray(y_true).astype(int)
+    s_arr = np.asarray(y_score, dtype=float)
+    if y_arr.shape != s_arr.shape:
+        raise ValueError(f"y_true shape {y_arr.shape} != y_score shape {s_arr.shape}")
+    n = int(y_arr.size)
+    if k < 2:
+        raise ValueError(f"k must be ≥ 2, got {k}")
+    if k > n:
+        raise ValueError(f"k={k} exceeds n={n}")
+
+    splitter: KFold | StratifiedKFold
+    if stratified:
+        splitter = StratifiedKFold(n_splits=k, shuffle=True, random_state=seed)
+        fold_iter = splitter.split(np.zeros(n), y_arr)
+    else:
+        splitter = KFold(n_splits=k, shuffle=True, random_state=seed)
+        fold_iter = splitter.split(np.zeros(n))
+
+    fold_metrics = np.full(k, np.nan, dtype=np.float64)
+    for f, (_train_idx, test_idx) in enumerate(fold_iter):
+        with contextlib.suppress(ValueError, RuntimeError):
+            fold_metrics[f] = float(metric(y_arr[test_idx], s_arr[test_idx]))
+
+    n_failed = int(np.isnan(fold_metrics).sum())
+    if n_failed > k // 2:
+        raise ValueError(
+            f"cross_validate_metric: {n_failed}/{k} folds raised the metric "
+            f"(likely single-class folds on rare-positive data); refusing to "
+            f"return CV result with > 50% degenerate folds"
+        )
+    return fold_metrics

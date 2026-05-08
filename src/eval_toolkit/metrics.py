@@ -30,6 +30,7 @@ __all__ = [
     "brier_decomposition",
     "brier_score",
     "expected_calibration_error",
+    "expected_calibration_error_debiased",
     "expected_calibration_error_equal_mass",
     "expected_calibration_error_l2",
     "expected_calibration_error_l2_debiased",
@@ -882,6 +883,123 @@ def expected_calibration_error_l2_debiased(
         bias += (n_k / n) * (p_bar_k * (1.0 - p_bar_k) / n_k)
     debiased_sq = max(sq_err - bias, 0.0)
     return float(np.sqrt(debiased_sq))
+
+
+def expected_calibration_error_debiased(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    n_bins: int = 10,
+    *,
+    n_sweep: int = 200,
+    seed: int = 42,
+) -> float:
+    r"""Bias-corrected L1 ECE via simulated-H0 Monte-Carlo (Roelofs 2022 spirit).
+
+    The plug-in L1 ECE has positive O(M/n) bias — random miscalibration
+    "noise" inflates the absolute-deviation term per bin even on
+    perfectly-calibrated data. Unlike the L2 form (where Kumar 2019 gives
+    a closed-form bias correction in
+    :func:`expected_calibration_error_l2_debiased`), L1 has no closed-form
+    correction and must be estimated.
+
+    This estimator uses the **simulated-H0 bootstrap**: resample synthetic
+    labels :math:`y_i^* \\sim \\mathrm{Bernoulli}(s_i)` (assuming the
+    scores ARE the true probabilities), compute the plug-in L1 ECE on each
+    resample, and average to estimate the bias under the null hypothesis
+    of perfect calibration. The debiased estimate is then
+
+    .. math::
+
+        \widehat{\mathrm{ECE}}^{\,\text{deb}}_1 = \max\!\big(0,\,
+        \widehat{\mathrm{ECE}}_1 - \widehat{\mathrm{bias}}_1\big).
+
+    Same conceptual move as Roelofs 2022's ECE_SWEEP estimator (which
+    uses cross-validation rather than simulated-H0), trading a bit of
+    fidelity to the literal SWEEP construction for a substantially
+    simpler implementation.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels.
+    y_score : np.ndarray, shape (n,)
+        Calibrated probabilities ∈ [0, 1].
+    n_bins : int, optional
+        Number of equal-mass bins (default 10).
+    n_sweep : int, optional
+        Number of simulated-H0 resamples for the bias estimate. Default
+        ``200``. Larger → tighter bias estimate, more compute.
+    seed : int, optional
+        RNG seed for the simulated H0 resamples.
+
+    Returns
+    -------
+    float
+        Debiased L1 ECE in [0, 1]. The bias correction can drive the
+        estimate to exactly 0 on well-calibrated data.
+
+    Raises
+    ------
+    ValueError
+        Same conditions as :func:`expected_calibration_error_equal_mass`,
+        plus ``n_sweep < 10``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> # Perfectly calibrated synthetic data
+    >>> n = 2000
+    >>> s = rng.uniform(0, 1, size=n)
+    >>> y = (rng.uniform(0, 1, size=n) < s).astype(int)
+    >>> plug_in = expected_calibration_error_equal_mass(y, s)
+    >>> debiased = expected_calibration_error_debiased(y, s, n_sweep=100, seed=0)
+    >>> debiased <= plug_in + 1e-9
+    True
+
+    See Also
+    --------
+    eval_toolkit.metrics.expected_calibration_error_l2_debiased :
+        Closed-form (Kumar 2019) debiased L2 ECE — no Monte-Carlo, faster.
+    eval_toolkit.metrics.expected_calibration_error_equal_mass :
+        Plug-in L1 ECE without bias correction.
+
+    Notes
+    -----
+    Compute cost is :math:`O(n_{\\text{sweep}} \\cdot n)` for the
+    Monte-Carlo bias estimate. With ``n_sweep=200`` and ``n=1000``, this
+    is ~200K Bernoulli draws + ECE computations — fast (~0.5s).
+
+    References
+    ----------
+    .. [1] Roelofs, R., Cain, N., Shlens, J., & Mozer, M. "Mitigating bias
+           in calibration error estimation." AISTATS 2022. (ECE_SWEEP via
+           cross-validation; this implementation uses simulated H0 instead.)
+    .. [2] Kumar, A., Liang, P. S., & Ma, T. "Verified uncertainty
+           calibration." NeurIPS 2019. arXiv:1909.10155.
+    """
+    _validate_inputs(y_true, y_score)
+    _validate_calibrated_score(y_score)
+    if n_bins < 2:
+        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
+    if n_sweep < 10:
+        raise ValueError(f"n_sweep must be ≥ 10, got {n_sweep}")
+    n = len(y_true)
+    if n < n_bins:
+        raise ValueError(f"n={n} smaller than n_bins={n_bins}; cannot form quantile bins")
+
+    plug_in = expected_calibration_error_equal_mass(y_true, y_score, n_bins=n_bins)
+
+    # Simulated-H0 bias estimate: under H0 (scores ARE true probabilities),
+    # the expected plug-in ECE on Bernoulli(s) labels gives the bias floor.
+    s_arr = np.asarray(y_score, dtype=float)
+    rng = np.random.default_rng(seed)
+    bias_estimates = np.empty(n_sweep, dtype=np.float64)
+    for i in range(n_sweep):
+        y_synth = (rng.uniform(0, 1, size=n) < s_arr).astype(int)
+        bias_estimates[i] = expected_calibration_error_equal_mass(y_synth, s_arr, n_bins=n_bins)
+    bias = float(bias_estimates.mean())
+    return float(max(0.0, plug_in - bias))
 
 
 def brier_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
