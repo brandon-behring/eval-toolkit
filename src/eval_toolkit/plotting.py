@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Container, Iterable, Mapping
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, cast
@@ -43,6 +43,7 @@ __all__ = [
     "DEFAULT_FIGSIZE",
     "PALETTE",
     "PLOT_STYLE",
+    "make_palette",
     "plot_bootstrap_distribution",
     "plot_confusion_matrix_grid",
     "plot_lift_ci",
@@ -108,6 +109,76 @@ PLOT_STYLE: dict[str, Any] = {
 DEFAULT_FIGSIZE: tuple[float, float] = (6.0, 4.0)
 
 
+def make_palette(
+    *,
+    negative: str = "#004488",
+    positive: str = "#BB5566",
+    accent: str = "#DDAA33",
+    baseline: str = "#999999",
+    **extras: str,
+) -> Mapping[str, str]:
+    """Construct a semantic-role color palette for downstream projects.
+
+    Returns a frozen mapping (via :class:`types.MappingProxyType`) keyed by
+    semantic role names. Standard roles are ``negative`` (good outcome,
+    diagonal of confusion matrix), ``positive`` (alert, off-diagonal),
+    ``accent`` (threshold marker / highlight), and ``baseline`` (reference
+    line, calibration diagonal). Pass any number of additional named keyword
+    arguments to extend the palette with project-specific roles
+    (e.g., ``benign="#004488"``, ``injection="#BB5566"`` for prompt-injection
+    framing).
+
+    Parameters
+    ----------
+    negative, positive, accent, baseline : str, optional
+        Hex color strings for the four standard semantic roles. Defaults
+        match the toolkit's :data:`PALETTE` constant.
+    **extras : str
+        Project-specific role keys (e.g., ``benign``, ``injection``,
+        ``emphasis``). All values must be valid hex color strings.
+
+    Returns
+    -------
+    Mapping[str, str]
+        Frozen palette mapping role → hex color. Mutation attempts raise
+        ``TypeError``.
+
+    Examples
+    --------
+    Default palette:
+
+    >>> p = make_palette()
+    >>> p["negative"]
+    '#004488'
+
+    Project-specific extension (PID semantics):
+
+    >>> p = make_palette(benign="#004488", injection="#BB5566", emphasis="#DDAA33")
+    >>> p["benign"]
+    '#004488'
+    >>> p["injection"]
+    '#BB5566'
+    >>> p["negative"]  # standard roles still present
+    '#004488'
+
+    Mutation prevented:
+
+    >>> try:
+    ...     p["new_key"] = "#000000"
+    ... except TypeError:
+    ...     print("frozen")
+    frozen
+    """
+    base: dict[str, str] = {
+        "negative": negative,
+        "positive": positive,
+        "accent": accent,
+        "baseline": baseline,
+    }
+    base.update(extras)
+    return MappingProxyType(base)
+
+
 def set_plot_style() -> None:
     """Apply ``PLOT_STYLE`` rcParams + ``PALETTE`` color cycle.
 
@@ -116,36 +187,54 @@ def set_plot_style() -> None:
     plt.rcParams.update(PLOT_STYLE)
 
 
+_DEFAULT_PERMITTED_SUFFIXES: frozenset[str] = frozenset({".png", ".pdf", ".svg"})
+
+
 def save_figure(
     fig: Figure,
     path: Path,
     *,
     dpi: int = 300,
     provenance: dict[str, str] | None = None,
+    permitted_suffixes: Container[str] = _DEFAULT_PERMITTED_SUFFIXES,
+    skip_env_var: str = "EVAL_TOOLKIT_SKIP_SAVEFIG",
 ) -> Path:
-    """Save figure to a PNG path with optional provenance metadata.
+    """Save figure to disk with optional provenance metadata.
 
-    Honors ``EVAL_TOOLKIT_SKIP_SAVEFIG=1`` env var — when set, returns the
-    resolved path without writing.
+    Honors a configurable skip-env-var (default ``EVAL_TOOLKIT_SKIP_SAVEFIG``)
+    — when set to ``"1"``, returns the resolved path without writing.
 
     When ``provenance`` is provided, persists the metadata in two places:
 
     1. PNG iTXt chunks via ``fig.savefig(metadata=...)``. Travels with the
-       PNG when copied/shared.
-    2. Sidecar ``{path.stem}.meta.json`` next to the PNG. Human-readable.
+       PNG when copied/shared. ``.pdf`` and ``.svg`` skip the iTXt step.
+    2. Sidecar ``{path.stem}.meta.json`` next to the figure. Human-readable
+       and works for all permitted suffixes.
 
-    Both contain the caller-supplied keys plus auto-fields ``timestamp_utc``
-    (ISO-8601), ``matplotlib_version``, ``figure_dpi``.
+    Both sidecar and iTXt contain the caller-supplied keys plus auto-fields
+    ``timestamp_utc`` (ISO-8601), ``matplotlib_version``, ``figure_dpi``.
 
     Parameters
     ----------
     fig : matplotlib.figure.Figure
     path : pathlib.Path
-        Output path; must end in ``.png``.
+        Output path. Suffix must be in ``permitted_suffixes``.
     dpi : int, optional
         Resolution. Default 300.
     provenance : dict[str, str] or None, optional
         Caller-supplied provenance keys (e.g., ``git_sha``, ``run_id``).
+    permitted_suffixes : Container[str], optional
+        Allowed file-extension suffixes (with leading dot). Default
+        ``{".png", ".pdf", ".svg"}``. Downstream projects can restrict to a
+        single format (e.g. ``permitted_suffixes={".png"}``) for stable
+        artifact pipelines, or extend to additional matplotlib-supported
+        suffixes (``.eps``, ``.ps``, etc.).
+    skip_env_var : str, optional
+        Environment-variable name that, when set to ``"1"``, suppresses
+        writes and returns the resolved path. Default
+        ``"EVAL_TOOLKIT_SKIP_SAVEFIG"``. Downstream projects can pass their
+        own (e.g. ``skip_env_var="PID_SKIP_SAVEFIG"``) for project-specific
+        opt-out controls.
 
     Returns
     -------
@@ -155,8 +244,8 @@ def save_figure(
     Raises
     ------
     ValueError
-        If path doesn't end in ``.png``, ``.pdf``, or ``.svg``, or if
-        ``dpi`` is non-positive.
+        If ``path.suffix`` is not in ``permitted_suffixes``, or if ``dpi``
+        is non-positive.
 
     Notes
     -----
@@ -165,14 +254,19 @@ def save_figure(
     iTXt natively via ``metadata=`` kwarg). ``.pdf`` and ``.svg`` ship the
     same sidecar JSON without embedded metadata.
     """
-    allowed_suffixes = {".png", ".pdf", ".svg"}
-    if path.suffix not in allowed_suffixes:
-        raise ValueError(f"path must end in {sorted(allowed_suffixes)}, got {path.suffix!r}")
+    if path.suffix not in permitted_suffixes:
+        # Container is the broadest acceptable type, but most realistic
+        # implementations (set, frozenset, list, tuple) are also iterable.
+        if isinstance(permitted_suffixes, Iterable):
+            permitted_repr: object = sorted(permitted_suffixes)
+        else:
+            permitted_repr = permitted_suffixes
+        raise ValueError(f"path must end in {permitted_repr}, got {path.suffix!r}")
     if dpi <= 0:
         raise ValueError(f"dpi must be positive, got {dpi}")
 
     resolved = path.resolve()
-    if os.environ.get("EVAL_TOOLKIT_SKIP_SAVEFIG") == "1":
+    if os.environ.get(skip_env_var) == "1":
         return resolved
 
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-05-08
+
+Downstream-extensibility release. Surfaces three previously hard-coded
+defaults (palette role names, save_figure permitted suffixes, file_sha256
+missing-file behavior) as configurable parameters so projects can adopt
+``eval_toolkit`` without local-shim wrappers. Driven by the
+prompt-injection-detector PoC's toolkit-migration follow-up.
+
+### Added
+
+- **`make_palette(*, negative='#004488', positive='#BB5566', accent='#DDAA33', baseline='#999999', **extras: str) -> Mapping[str, str]`**
+  in ``eval_toolkit.plotting``. Factory for project-specific semantic
+  palettes. Returns a frozen ``MappingProxyType``. ``**extras`` accepts any
+  number of additional named keyword arguments for project-specific roles
+  (e.g. ``make_palette(benign=..., injection=..., emphasis=...)`` for
+  prompt-injection framing).
+
+- **`save_figure(..., permitted_suffixes: Container[str] = {".png", ".pdf", ".svg"})`**
+  parameter. Downstream projects can restrict to a single format
+  (``permitted_suffixes={".png"}``) for stable artifact pipelines.
+
+- **`save_figure(..., skip_env_var: str = "EVAL_TOOLKIT_SKIP_SAVEFIG")`**
+  parameter. Downstream projects can pass their own opt-out env-var name.
+
+- **`file_sha256(path, *, strict: bool = False)`** parameter. When ``True``,
+  raises ``FileNotFoundError`` instead of returning ``None`` for missing
+  paths. Useful when caller invariants require the digest to exist.
+
+### Changed
+
+- ``save_figure`` validation message now reflects the configured
+  ``permitted_suffixes`` rather than a hard-coded set.
+
+### Backward compatibility
+
+All four changes are purely additive — defaults match v0.5.0 behavior. No
+breaking changes; existing call sites unaffected.
+
 ## [0.5.0] — 2026-05-07
 
 Closes the v0.4 deferral list: cross-validation orchestrator,

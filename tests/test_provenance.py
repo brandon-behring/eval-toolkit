@@ -36,6 +36,32 @@ def test_file_sha256_returns_none_for_directory(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_file_sha256_strict_raises_on_missing() -> None:
+    """``strict=True`` raises ``FileNotFoundError`` instead of returning ``None``."""
+    with pytest.raises(FileNotFoundError, match="path missing or not a regular file"):
+        file_sha256("/no/such/file/exists", strict=True)
+
+
+@pytest.mark.unit
+def test_file_sha256_strict_raises_on_directory(tmp_path: Path) -> None:
+    """``strict=True`` rejects directories (not regular files)."""
+    with pytest.raises(FileNotFoundError):
+        file_sha256(tmp_path, strict=True)
+
+
+@pytest.mark.unit
+def test_file_sha256_strict_returns_digest_when_present(tmp_path: Path) -> None:
+    """``strict=True`` returns the digest unchanged when the file exists."""
+    p = tmp_path / "hello.txt"
+    p.write_text("hello\n")
+    digest_strict = file_sha256(p, strict=True)
+    digest_default = file_sha256(p)
+    assert digest_strict == digest_default
+    assert digest_strict is not None
+    assert len(digest_strict) == 64
+
+
+@pytest.mark.unit
 def test_make_run_dir_creates_path(tmp_path: Path) -> None:
     out = make_run_dir(tmp_path, prefix="run")
     assert out.exists()

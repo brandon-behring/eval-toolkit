@@ -10,7 +10,7 @@ See ``STYLE.md`` for coding standards and ``CHANGELOG.md`` for version history.
 
 from __future__ import annotations
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 from eval_toolkit.bootstrap import (
     DEFAULT_CONFIDENCE,
@@ -96,6 +96,7 @@ from eval_toolkit.plotting import (
     DEFAULT_FIGSIZE,
     PALETTE,
     PLOT_STYLE,
+    make_palette,
     plot_bootstrap_distribution,
     plot_confusion_matrix_grid,
     plot_lift_ci,
@@ -192,6 +193,7 @@ __all__ = [
     "from_yaml",
     "frozen_config",
     "headline_metrics",
+    "make_palette",
     "make_run_dir",
     "mde_from_ci",
     "metrics_at_threshold",

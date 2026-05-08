@@ -18,6 +18,7 @@ from matplotlib.figure import Figure
 from eval_toolkit.plotting import (
     DEFAULT_FIGSIZE,
     PALETTE,
+    make_palette,
     plot_confusion_matrix_grid,
     plot_lift_ci,
     plot_metric_bars,
@@ -144,6 +145,91 @@ def test_save_figure_validates_suffix(tmp_path: Path) -> None:
     fig, _ = plt.subplots()
     with pytest.raises(ValueError, match="\\.png"):
         save_figure(fig, tmp_path / "bad.jpg")
+
+
+@pytest.mark.smoke
+def test_save_figure_permitted_suffixes_restricts_to_caller_set(tmp_path: Path) -> None:
+    """``permitted_suffixes={'.png'}`` rejects ``.pdf`` even though it's a default-allowed suffix.
+
+    Downstream projects (e.g. PID) can lock to PNG-only via this kwarg.
+    """
+    fig, _ = plt.subplots()
+    # Default permits .pdf; restricted set should reject it.
+    with pytest.raises(ValueError, match="\\.png"):
+        save_figure(fig, tmp_path / "out.pdf", permitted_suffixes={".png"})
+    # PNG still works with the restricted set.
+    out = save_figure(fig, tmp_path / "out.png", permitted_suffixes={".png"})
+    assert out.exists()
+
+
+@pytest.mark.smoke
+def test_save_figure_skip_env_var_honors_caller_supplied_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Custom ``skip_env_var`` controls write-suppression independently of default.
+
+    Setting ``EVAL_TOOLKIT_SKIP_SAVEFIG`` should NOT suppress when the caller
+    asked for a different env-var name; setting the caller-supplied name
+    should suppress.
+    """
+    fig, _ = plt.subplots()
+    target = tmp_path / "skipped.png"
+
+    # Default env not set; explicit env var name not set → write happens.
+    monkeypatch.delenv("EVAL_TOOLKIT_SKIP_SAVEFIG", raising=False)
+    monkeypatch.delenv("PID_SKIP_SAVEFIG", raising=False)
+    save_figure(fig, target, skip_env_var="PID_SKIP_SAVEFIG")
+    assert target.exists()
+
+    # Toolkit's default env-var name should NOT trigger the project-specific opt-out.
+    target.unlink()
+    monkeypatch.setenv("EVAL_TOOLKIT_SKIP_SAVEFIG", "1")
+    save_figure(fig, target, skip_env_var="PID_SKIP_SAVEFIG")
+    assert target.exists()  # written despite the toolkit-default env-var being set
+
+    # Caller-supplied env-var name DOES trigger suppression.
+    target.unlink()
+    monkeypatch.setenv("PID_SKIP_SAVEFIG", "1")
+    save_figure(fig, target, skip_env_var="PID_SKIP_SAVEFIG")
+    assert not target.exists()  # suppressed
+
+
+@pytest.mark.unit
+def test_make_palette_default_returns_standard_roles() -> None:
+    """Default ``make_palette()`` matches the toolkit's :data:`PALETTE` constant."""
+    p = make_palette()
+    assert p["negative"] == "#004488"
+    assert p["positive"] == "#BB5566"
+    assert p["accent"] == "#DDAA33"
+    assert p["baseline"] == "#999999"
+    # Must match the module-level PALETTE on the four core roles.
+    for role in ("negative", "positive", "accent", "baseline"):
+        assert p[role] == PALETTE[role]
+
+
+@pytest.mark.unit
+def test_make_palette_extras_extend_standard_roles() -> None:
+    """Extras are added alongside the four standard roles (PID semantics).
+
+    PID's project-specific roles ('benign', 'injection', 'emphasis') extend
+    the palette without removing the standard roles.
+    """
+    p = make_palette(benign="#004488", injection="#BB5566", emphasis="#DDAA33")
+    # Project-specific keys present.
+    assert p["benign"] == "#004488"
+    assert p["injection"] == "#BB5566"
+    assert p["emphasis"] == "#DDAA33"
+    # Standard roles still present (additive, not replacement).
+    assert p["negative"] == "#004488"
+    assert p["accent"] == "#DDAA33"
+
+
+@pytest.mark.unit
+def test_make_palette_returns_frozen_mapping() -> None:
+    """The returned mapping rejects mutation (MappingProxyType)."""
+    p = make_palette()
+    with pytest.raises(TypeError):
+        p["new_key"] = "#000000"  # type: ignore[index]
 
 
 @pytest.mark.smoke

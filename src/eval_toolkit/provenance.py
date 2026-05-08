@@ -23,18 +23,31 @@ __all__ = [
 ]
 
 
-def file_sha256(path: Path | str) -> str | None:
-    """SHA-256 hex digest of an existing file, or ``None`` if absent.
+def file_sha256(path: Path | str, *, strict: bool = False) -> str | None:
+    """SHA-256 hex digest of an existing file.
+
+    Default behavior is permissive: returns ``None`` if the path does not
+    exist or is not a regular file. Pass ``strict=True`` to raise
+    :class:`FileNotFoundError` instead — useful when the caller's invariants
+    require the digest to exist.
 
     Parameters
     ----------
     path : pathlib.Path or str
+    strict : bool, optional
+        If ``True``, raise :class:`FileNotFoundError` when ``path`` is missing
+        or not a regular file. Default ``False`` (return ``None``).
 
     Returns
     -------
     str or None
-        64-character hex digest, or ``None`` if ``path`` does not exist or is
-        not a file.
+        64-character hex digest. ``None`` only when ``strict=False`` and the
+        path is absent / not a regular file.
+
+    Raises
+    ------
+    FileNotFoundError
+        Only when ``strict=True`` and ``path`` is missing or not a regular file.
 
     Examples
     --------
@@ -48,9 +61,16 @@ def file_sha256(path: Path | str) -> str | None:
     64
     >>> file_sha256("/no/such/file") is None
     True
+    >>> try:
+    ...     file_sha256("/no/such/file", strict=True)
+    ... except FileNotFoundError:
+    ...     print("raised")
+    raised
     """
     p = Path(path)
     if not p.exists() or not p.is_file():
+        if strict:
+            raise FileNotFoundError(f"file_sha256: path missing or not a regular file: {p}")
         return None
     h = hashlib.sha256()
     with p.open("rb") as fh:
