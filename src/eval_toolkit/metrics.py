@@ -131,6 +131,12 @@ def pr_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
 
     where :math:`P_n, R_n` are precision and recall at the :math:`n`-th threshold.
 
+    See Also
+    --------
+    eval_toolkit.metrics.roc_auc : ROC-AUC; less informative under imbalance.
+    eval_toolkit.metrics.headline_metrics : Bundle including PR-AUC.
+    sklearn.metrics.average_precision_score : Underlying sklearn implementation.
+
     References
     ----------
     .. [1] Davis, J. & Goadrich, M. "The relationship between precision-recall
@@ -177,6 +183,11 @@ def roc_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     strictly monotone :math:`f`, :math:`\\mathrm{ROC-AUC}(y, s) = \\mathrm{ROC-AUC}(y, f(s))`.
     Inversion: :math:`\\mathrm{ROC-AUC}(y, -s) = 1 - \\mathrm{ROC-AUC}(y, s)`.
 
+    See Also
+    --------
+    eval_toolkit.metrics.pr_auc : Prefer PR-AUC under class imbalance.
+    sklearn.metrics.roc_auc_score : Underlying sklearn implementation.
+
     References
     ----------
     .. [1] Hanley, J. A. & McNeil, B. J. "The meaning and use of the area under
@@ -202,8 +213,12 @@ def select_threshold(
         Real-valued scores.
     criterion : {"max_f1", "recall_0.90", "recall_0.95"}, optional
         - ``max_f1``: argmax F1 over the PR-curve thresholds.
-        - ``recall_0.90``: smallest threshold achieving recall ≥ 0.90 (best precision under that).
-        - ``recall_0.95``: smallest threshold achieving recall ≥ 0.95.
+        - ``recall_0.90``: **highest** threshold achieving recall ≥ 0.90 —
+          the most-precise operating point that still satisfies the recall
+          constraint. (Higher threshold → fewer positive predictions → higher
+          precision; the algorithm picks the largest threshold consistent
+          with the recall floor.)
+        - ``recall_0.95``: highest threshold achieving recall ≥ 0.95.
 
     Returns
     -------
@@ -226,6 +241,20 @@ def select_threshold(
     >>> tr = select_threshold(y, s, criterion="max_f1")
     >>> tr.f1
     1.0
+
+    See Also
+    --------
+    eval_toolkit.calibration.bayes_optimal_threshold :
+        Closed-form Bayes-optimal threshold from cost matrix + prior;
+        complements the empirical max-F1 / recall-target rules here.
+    eval_toolkit.metrics.metrics_at_threshold :
+        Compute metrics at a *given* threshold (after selecting one).
+
+    References
+    ----------
+    .. [1] Lipton, Z., Elkan, C., & Naryanaswamy, B. "Optimal thresholding
+           of classifiers to maximize F1 measure." ECML PKDD 2014.
+           arXiv:1402.1892. (Optimality analysis of max-F1 selection.)
     """
     _validate_inputs(y_true, y_score)
     precisions, recalls, thresholds = precision_recall_curve(y_true, y_score)
@@ -239,8 +268,9 @@ def select_threshold(
         idx = int(np.argmax(f1s))
     elif criterion in ("recall_0.90", "recall_0.95"):
         target = float(criterion.split("_")[1])
-        # smallest threshold (most permissive on positives) achieving recall ≥ target;
-        # PR-curve thresholds are in increasing order, recall decreases with threshold.
+        # PR-curve thresholds are sorted ascending, recall decreases monotonically
+        # with threshold; eligible[-1] is therefore the *highest* threshold
+        # (most precise operating point) still satisfying recall ≥ target.
         eligible = np.where(recalls >= target)[0]
         if len(eligible) == 0:
             raise RuntimeError(
@@ -417,6 +447,17 @@ def stratified_recall(
     ['A', 'B']
     >>> result["A"]["recall"], result["A"]["n"]
     (1.0, 2)
+
+    See Also
+    --------
+    eval_toolkit.metrics.quantile_stratified_pr_auc :
+        PR-AUC on a numeric stratifier window (vs categorical strata here).
+
+    References
+    ----------
+    .. [1] Hardt, M., Price, E., & Srebro, N. "Equality of opportunity in
+           supervised learning." NIPS 2016. (Per-group recall is the
+           "equal opportunity" fairness criterion.)
     """
     _validate_inputs(y_true, y_score)
     strata_arr = np.asarray(strata)
@@ -639,6 +680,22 @@ def quantile_stratified_pr_auc(
     ValueError
         If shapes mismatch, quantile bounds invalid, or the kept window has
         too few positives/negatives (< 10) for a reliable PR-AUC.
+
+    Notes
+    -----
+    When ``stratifier`` is the score itself, this method becomes a partial
+    AUC over a score-quantile window — the same construct as McClish 1989's
+    "partial area under the ROC curve" (in PR space rather than ROC).
+
+    See Also
+    --------
+    eval_toolkit.metrics.stratified_recall :
+        Categorical-stratum recall.
+
+    References
+    ----------
+    .. [1] McClish, D. K. "Analyzing a portion of the ROC curve."
+           Medical Decision Making 9(3), 1989. (Partial-AUC framework.)
     """
     _validate_inputs(y_true, y_score)
     strat_arr = np.asarray(stratifier)

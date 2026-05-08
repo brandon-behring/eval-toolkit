@@ -26,6 +26,27 @@ Orchestrators (strategy-agnostic):
 - :func:`near_dedup` — forward-scan greedy near-deduplication
 - :func:`cross_dedup` — drop eval rows near-duplicate to any train row
 - :class:`DedupReport` — frozen audit-trail of which rows were dropped and why
+
+Notes
+-----
+
+**NFC normalization asymmetry across strategies.** Only
+:class:`ExactNormalizedHashStrategy` applies Unicode NFC normalization
+before similarity (via :func:`normalize_text_for_dedup`). The TF-IDF,
+embedding, and Jaccard strategies treat composed and decomposed accents
+as different inputs by default. If your corpus mixes NFC and NFD forms
+(common when concatenating data from different OSes), normalize once at
+load time with :func:`normalize_text_for_dedup` and then call any
+strategy.
+
+References
+----------
+.. [1] Lee, K., et al. "Deduplicating training data makes language models
+       better." ACL 2022. (NearDup pipeline; modern authority on
+       dedup-and-LM-quality.)
+.. [2] Penedo, G., et al. "The RefinedWeb dataset for Falcon LLM."
+       NeurIPS Datasets & Benchmarks, 2023.
+.. [3] Unicode Standard Annex #15 (Unicode Normalization Forms).
 """
 
 from __future__ import annotations
@@ -710,6 +731,19 @@ def near_dedup(
     plus forward-scan greedy drop logic. Different "senses of leakage"
     (lexical, semantic, exact, n-gram-set) are encoded by swapping the
     strategy.
+
+    **Order dependence**: forward-scan greedy is order-dependent — for any
+    cluster of near-duplicates, the *first* occurrence is kept and later
+    occurrences are dropped. To make dedup reproducible across re-runs
+    that may permute the input, **sort inputs by a canonical key** (URL,
+    document id, primary key) before calling. This is the canonical
+    approach in modern dedup pipelines (Lee et al. 2022 ACL "NearDup";
+    Penedo et al. 2023 RefinedWeb; Penedo et al. 2025 FineWeb2).
+
+    References
+    ----------
+    .. [1] Lee, K., et al. "Deduplicating training data makes language
+           models better." ACL 2022.
     """
     if not isinstance(texts, list):
         raise TypeError(f"texts must be a list, got {type(texts).__name__}")

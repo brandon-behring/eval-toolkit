@@ -514,10 +514,26 @@ def paired_bootstrap_op_point_diff(
     resample. The combined CI is wider than the fixed-threshold paired CI
     because it absorbs threshold-selection noise.
 
+    Methodological caveats:
+
+    1. **Variance-only simplification**: this is a *variance-correction*
+       nested bootstrap — it does not implement the double-bootstrap bias
+       correction in Davison & Hinkley §4.2 eq. 4.6. Acceptable for most
+       ML applications but matters at small val sets or near boundary
+       prevalences (e.g., precision@99% recall).
+    2. **Independent val/test resampling**: deliberately drops any
+       correlation structure between val and test (correct under i.i.d.
+       splits; conservative under deliberate-OOD splits).
+    3. **Replicability caveat**: paired bootstrap tests with re-used data
+       have lower replicability than naive degrees-of-freedom suggest
+       (Bouckaert 2003).
+
     References
     ----------
     .. [1] Davison, A. C. & Hinkley, D. V. "Bootstrap Methods and their
            Application." Cambridge, 1997. (§4.2 Nested bootstrap.)
+    .. [2] Bouckaert, R. R. "Choosing between two learning algorithms
+           based on calibrated tests." ICML 2003.
     """
     val_y_arr = np.asarray(val_y)
     val_a, val_b = np.asarray(val_score_a), np.asarray(val_score_b)
@@ -678,6 +694,26 @@ def mde_from_ci(
     -------
     MDEEstimate
         ``n`` is set to -1 (unknown without source arrays).
+
+    Notes
+    -----
+    Limitations of the analytical σ̂ from CI half-width:
+
+    1. **Normality assumption**: ``σ̂_Δ = width / (2 · z_{α/2})`` assumes
+       the bootstrap distribution of Δ is approximately normal and
+       symmetric. For small ``n_resamples`` (< 200) or skewed metrics
+       (PR-AUC under extreme imbalance), σ̂ is biased.
+    2. **Boundary-effect bias on bounded metrics**: when the true Δ is
+       near 0 or near the metric's max (e.g., AUC ≈ 1), the CI is
+       asymmetric and the half-width approximation under-estimates σ.
+    3. **Skew bias**: for heavy-tailed Δ distributions the percentile-CI
+       half-width over-estimates σ. Use :func:`paired_mde` (which
+       computes σ from the deltas directly) when these effects matter.
+
+    References
+    ----------
+    .. [1] Cohen, J. "Statistical Power Analysis for the Behavioral
+           Sciences." 2nd ed., Lawrence Erlbaum, 1988.
     """
     if not 0.0 < alpha < 1.0:
         raise ValueError(f"alpha must be in (0, 1), got {alpha}")

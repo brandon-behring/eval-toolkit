@@ -239,6 +239,15 @@ def bayes_optimal_threshold(π: float, c_fp: float, c_fn: float) -> float:
     Equivalently, when costs are equal the optimal threshold is the *negative*
     prior — predicting 1 whenever P(y=1 | x) > P(y=0).
 
+    Attribution caveat: Elkan 2001 §4 derives the **prior-independent**
+    posterior-formula ``t* = c_fp / (c_fp + c_fn)`` for thresholding a
+    *Bayes-calibrated* posterior P(y=1 | x). The formula implemented here
+    is the **prior-corrected** form for thresholding raw scores at a known
+    deployment prior π, which agrees with Elkan only under symmetric costs.
+    For our intended use (deployment prior + asymmetric costs) the
+    prior-corrected form is what the user wants — but the citation should
+    be read as "Elkan 2001 cost-sensitive framework", not literal §4.
+
     References
     ----------
     .. [#elkan] Elkan, C. "The foundations of cost-sensitive learning." IJCAI
@@ -386,8 +395,10 @@ def fit_isotonic_calibrator(
     -----
     Isotonic regression fits a monotonic step function from raw scores to
     calibrated probabilities. The fit is non-parametric; on small fitting
-    sets it can overfit, so prefer Platt for n < 200 per Niculescu-Mizil &
-    Caruana 2005 guidance.
+    sets it can overfit. Niculescu-Mizil & Caruana 2005 §5 finds isotonic
+    competitive with Platt only at **n ≳ 1000**; below ~1000 Platt scaling
+    (or :class:`fit_beta_calibrator`) typically generalizes better. Prefer
+    Platt / Beta for small calibration sets.
 
     References
     ----------
@@ -667,11 +678,19 @@ def _negative_log_likelihood(t: float, logits: np.ndarray, labels: np.ndarray) -
 def fit_temperature_oracle(
     y_true: np.ndarray, y_score: np.ndarray
 ) -> tuple[float, Callable[[np.ndarray], np.ndarray]]:
-    r"""Per-slice oracle T-scaling per Guo et al. 2017 [#guo]_.
+    r"""**DIAGNOSTIC ONLY** — fit-on-test oracle T-scaling per Guo et al. 2017 [#guo]_.
 
-    DIAGNOSTIC UPPER-BOUND ONLY. Fits T on the same data the resulting
-    callable scores. Use only as an upper-bound on what any single-T
-    recalibration could achieve; never as a deployment policy.
+    .. warning::
+
+        **Do not use this function as a deployment policy.** It fits ``T``
+        on the same data the returned callable scores — the canonical
+        "fit-on-test" methodological pitfall. ECE measured on the fitted
+        scores is systematically **under**-estimated, sometimes by 50% or
+        more (Vaicenavicius 2019 §3, Kumar 2019 §5, Roelofs 2022). Use
+        :func:`fit_temperature` (fit on a separate validation set) for
+        deployment; use this function only to compute a diagnostic
+        upper bound on what *any* single-T recalibration could achieve
+        if T were chosen optimally per slice.
 
     Internally inverts probabilities to logits via :math:`\log(p / (1 - p))`,
     fits T to minimize NLL on the T-scaled logits, then exposes a callable
@@ -703,10 +722,23 @@ def fit_temperature_oracle(
     >>> rng = np.random.default_rng(42)
     >>> y = rng.integers(0, 2, size=200)
     >>> s = (y + rng.normal(0, 0.5, size=200)).clip(0.01, 0.99)
-    >>> T_opt, apply = fit_temperature_oracle(y, s)
+    >>> import warnings
+    >>> with warnings.catch_warnings():
+    ...     warnings.simplefilter("ignore", UserWarning)
+    ...     T_opt, apply = fit_temperature_oracle(y, s)
     >>> T_opt > 0
     True
     """
+    import warnings as _warnings  # noqa: PLC0415  (deferred to keep top of file lean)
+
+    _warnings.warn(
+        "fit_temperature_oracle is fit-on-test and produces an under-estimated "
+        "ECE; use fit_temperature with a held-out validation set for deployment. "
+        "This warning may be suppressed in test contexts: "
+        "`warnings.simplefilter('ignore', UserWarning)`.",
+        UserWarning,
+        stacklevel=2,
+    )
     y_true_arr, y_score_arr = _validate_calibrator_inputs(y_true, y_score)
 
     def _logits_from_probs(p: np.ndarray) -> np.ndarray:
