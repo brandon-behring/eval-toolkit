@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://eval-toolkit/schemas/results.v1.json",
+  "version": "1",
   "title": "eval-toolkit RunResult (compact)",
   "description": "Schema for run_dir/results.json (per-row scores stripped). Produced by eval_toolkit.harness.write_run_result.",
   "type": "object",

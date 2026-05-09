@@ -19,7 +19,6 @@ References
 
 from __future__ import annotations
 
-import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
@@ -321,6 +320,10 @@ def _bootstrap_t_ci(
     n = int(len(y_true))
     theta_stars = np.full(n_resamples, np.nan, dtype=np.float64)
     se_stars = np.full(n_resamples, np.nan, dtype=np.float64)
+    # Capture first underlying exception so the n_valid raise can name it
+    # (was silent contextlib.suppress; per-resample logging would be noise
+    # in a thousands-iteration loop, but aggregate diagnostic is essential).
+    first_failure: str | None = None
 
     for b in range(n_resamples):
         idx = rng.integers(0, n, size=n)
@@ -328,13 +331,18 @@ def _bootstrap_t_ci(
         s_b = y_score[idx]
         try:
             theta_b = float(metric(y_b, s_b))
-        except (ValueError, RuntimeError):
+        except (ValueError, RuntimeError) as exc:
+            if first_failure is None:
+                first_failure = f"{type(exc).__name__}: {exc}"
             continue
         # Inner jackknife: leave-one-out within the resample.
         loo = np.full(n, np.nan, dtype=np.float64)
         for i in range(n):
-            with contextlib.suppress(ValueError, RuntimeError):
+            try:
                 loo[i] = float(metric(np.delete(y_b, i), np.delete(s_b, i)))
+            except (ValueError, RuntimeError) as exc:
+                if first_failure is None:
+                    first_failure = f"{type(exc).__name__}: {exc}"
         valid = ~np.isnan(loo)
         if int(valid.sum()) < 2:
             continue
@@ -348,10 +356,14 @@ def _bootstrap_t_ci(
     valid_mask = ~np.isnan(theta_stars) & ~np.isnan(se_stars) & (se_stars > 0.0)
     n_valid = int(valid_mask.sum())
     if n_valid < n_resamples * 0.95:
+        first_msg = (
+            f"; first underlying failure: {first_failure}" if first_failure is not None else ""
+        )
         raise ValueError(
             f"_bootstrap_t_ci: {n_resamples - n_valid}/{n_resamples} resamples "
             f"degenerate (single-class draws or zero jackknife variance); "
             f"refusing to compute studentized CI on > 5% degenerate resamples"
+            f"{first_msg}"
         )
 
     theta_v = theta_stars[valid_mask]
@@ -1112,15 +1124,26 @@ def cross_validate_metric(
         fold_iter = splitter.split(np.zeros(n))
 
     fold_metrics = np.full(k, np.nan, dtype=np.float64)
+    # Capture first underlying exception so the n_failed raise can quote it
+    # (was silent contextlib.suppress; "likely single-class" guess is unhelpful
+    # when the actual cause is a different upstream error).
+    first_failure: str | None = None
     for f, (_train_idx, test_idx) in enumerate(fold_iter):
-        with contextlib.suppress(ValueError, RuntimeError):
+        try:
             fold_metrics[f] = float(metric(y_arr[test_idx], s_arr[test_idx]))
+        except (ValueError, RuntimeError) as exc:
+            if first_failure is None:
+                first_failure = f"fold {f}: {type(exc).__name__}: {exc}"
 
     n_failed = int(np.isnan(fold_metrics).sum())
     if n_failed > k // 2:
+        first_msg = (
+            f"; first underlying failure: {first_failure}" if first_failure is not None else ""
+        )
         raise ValueError(
             f"cross_validate_metric: {n_failed}/{k} folds raised the metric "
             f"(likely single-class folds on rare-positive data); refusing to "
             f"return CV result with > 50% degenerate folds"
+            f"{first_msg}"
         )
     return fold_metrics

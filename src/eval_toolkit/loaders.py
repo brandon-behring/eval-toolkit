@@ -29,10 +29,10 @@ References
 from __future__ import annotations
 
 import glob as _glob
-from collections.abc import Sequence
-from dataclasses import dataclass, field
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 import pandas as pd
 
@@ -346,8 +346,15 @@ class HFDatasetsLoader:
     license: str = ""
     url: str = ""
 
-    def _load_dataset(self) -> object:
-        """Soft-import ``datasets`` and return the loaded DatasetDict."""
+    def _load_dataset(self) -> Mapping[str, Any]:
+        """Soft-import ``datasets`` and return the loaded DatasetDict.
+
+        Returns a ``Mapping[str, Any]`` (HF ``DatasetDict`` is dict-like —
+        keys are split names, values are HF ``Dataset`` objects exposing
+        ``.to_pandas()``). Annotated as ``Mapping`` rather than concrete
+        ``DatasetDict`` so consumers don't need to install ``datasets`` to
+        type-check downstream code.
+        """
         try:
             from datasets import load_dataset  # type: ignore[import-not-found]
         except ImportError as exc:
@@ -356,16 +363,16 @@ class HFDatasetsLoader:
                 "Install with: pip install datasets"
             ) from exc
         if self.config_name is not None:
-            return load_dataset(self.repo_id, name=self.config_name)
-        return load_dataset(self.repo_id)
+            return cast(Mapping[str, Any], load_dataset(self.repo_id, name=self.config_name))
+        return cast(Mapping[str, Any], load_dataset(self.repo_id))
 
     def load_splits(self) -> dict[str, EvalSlice]:
         """Convert each requested HF split to an :class:`EvalSlice`."""
         ds = self._load_dataset()
-        ds_splits = list(ds.keys()) if self.splits is None else list(self.splits)  # type: ignore[attr-defined]
+        ds_splits = list(ds.keys()) if self.splits is None else list(self.splits)
         out: dict[str, EvalSlice] = {}
         for split_name in ds_splits:
-            sub = ds[split_name]  # type: ignore[index]
+            sub = ds[split_name]
             df = sub.to_pandas()
             for col in (self.feature_col, self.label_col):
                 if col not in df.columns:
@@ -401,7 +408,3 @@ class HFDatasetsLoader:
             ],
             "config_name": self.config_name,
         }
-
-
-# Suppress unused-import warning: `field` referenced in dataclass field defaults indirectly
-_ = field

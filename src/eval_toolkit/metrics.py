@@ -222,6 +222,7 @@ def metrics_at_threshold(
     -------
     dict
         Keys: ``threshold``, ``f1``, ``precision``, ``recall``, ``accuracy``,
+        ``fpr`` (false-positive rate), ``fnr`` (false-negative rate),
         ``tn``, ``fp``, ``fn``, ``tp``.
 
     Examples
@@ -232,6 +233,8 @@ def metrics_at_threshold(
     >>> result = metrics_at_threshold(y, s, threshold=0.5)
     >>> result["f1"], result["tp"], result["fp"]
     (1.0, 2, 0)
+    >>> result["fpr"], result["fnr"]
+    (0.0, 0.0)
     """
     _validate_inputs(y_true, y_score)
     y_pred = (np.asarray(y_score) >= threshold).astype(int)
@@ -396,15 +399,14 @@ def stratified_recall(
             f"strata shape {strata_arr.shape} != y_true shape {np.asarray(y_true).shape}"
         )
 
-    # Coerce to string for groupby; treat None/NaN as "unlabeled".
+    # Coerce to string for groupby; treat None/NaN as "unlabeled". The
+    # isinstance(v, float) guard ensures np.isnan only sees floats (incl.
+    # numpy.float64), which never raises TypeError — no try/except needed.
     def _coerce(v: object) -> str:
         if v is None:
             return "unlabeled"
-        try:
-            if isinstance(v, float) and np.isnan(v):
-                return "unlabeled"
-        except TypeError:
-            pass
+        if isinstance(v, float) and np.isnan(v):
+            return "unlabeled"
         return str(v)
 
     strata_str = np.array([_coerce(v) for v in strata_arr])

@@ -141,6 +141,27 @@ print(f"Optimal T: {result['temperature']:.3f}")
 print(f"NLL: {result['nll_pre']:.3f} -> {result['nll_post']:.3f}")
 ```
 
+### Reproducibility manifest (NeurIPS-aligned)
+
+```python
+import tempfile
+from pathlib import Path
+from eval_toolkit import build_manifest, write_manifest
+
+with tempfile.TemporaryDirectory() as run_dir:
+    # data_files: {name: path} → eval_toolkit hashes the files for you;
+    # versioned: any object with a `version` attribute (e.g. a scorer or
+    # leakage check) is captured by name → version in the manifest.
+    manifest = build_manifest(
+        run_id="quickstart-demo",
+        config={"threshold_criterion": "max_f1", "seed": 42},
+        seeds={"global": 42, "bootstrap": 42},
+    )
+    write_manifest(manifest, Path(run_dir))
+    # → run_dir/manifest.json: schema_version, git_sha, dirty_flag, code_versions,
+    #   env (python+platform), seeds, data_hashes, versioned_objects, gpu_info
+```
+
 ## Modules
 
 | Module | Purpose |

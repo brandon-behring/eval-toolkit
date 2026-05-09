@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://eval-toolkit/schemas/results_full.v1.json",
+  "version": "1",
   "title": "eval-toolkit RunResult (full)",
   "description": "Schema for run_dir/results_full.json (includes per-row scores). Same top-level shape as results.v1; differs only in that by_slice[*].by_scorer[*].scores arrays are retained.",
   "type": "object",

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eval-toolkit"
-version = "0.8.0"
+version = "0.8.1"
 description = "Reusable evaluation toolkit for binary classification: metrics, bootstrap CIs, calibration, plotting."
 readme = "README.md"
 license = "MIT"
@@ -29,6 +29,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Typing :: Typed",

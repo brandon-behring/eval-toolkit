@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Nothing yet.
+
+## [0.8.1] — 2026-05-08
+
+Post-v0.8.0 quality sweep. Surfaces bootstrap diagnostics that were
+previously silent, removes type-discipline anti-patterns in `loaders.py`,
+adds a generic Protocol conformance test harness consumers can adapt,
+makes JSON schemas self-describing via a `version` root property, and
+closes a handful of docs / packaging hygiene gaps.
+
+### Added
+
+- `tests/test_protocol_conformance.py` — generic conformance harness
+  (23 tests) covering all 5 v0.7 Protocols (`ThresholdSelector`,
+  `LeakageCheck`, `Splitter`, `DatasetLoader`, `Versioned`). Doubles as
+  a copy-paste template for downstream consumers validating their own
+  custom impls before plugging into the harness.
+- `version: "1"` root property in `src/eval_toolkit/schemas/*.json`.
+  Allows programmatic schema-version checking without filename parsing.
+- README "Reproducibility manifest" quickstart block — runnable
+  `build_manifest` / `write_manifest` example covered by Sybil doctest.
+- `Programming Language :: Python :: 3.13` trove classifier in
+  `pyproject.toml` (CI matrix already exercises 3.13 via
+  `.github/workflows/ci.yml`).
+
+### Changed
+
+- `bootstrap.py:_bootstrap_t_ci` and `cross_validate_metric` now
+  capture the *first* underlying exception when their inner `try/except`
+  swallows resample / fold failures, and quote it in the eventual
+  guard-rail `ValueError`. Previously these raises only said "likely
+  single-class" — a guess that was unhelpful when the real cause was
+  a different upstream error. Behavior is purely additive (extra text
+  in the error message); no return-shape changes.
+
+### Fixed
+
+- `loaders.py:_load_dataset` is now annotated `-> Mapping[str, Any]`
+  (with a single `cast(...)` at the boundary) instead of returning
+  `object` and forcing `# type: ignore[attr-defined]` /
+  `# type: ignore[index]` at every call site. Net `# type: ignore`
+  count in `loaders.py` drops 3 → 1 (only the soft-import is now
+  ignored). No runtime behavior change.
+- `loaders.py` removed `_ = field` anti-pattern (the comment claimed
+  `field` was used in dataclass defaults, but no calls existed —
+  the import was just dead code).
+- `metrics.py:_coerce` (inside the strata report's groupby) removed a
+  dead `try/except TypeError: pass` that was unreachable because the
+  preceding `isinstance(v, float)` guard prevents `np.isnan` from ever
+  raising `TypeError`. Behavior unchanged; intent now visible.
+- `metrics.py:metrics_at_threshold` docstring `Returns` section was
+  missing `fpr` and `fnr` keys (the function returns them but the
+  docstring claimed only TN/FP/FN/TP/F1/precision/recall/accuracy).
+- `bootstrap.py` dropped `import contextlib` (now unused).
+- `CHANGELOG.md` adds the standard `## [Unreleased]` placeholder per
+  Keep-a-Changelog 1.1.0.
+
+### Notes
+
+- `harness.py:281` `except Exception` was flagged in audit but
+  verified safe: `BaseException` subclasses (`KeyboardInterrupt`,
+  `SystemExit`) are NOT swallowed by `except Exception`; left as-is.
+
 ## [0.8.0] — 2026-05-08
 
 Post-v0.7.1 best-practices sweep. Closes one real bug (the v0.7.1
