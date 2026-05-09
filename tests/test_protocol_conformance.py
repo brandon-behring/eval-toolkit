@@ -1,4 +1,8 @@
-"""Generic conformance tests for the five v0.7+ Protocols.
+"""Generic conformance tests for all 8 ``@runtime_checkable`` Protocols.
+
+Covers (v0.7+ unless noted): ``ThresholdSelector``, ``LeakageCheck``,
+``Splitter``, ``DatasetLoader``, ``Versioned``, ``Scorer``,
+``SliceAwareScorer``, ``SimilarityStrategy`` (text_dedup, v0.2+).
 
 Doubles as:
   1. A self-test on every reference implementation in the toolkit.
@@ -26,9 +30,11 @@ from eval_toolkit import (
     DatasetLoader,
     EvalSlice,
     ExactDuplicateCheck,
+    ExactNormalizedHashStrategy,
     GroupKFoldSplitter,
     GroupLeakageCheck,
     HoldoutSplitter,
+    JaccardNgramStrategy,
     LabelConflictCheck,
     LeakageCheck,
     LeakageFinding,
@@ -43,12 +49,15 @@ from eval_toolkit import (
     TargetPrecisionSelector,
     TargetRecallSelector,
     TemporalLeakageCheck,
+    TfidfCosineStrategy,
     ThresholdSelector,
     TimeSeriesSplitter,
     Versioned,
     YoudenJSelector,
 )
+from eval_toolkit.harness import Scorer, SliceAwareScorer
 from eval_toolkit.metrics import ThresholdResult
+from eval_toolkit.text_dedup import SimilarityStrategy
 from eval_toolkit.thresholds import CostMatrix
 
 # ---------------------------------------------------------------------------
@@ -336,3 +345,155 @@ def test_versioned_protocol_negative() -> None:
         pass
 
     assert not isinstance(_Untagged(), Versioned)
+
+
+# ---------------------------------------------------------------------------
+# Scorer + SliceAwareScorer (the central Protocols every consumer extends)
+# ---------------------------------------------------------------------------
+
+
+class _ConstantScorer:
+    """Returns a fixed score per row (smallest valid Scorer impl)."""
+
+    def __init__(self, score: float = 0.5) -> None:
+        self._score = score
+
+    def predict_proba(self, X: list[str] | pd.Series | np.ndarray) -> np.ndarray:
+        return np.full(len(X), self._score, dtype=float)
+
+
+class _SliceSkippingScorer(_ConstantScorer):
+    """Adds the should_score_slice() opt-in for cost-controlled slice skipping."""
+
+    def __init__(self, score: float = 0.5, skip_slice: str = "skip_me") -> None:
+        super().__init__(score)
+        self._skip = skip_slice
+
+    def should_score_slice(self, slice_name: str) -> bool:
+        return slice_name != self._skip
+
+
+@pytest.mark.unit
+def test_scorer_protocol_conformance() -> None:
+    scorer = _ConstantScorer(score=0.7)
+    # 1. Runtime structural check.
+    assert isinstance(scorer, Scorer)
+    # 2. predict_proba returns 1-D float ndarray of correct length.
+    out = scorer.predict_proba(["a", "b", "c"])
+    assert isinstance(out, np.ndarray) and out.shape == (3,) and out.dtype == np.float64
+    # 3. Idempotent on identical input.
+    out2 = scorer.predict_proba(["a", "b", "c"])
+    assert np.array_equal(out, out2)
+
+
+@pytest.mark.unit
+def test_scorer_protocol_negative() -> None:
+    """An object without predict_proba is NOT a Scorer."""
+
+    class _NotAScorer:
+        pass
+
+    assert not isinstance(_NotAScorer(), Scorer)
+
+
+@pytest.mark.unit
+def test_slice_aware_scorer_protocol_conformance() -> None:
+    scorer = _SliceSkippingScorer(score=0.3, skip_slice="ood")
+    # SliceAwareScorer extends Scorer — both isinstance checks pass.
+    assert isinstance(scorer, Scorer)
+    assert isinstance(scorer, SliceAwareScorer)
+    # should_score_slice returns bool with the documented contract.
+    assert scorer.should_score_slice("dev_test") is True
+    assert scorer.should_score_slice("ood") is False
+
+
+@pytest.mark.unit
+def test_slice_aware_scorer_negative() -> None:
+    """A plain Scorer (no should_score_slice) is NOT a SliceAwareScorer."""
+    plain = _ConstantScorer()
+    assert isinstance(plain, Scorer)
+    assert not isinstance(plain, SliceAwareScorer)
+
+
+# ---------------------------------------------------------------------------
+# SimilarityStrategy (text_dedup backbone — drives all near-leakage checks)
+# ---------------------------------------------------------------------------
+
+
+def _fixed_embedder(texts) -> np.ndarray:  # type: ignore[no-untyped-def]
+    """Tiny deterministic 'embedding' for EmbeddingCosineStrategy tests."""
+    out = np.zeros((len(texts), 4), dtype=np.float64)
+    for i, t in enumerate(texts):
+        out[i, 0] = float(len(t))
+        out[i, 1] = float(sum(map(ord, t)) % 100)
+        out[i, 2] = float(t.count(" "))
+        out[i, 3] = 1.0  # bias dim
+    return out
+
+
+def _similarity_strategies() -> list[SimilarityStrategy]:
+    from eval_toolkit import EmbeddingCosineStrategy
+
+    strategies: list[SimilarityStrategy] = [
+        TfidfCosineStrategy(ngram_range=(1, 2)),
+        ExactNormalizedHashStrategy(),
+        JaccardNgramStrategy(n=3, analyzer="char"),
+        EmbeddingCosineStrategy(embedder=_fixed_embedder),
+    ]
+    # MinHashLSH needs the optional `datasketch` package.
+    try:
+        import datasketch  # noqa: F401
+
+        from eval_toolkit import MinHashLSHStrategy
+
+        strategies.append(MinHashLSHStrategy(n=3, num_perm=64, bands=8, seed=42))
+    except ImportError:
+        pass
+    return strategies
+
+
+@pytest.fixture(scope="module")
+def synth_texts() -> list[str]:
+    return [
+        "the quick brown fox jumps",
+        "the quick brown fox jumps!",  # near-dupe
+        "the slow blue cat naps",
+        "lorem ipsum dolor sit amet",
+        "lorem ipsum dolor sit amet.",  # near-dupe
+        "completely unrelated content here",
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("strategy", _similarity_strategies(), ids=lambda s: type(s).__name__)
+def test_similarity_strategy_conformance(
+    strategy: SimilarityStrategy,
+    synth_texts: list[str],
+) -> None:
+    # 1. Runtime structural check.
+    assert isinstance(strategy, SimilarityStrategy)
+    # 2. pairs_within: aligned (similarities, indices) of shape (n, k_eff).
+    n = len(synth_texts)
+    k = 3
+    sims, idx = strategy.pairs_within(synth_texts, k=k)
+    assert isinstance(sims, np.ndarray) and isinstance(idx, np.ndarray)
+    assert sims.shape == idx.shape
+    assert sims.shape[0] == n
+    assert sims.shape[1] <= k  # k_eff = min(k, n_reference)
+    # 3. pairs_across: shape (n_query, k_eff) over reference list.
+    query = synth_texts[:3]
+    ref = synth_texts[3:]
+    sims_x, idx_x = strategy.pairs_across(query, ref, k=2)
+    assert sims_x.shape == idx_x.shape
+    assert sims_x.shape[0] == len(query)
+    assert sims_x.shape[1] <= 2
+
+
+@pytest.mark.unit
+def test_similarity_strategy_negative() -> None:
+    """An object missing pairs_within / pairs_across is NOT a SimilarityStrategy."""
+
+    class _NotAStrategy:
+        pass
+
+    assert not isinstance(_NotAStrategy(), SimilarityStrategy)

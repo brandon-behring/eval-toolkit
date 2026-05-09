@@ -10,7 +10,7 @@ See ``STYLE.md`` for coding standards and ``CHANGELOG.md`` for version history.
 
 from __future__ import annotations
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 from eval_toolkit.bootstrap import (
     DEFAULT_CONFIDENCE,

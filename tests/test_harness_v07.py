@@ -189,6 +189,7 @@ def test_evaluate_folded_with_kfold(big_slice: EvalSlice) -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.slow
 def test_evaluate_folded_multi_seed(big_slice: EvalSlice) -> None:
     """seeds=(1, 2, 3) × k=2 = 6 fold entries."""
     result = evaluate_folded(

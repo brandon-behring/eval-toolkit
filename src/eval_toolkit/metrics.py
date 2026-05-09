@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import numpy as np
 
@@ -1342,7 +1342,7 @@ def precision_at_prior(
     }
 
 
-DEFAULT_ASSUMED_PRIORS: tuple[float, ...] = (0.001, 0.01, 0.05)
+DEFAULT_ASSUMED_PRIORS: Final[tuple[float, ...]] = (0.001, 0.01, 0.05)
 
 
 def score_distribution_summary(scores: np.ndarray) -> dict[str, float | int]:

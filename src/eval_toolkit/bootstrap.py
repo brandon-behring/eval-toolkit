@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
 
 import numpy as np
 from scipy.stats import bootstrap as _scipy_bootstrap
@@ -48,10 +48,10 @@ __all__ = [
     "paired_mde",
 ]
 
-DEFAULT_N_RESAMPLES = 1000
-DEFAULT_CONFIDENCE = 0.95
-DEFAULT_METHOD: Literal["BCa", "percentile"] = "BCa"
-DEFAULT_SEED = 42
+DEFAULT_N_RESAMPLES: Final[int] = 1000
+DEFAULT_CONFIDENCE: Final[float] = 0.95
+DEFAULT_METHOD: Final[Literal["BCa", "percentile"]] = "BCa"
+DEFAULT_SEED: Final[int] = 42
 
 MetricFn = Callable[[np.ndarray, np.ndarray], float]
 ThresholdFn = Callable[[np.ndarray, np.ndarray], float]

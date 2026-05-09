@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
 
 import numpy as np
 from scipy.optimize import minimize, minimize_scalar
@@ -53,15 +53,15 @@ __all__ = [
     "reliability_curve",
 ]
 
-DEFAULT_N_BINS = 10
-DEFAULT_STRATEGY: Literal["uniform", "quantile"] = "quantile"
+DEFAULT_N_BINS: Final[int] = 10
+DEFAULT_STRATEGY: Final[Literal["uniform", "quantile"]] = "quantile"
 
 # Example cost-matrix defaults (rare-positive deployment surface). These are
 # illustrative scaffolding; a real cost matrix should come from stakeholder
 # elicitation, not library defaults.
-DEFAULT_PRIOR = 0.01
-DEFAULT_FP_COST = 1.0
-DEFAULT_FN_COST = 10.0
+DEFAULT_PRIOR: Final[float] = 0.01
+DEFAULT_FP_COST: Final[float] = 1.0
+DEFAULT_FN_COST: Final[float] = 10.0
 
 
 def reliability_curve(

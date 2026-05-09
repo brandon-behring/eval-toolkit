@@ -992,6 +992,7 @@ def test_l2_ece_rejects_logits() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.slow
 def test_bootstrap_ci_studentized_runs() -> None:
     """method='studentized' returns a valid BootstrapCI."""
     from eval_toolkit.metrics import pr_auc
@@ -1007,6 +1008,7 @@ def test_bootstrap_ci_studentized_runs() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.slow
 def test_bootstrap_ci_studentized_deterministic() -> None:
     """Same seed → identical studentized CI."""
     from eval_toolkit.metrics import pr_auc
@@ -1214,55 +1216,8 @@ def test_cross_validate_metric_validates() -> None:
         cross_validate_metric(y, s, metric=pr_auc, k=10)
 
 
-# v0.8.1: ensure the >50% degenerate-folds raise quotes the underlying
-# exception (regression test for the new first_failure diagnostic that
-# replaced contextlib.suppress in bootstrap.py:1116).
-@pytest.mark.unit
-def test_cross_validate_metric_quotes_underlying_failure() -> None:
-    from eval_toolkit.bootstrap import cross_validate_metric
-
-    def evil_metric(y: np.ndarray, s: np.ndarray) -> float:
-        raise RuntimeError("synthetic-failure-XYZ")
-
-    rng = np.random.default_rng(0)
-    y = rng.integers(0, 2, size=40)
-    s = rng.uniform(0, 1, size=40)
-    with pytest.raises(ValueError) as excinfo:
-        cross_validate_metric(y, s, metric=evil_metric, k=5, stratified=True)
-    msg = str(excinfo.value)
-    assert "5/5 folds raised" in msg
-    # The new diagnostic must surface the underlying exception verbatim
-    # so users can fix the real upstream problem.
-    assert "first underlying failure" in msg
-    assert "RuntimeError: synthetic-failure-XYZ" in msg
-
-
-# v0.8.1: same diagnostic for the studentized bootstrap-t inner-jackknife loop
-# (was silent contextlib.suppress in bootstrap.py:336). The metric must succeed
-# on the original (point estimate) data but fail on most resamples — emulating
-# the realistic single-class-resample case that motivated the diagnostic.
-@pytest.mark.unit
-def test_bootstrap_t_quotes_underlying_failure() -> None:
-    from eval_toolkit.bootstrap import bootstrap_ci
-
-    def picky_metric(y: np.ndarray, s: np.ndarray) -> float:
-        # Mimic pr_auc / roc_auc: raise on single-class slices.
-        if len(np.unique(y)) < 2:
-            raise RuntimeError("single-class-slice-XYZ")
-        return float(s.mean())
-
-    # Rare-positive small slice → most bootstrap resamples will be all-negative.
-    n = 15
-    y = np.zeros(n, dtype=int)
-    y[0] = 1  # exactly one positive
-    s = np.linspace(0.0, 1.0, n)
-
-    with pytest.raises(ValueError) as excinfo:
-        bootstrap_ci(y, s, metric=picky_metric, n_resamples=200, method="studentized")
-    msg = str(excinfo.value)
-    assert "degenerate" in msg
-    assert "first underlying failure" in msg
-    assert "RuntimeError: single-class-slice-XYZ" in msg
+# (v0.8.1 + v0.8.2 bootstrap-diagnostic regression tests now live in
+# tests/test_bootstrap_unit.py — keeping bootstrap-engine tests together.)
 
 
 # ---------------------------------------------------------------------------

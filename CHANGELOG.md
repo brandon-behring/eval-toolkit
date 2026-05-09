@@ -9,6 +9,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.8.2] — 2026-05-08
+
+Follow-up patch closing the post-v0.8.1 audit's residual items: extends
+the Protocol conformance harness to cover all 8 Protocols (was ⅝),
+boosts coverage in two under-covered modules to 98–100%, adds a
+`slow` test marker for opt-out of the studentized-bootstrap tests, and
+applies `Final` annotations to module-level defaults.
+
+### Added
+
+- Conformance harness extended (`tests/test_protocol_conformance.py`):
+  `Scorer`, `SliceAwareScorer`, and `SimilarityStrategy` now have
+  contract assertions + negative-isinstance tests. 9 new tests; harness
+  now covers 8/8 `@runtime_checkable` Protocols (was 5/8).
+- `tests/test_seeds.py` adds a torch-installed code-path test via
+  `monkeypatch` of `builtins.__import__`. Covers `seeds.py:103-109`
+  (`manual_seed` / cuda branch / cudnn flags / `use_deterministic_algorithms`)
+  even when torch isn't a dev dep.
+- `tests/test_docs_props.py` adds 8 unit tests for `walk_path` list-index
+  branch, render_text/render_files type guards, render_files check-mode
+  drift+errors aggregation, and per-helper None handling on `_fmt_signed_3`,
+  `_fmt_signed_4`, `_fmt_4`.
+- `tests/test_bootstrap_unit.py` now houses 3 diagnostic regression tests
+  (relocated from `test_coverage_gap.py`) covering the v0.8.1
+  `first_failure` capture in `cross_validate_metric` + `_bootstrap_t_ci`,
+  PLUS a new test for the *inner* LOO failure capture (a metric that
+  succeeds on the full resample but fails on every leave-one-out subset
+  — exercises `bootstrap.py:343-345`).
+- `slow` pytest marker registered in `pyproject.toml`. Three tests
+  (`test_bootstrap_ci_studentized_runs`,
+  `test_bootstrap_ci_studentized_deterministic`,
+  `test_evaluate_folded_multi_seed`) are now marked `@pytest.mark.slow`
+  — opt out via `pytest -m "not slow"` (saves ~10s on default runs).
+
+### Changed
+
+- Module-level constants in `metrics.py`, `bootstrap.py`, `calibration.py`,
+  `harness.py` now annotated with `typing.Final` (`DEFAULT_ASSUMED_PRIORS`,
+  `DEFAULT_N_RESAMPLES`, `DEFAULT_CONFIDENCE`, `DEFAULT_METHOD`,
+  `DEFAULT_SEED`, `DEFAULT_N_BINS`, `DEFAULT_STRATEGY`, `DEFAULT_PRIOR`,
+  `DEFAULT_FP_COST`, `DEFAULT_FN_COST`, `DEFAULT_BOOTSTRAP_RESAMPLES`,
+  `RUN_RESULT_SCHEMA_VERSION`). Catches accidental rebinding under mypy
+  `--strict`. No runtime change.
+
+### Coverage
+
+- `seeds.py`: 74% → 98%
+- `docs.py`: 84% → 100%
+- Total module coverage maintained ≥ 90% gate.
+
+### Notes
+
+- Audit's "split `test_coverage_gap.py` into topical files" recommendation
+  was rejected on inspection: the file is intentionally organized
+  chronologically by version (v0.3 → v0.4 → v0.5 → v0.7 → v0.8 capability
+  tags) and a topical reorg would lose that audit trail. The 3 v0.8.x
+  bootstrap-diagnostic tests were relocated to `test_bootstrap_unit.py`
+  where they topologically belong, but the chronological structure of
+  `test_coverage_gap.py` is preserved.
+- Audit's "narrow `Any` in `docs.py` formatters" was rejected: the
+  formatters are dispatched dynamically on user-supplied anchor keys
+  with arbitrary leaf types — narrowing would over-constrain.
+
 ## [0.8.1] — 2026-05-08
 
 Post-v0.8.0 quality sweep. Surfaces bootstrap diagnostics that were

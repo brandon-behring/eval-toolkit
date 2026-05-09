@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eval-toolkit"
-version = "0.8.1"
+version = "0.8.2"
 description = "Reusable evaluation toolkit for binary classification: metrics, bootstrap CIs, calibration, plotting."
 readme = "README.md"
 license = "MIT"
@@ -131,6 +131,7 @@ markers = [
     "property: Hypothesis property-based invariant tests",
     "smoke: End-to-end smoke tests",
     "golden: Snapshot tests for deterministic outputs (docs.py)",
+    "slow: Tests > 2s (bootstrap-t studentized, multi-seed K-fold). Opt out with `pytest -m 'not slow'`.",
 ]
 
 [tool.coverage.run]

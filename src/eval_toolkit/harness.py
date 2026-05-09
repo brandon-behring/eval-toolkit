@@ -36,7 +36,7 @@ import traceback
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Final, Literal, Protocol, runtime_checkable
 
 import numpy as np
 import pandas as pd
@@ -66,8 +66,8 @@ __all__ = [
     "write_run_result",
 ]
 
-DEFAULT_BOOTSTRAP_RESAMPLES = 1000
-RUN_RESULT_SCHEMA_VERSION = "v1"
+DEFAULT_BOOTSTRAP_RESAMPLES: Final[int] = 1000
+RUN_RESULT_SCHEMA_VERSION: Final[str] = "v1"
 
 _logger = logging.getLogger(__name__)
 

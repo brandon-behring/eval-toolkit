@@ -16,6 +16,7 @@ from eval_toolkit.bootstrap import (
     MDEEstimate,
     PairedBootstrapCI,
     bootstrap_ci,
+    cross_validate_metric,
     mde_from_ci,
     paired_bootstrap_diff,
     paired_bootstrap_ece_diff,
@@ -281,3 +282,83 @@ def test_paired_bootstrap_overlaps_zero_at_lower_boundary() -> None:
         n_resamples=1000,
     )
     assert fake.overlaps_zero is True
+
+
+# ---------------------------------------------------------------------------
+# v0.8.1 + v0.8.2: bootstrap-diagnostic regression tests
+# ---------------------------------------------------------------------------
+# These cover the `first_failure` capture that replaced silent
+# contextlib.suppress in `_bootstrap_t_ci` and `cross_validate_metric`
+# (bootstrap.py:336 and :1116). A guard-rail raise should always quote
+# the underlying exception so users can fix the real upstream problem.
+
+
+@pytest.mark.unit
+def test_cross_validate_metric_quotes_underlying_failure() -> None:
+    """v0.8.1: >50% degenerate-folds raise must quote the first underlying exc."""
+
+    def evil_metric(y: np.ndarray, s: np.ndarray) -> float:
+        raise RuntimeError("synthetic-failure-XYZ")
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=40)
+    s = rng.uniform(0, 1, size=40)
+    with pytest.raises(ValueError) as excinfo:
+        cross_validate_metric(y, s, metric=evil_metric, k=5, stratified=True)
+    msg = str(excinfo.value)
+    assert "5/5 folds raised" in msg
+    assert "first underlying failure" in msg
+    assert "RuntimeError: synthetic-failure-XYZ" in msg
+
+
+@pytest.mark.unit
+def test_bootstrap_t_quotes_underlying_failure() -> None:
+    """v0.8.1: studentized bootstrap raise must quote the underlying exc.
+
+    Realistic case: rare-positive small slice → most bootstrap resamples are
+    all-negative, and a `pr_auc`-style metric raises on single-class data.
+    """
+
+    def picky_metric(y: np.ndarray, s: np.ndarray) -> float:
+        if len(np.unique(y)) < 2:
+            raise RuntimeError("single-class-slice-XYZ")
+        return float(s.mean())
+
+    n = 15
+    y = np.zeros(n, dtype=int)
+    y[0] = 1
+    s = np.linspace(0.0, 1.0, n)
+    with pytest.raises(ValueError) as excinfo:
+        bootstrap_ci(y, s, metric=picky_metric, n_resamples=200, method="studentized")
+    msg = str(excinfo.value)
+    assert "degenerate" in msg
+    assert "first underlying failure" in msg
+    assert "RuntimeError: single-class-slice-XYZ" in msg
+
+
+@pytest.mark.unit
+def test_bootstrap_t_inner_loo_failure_surfaced() -> None:
+    """v0.8.2: cover the *inner* LOO first_failure capture (bootstrap.py:343-345).
+
+    Construct a metric that succeeds on the FULL resample but fails on every
+    leave-one-out subset → valid.sum() < 2, theta_stars[b] stays NaN, eventually
+    triggering the n_valid raise with `first_failure` surfaced from the inner
+    loop (not the outer try/except).
+    """
+    n = 20
+
+    def n_strict_metric(y: np.ndarray, s: np.ndarray) -> float:
+        if len(y) < n:
+            raise RuntimeError("inner-loo-failure-DEF")
+        return float(s.mean())
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, size=n)
+    s = rng.uniform(0, 1, size=n)
+    with pytest.raises(ValueError) as excinfo:
+        bootstrap_ci(y, s, metric=n_strict_metric, n_resamples=50, method="studentized")
+    msg = str(excinfo.value)
+    assert "degenerate" in msg
+    assert "first underlying failure" in msg
+    # Crucially: the INNER LOO exception (not the outer one) is what's surfaced.
+    assert "RuntimeError: inner-loo-failure-DEF" in msg
