@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Nothing yet.
 
+## [0.8.3] — 2026-05-09
+
+Pure-polish patch from a fresh-eyes audit of the v0.8.2 surface. Three
+parallel Explore agents surfaced 18 raw findings; **11 were rejected on
+verification** (sklearn PR-curve index semantics, integer arithmetic
+equivalence at `k // 2`, intentional determinism `==` assertions, and a
+wheel-inclusion claim disproved by direct `zipfile` inspection). The 4
+remaining items were all LOW severity. No public-API or behavior
+changes.
+
+### Fixed
+
+- `README.md` modules table no longer mislabels `eval_toolkit.schemas`
+  as an importable Python module (it's a JSON resource directory with
+  no `__init__.py`). Row reworded to point at
+  `importlib.resources.files("eval_toolkit") / "schemas"`.
+
+### Tests
+
+- Deduped the autouse `_close_figures_after_each_test` fixture into
+  `tests/conftest.py`; removed the local copies in
+  `tests/test_plotting_smoke.py` and `tests/test_plotting_visual.py`
+  (also dropped the now-unused `import matplotlib.pyplot as plt` from
+  `test_plotting_visual.py`).
+- `tests/test_paths.py::test_path_for_config_outside_repo` tightened:
+  `assert out is not None` → `assert out == elsewhere` (was passing on
+  any non-None value); replaced hardcoded `/tmp/some_external_path.txt`
+  with `tmp_path.parent / "outside.txt"` for full tmp-isolation.
+- `tests/test_bootstrap_unit.py` adds 2 degenerate-input boundary tests
+  for `bootstrap_ci`: `n_resamples=2` produces a (degenerate) CI without
+  crashing; `n_resamples=0` is rejected (currently delegated to
+  scipy.stats.bootstrap; test is belt-and-braces against silent NaN
+  regressions).
+
+### Notes
+
+- See `~/.claude/plans/my-goal-is-to-enchanted-origami.md` for the audit
+  rationale, the 11 rejected claims with verification evidence, and the
+  signal that a fresh audit found 0 HIGH/MED issues across the v0.8.2
+  surface (i.e., the v0.8.0/.1/.2 sweep was thorough).
+
 ## [0.8.2] — 2026-05-08
 
 Follow-up patch closing the post-v0.8.1 audit's residual items: extends

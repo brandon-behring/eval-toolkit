@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from matplotlib.figure import Figure
@@ -32,12 +31,6 @@ from eval_toolkit.plotting import (
     plot_reliability_diagram,
     plot_score_histograms,
 )
-
-
-@pytest.fixture(autouse=True)
-def _close_figures_after_each_test() -> None:
-    yield
-    plt.close("all")
 
 
 @dataclass(frozen=True, slots=True)

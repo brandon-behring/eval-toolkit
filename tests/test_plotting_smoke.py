@@ -39,12 +39,6 @@ class _StubCI:
     ci_high: float
 
 
-@pytest.fixture(autouse=True)
-def _close_figures_after_each_test() -> None:
-    yield
-    plt.close("all")
-
-
 @pytest.fixture
 def synthetic() -> tuple[np.ndarray, np.ndarray]:
     rng = np.random.default_rng(42)

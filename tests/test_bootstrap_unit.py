@@ -362,3 +362,45 @@ def test_bootstrap_t_inner_loo_failure_surfaced() -> None:
     assert "first underlying failure" in msg
     # Crucially: the INNER LOO exception (not the outer one) is what's surfaced.
     assert "RuntimeError: inner-loo-failure-DEF" in msg
+
+
+# ---------------------------------------------------------------------------
+# v0.8.3: degenerate-input boundary tests for bootstrap_ci
+# ---------------------------------------------------------------------------
+# Defensive coverage for n_resamples ≤ 2 (a scipy.stats.bootstrap delegate)
+# and the n_resamples=0 rejection. These exist to fail loudly if the
+# n_resamples validation behavior ever drifts (e.g., we swap out scipy or
+# wrap with our own preflight check that silently floors negative inputs).
+
+
+@pytest.mark.unit
+def test_bootstrap_ci_minimal_n_resamples_does_not_crash() -> None:
+    """v0.8.3: n_resamples=2 yields a (degenerate) CI without raising.
+
+    Internal scipy variance computation warns about dof ≤ 0 on such tiny
+    distributions; that's expected — we only assert the CI is well-formed
+    (low ≤ point ≤ high) and the call returns rather than crashing.
+    """
+    import warnings
+
+    y = np.array([0] * 10 + [1] * 10, dtype=int)
+    s = np.linspace(0.0, 1.0, 20)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        ci = bootstrap_ci(y, s, pr_auc, n_resamples=2, method="percentile", seed=0)
+    assert ci.ci_low <= ci.point_estimate <= ci.ci_high
+
+
+@pytest.mark.unit
+def test_bootstrap_ci_rejects_n_resamples_zero() -> None:
+    """v0.8.3: n_resamples=0 must raise (currently delegated to scipy).
+
+    Belt-and-braces against silently producing a NaN-filled CI if either
+    the scipy validation regresses or eval-toolkit ever wraps it with a
+    permissive preflight. Uses n=10 so we clear the n<10 ValueError before
+    reaching the n_resamples check.
+    """
+    y = np.array([0] * 5 + [1] * 5, dtype=int)
+    s = np.linspace(0.0, 1.0, 10)
+    with pytest.raises(ValueError):
+        bootstrap_ci(y, s, pr_auc, n_resamples=0, method="percentile", seed=0)

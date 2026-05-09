@@ -13,3 +13,18 @@ from __future__ import annotations
 import matplotlib
 
 matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt  # noqa: E402  (must follow Agg-backend selection)
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _close_figures_after_each_test() -> None:
+    """Close all matplotlib figures after each test.
+
+    Hoisted from test_plotting_smoke.py / test_plotting_visual.py in v0.8.3
+    to dedupe the autouse fixture and prevent figure leaks across the whole
+    test tree (matters once Sybil-rendered plots also hit pyplot state).
+    """
+    yield
+    plt.close("all")

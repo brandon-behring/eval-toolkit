@@ -38,10 +38,13 @@ def test_path_for_config_inside_repo(tmp_path: Path) -> None:
 
 @pytest.mark.unit
 def test_path_for_config_outside_repo(tmp_path: Path) -> None:
-    """Paths outside repo_root return absolute."""
-    elsewhere = "/tmp/some_external_path.txt"
+    """Paths outside repo_root pass through unchanged (absolute)."""
+    # tmp_path.parent is guaranteed to exist and be outside tmp_path itself,
+    # so we exercise the "outside-repo" branch without depending on /tmp
+    # specifically (v0.8.3: tighten from `out is not None` to value-equality).
+    elsewhere = str(tmp_path.parent / "outside.txt")
     out = path_for_config(elsewhere, tmp_path)
-    assert out is not None
+    assert out == elsewhere
     assert Path(out).is_absolute()
 
 

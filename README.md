@@ -178,7 +178,7 @@ with tempfile.TemporaryDirectory() as run_dir:
 | `eval_toolkit.text_dedup` | `SimilarityStrategy` Protocol + 5 strategies (TF-IDF / hash / embedding / Jaccard / MinHash-LSH); `near_dedup` / `cross_dedup` orchestrators |
 | `eval_toolkit.plotting` | PR curves, reliability diagrams, confusion matrices, score histograms, lift CIs |
 | `eval_toolkit.provenance` | File hashing, run-directory layout, figure metadata sidecar |
-| `eval_toolkit.schemas` | Versioned JSON Schemas (`results.v1.json`, `results_full.v1.json`, `manifest.v1.json`) |
+| `eval_toolkit/schemas/` | Bundled JSON Schemas (`results.v1.json`, `results_full.v1.json`, `manifest.v1.json`) — load via `importlib.resources.files("eval_toolkit") / "schemas"` (not an importable Python module) |
 | `eval_toolkit.paths` | Repo-relative path normalization |
 | `eval_toolkit.seeds` | `set_global_seeds` (random + numpy + optional torch) |
 | `eval_toolkit.config` | `frozen_config` decorator + `from_yaml` loader |
