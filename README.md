@@ -52,6 +52,9 @@ run: capture the manifest.
 - **[Extending](docs/extending.md)** — Protocol-by-Protocol guide for
   custom Scorers, Splitters, LeakageChecks, ThresholdSelectors,
   DatasetLoaders, EvidenceGates.
+- **[Repo strategy](docs/repo-strategy.md)** — how the package is
+  organized, the 6-bucket target shape, and the checklist that
+  governs when to extract a sub-package into its own repo.
 
 ## Methodology
 

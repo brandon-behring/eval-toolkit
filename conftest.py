@@ -42,6 +42,7 @@ pytest_collect_file = Sybil(
         "docs/extending.md",
         "docs/MIGRATION.md",
         "docs/getting-started.md",
+        "docs/repo-strategy.md",
         "docs/schemas.md",
         "docs/methodology/*.md",
         "docs/examples/*.md",

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `docs/repo-strategy.md` — repo organization strategy document.
+  Captures the v0.10.0 dependency-graph audit, the 6-bucket
+  in-place reorganization targeted for v0.11.0, the 4-question
+  machine-checkable checklist for "should we extract sub-package
+  X?", and the audit cadence (every 3 minor releases; next at
+  v0.13.0). Linked from `README.md` Documentation section.
+
 ## [0.10.0] — 2026-05-12 — Maturity Release
 
 A docs-and-hygiene minor release. Closes the v0.9 documentation gap
