@@ -12,7 +12,7 @@ help:
 	@echo "  test-unit     pytest -m unit"
 	@echo "  test-property pytest -m property"
 	@echo "  test-smoke    pytest -m smoke"
-	@echo "  test-doctest  pytest --doctest-modules src/eval_toolkit/{metrics,bootstrap,calibration,text_dedup}.py"
+	@echo "  test-doctest  pytest --doctest-modules src/eval_toolkit/{metrics,bootstrap,calibration,text_dedup,thresholds,leakage,manifest,paths,provenance}.py"
 	@echo "  type          mypy strict on src/"
 	@echo "  coverage      pytest with coverage report"
 	@echo "  ci            lint + test + coverage gate"
@@ -35,7 +35,10 @@ format:
 test:
 	$(PYTHON) -m pytest tests \
 		--doctest-modules src/eval_toolkit/metrics.py src/eval_toolkit/bootstrap.py \
-		src/eval_toolkit/calibration.py src/eval_toolkit/text_dedup.py
+		src/eval_toolkit/calibration.py src/eval_toolkit/text_dedup.py \
+		src/eval_toolkit/thresholds.py src/eval_toolkit/leakage.py \
+		src/eval_toolkit/manifest.py src/eval_toolkit/paths.py \
+		src/eval_toolkit/provenance.py
 
 test-unit:
 	$(PYTHON) -m pytest -m unit
@@ -49,7 +52,10 @@ test-smoke:
 test-doctest:
 	$(PYTHON) -m pytest --doctest-modules \
 		src/eval_toolkit/metrics.py src/eval_toolkit/bootstrap.py \
-		src/eval_toolkit/calibration.py src/eval_toolkit/text_dedup.py
+		src/eval_toolkit/calibration.py src/eval_toolkit/text_dedup.py \
+		src/eval_toolkit/thresholds.py src/eval_toolkit/leakage.py \
+		src/eval_toolkit/manifest.py src/eval_toolkit/paths.py \
+		src/eval_toolkit/provenance.py
 
 type:
 	$(PYTHON) -m mypy src

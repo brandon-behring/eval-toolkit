@@ -74,7 +74,7 @@ class EvidenceGate:
         """Run the gate and normalize unexpected exceptions to failures."""
         try:
             gate_result = self.check(result, manifest)
-        except Exception as exc:  # noqa: BLE001 - gates must not abort whole reports
+        except (KeyError, ValueError, TypeError, RuntimeError, AttributeError, LookupError) as exc:
             return GateResult(
                 name=self.name,
                 passed=False,

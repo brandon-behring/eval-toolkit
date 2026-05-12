@@ -27,7 +27,7 @@ PY_VERSIONS = ["3.11", "3.12", "3.13"]
 def tests(session: nox.Session) -> None:
     """Run the full pytest suite with coverage gate."""
     session.install("-e", ".[dev]")
-    session.run("pytest", "--cov=eval_toolkit", "--cov-fail-under=85", *session.posargs)
+    session.run("pytest", "--cov=eval_toolkit", "--cov-fail-under=90", *session.posargs)
 
 
 @nox.session
@@ -56,6 +56,11 @@ def doctest(session: nox.Session) -> None:
         "src/eval_toolkit/bootstrap.py",
         "src/eval_toolkit/calibration.py",
         "src/eval_toolkit/text_dedup.py",
+        "src/eval_toolkit/thresholds.py",
+        "src/eval_toolkit/leakage.py",
+        "src/eval_toolkit/manifest.py",
+        "src/eval_toolkit/paths.py",
+        "src/eval_toolkit/provenance.py",
     )
 
 

@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-05-12
+
+Post-v0.9.0 polish patch from an independent fresh-eyes audit. No
+public-API behavior changes; fixes config drift between CI and local
+runners, deduplicates Protocol definitions, and adds the v0.8→v0.9
+migration guide.
+
+### Fixed
+
+- Coverage threshold drift between CI (90%) and local `tox` / `nox`
+  (was 85%). `tox.ini` and `noxfile.py` now both enforce 90% to match
+  `.github/workflows/ci.yml` and `pyproject.toml` `[tool.coverage.report]`.
+- Doctest module list inconsistency: `Makefile`, `tox.ini`, and
+  `noxfile.py` all listed 4 modules (`metrics`, `bootstrap`,
+  `calibration`, `text_dedup`) while CI runs 9 (adds `thresholds`,
+  `leakage`, `manifest`, `paths`, `provenance`). Local runners now
+  match CI.
+
+### Changed
+
+- `claims.EvidenceGate.evaluate` exception handler narrowed from bare
+  `except Exception` to specific runtime/data errors
+  (`KeyError`, `ValueError`, `TypeError`, `RuntimeError`,
+  `AttributeError`, `LookupError`). Gate-implementer bugs
+  (`NameError`, `AssertionError`, `ImportError`, …) now surface as
+  real exceptions instead of being silently coerced into
+  "gate failed" messages. Intentional gate failures (caller-raised
+  `ValueError` / `KeyError` from missing payload fields) still
+  produce graceful `GateResult` records.
+- `Scorer` and `SliceAwareScorer` Protocols are now defined
+  exclusively in `eval_toolkit.protocols` (removed shadowed copies
+  from `eval_toolkit.harness`). The canonical type signature
+  for `Scorer.predict_proba` is now
+  `Sequence[str] | np.ndarray | pd.Series` — pandas remains a
+  type-only import (`TYPE_CHECKING`), so `protocols.py` retains
+  zero runtime pandas dependency. Re-exports from
+  `eval_toolkit.harness` and the top-level `eval_toolkit` namespace
+  are preserved; consumer imports require no changes.
+- `pyproject.toml`: deduplicated `jsonschema>=4.21` listing in the
+  `dev` extra (it was already pulled transitively via
+  `eval-toolkit[all]`).
+
+### Added
+
+- `docs/migration/v0.9.md` — comprehensive v0.8 → v0.9 migration
+  guide covering the new evidence-core modules, `RunResult` field
+  additions, schema additions, the `validation` extra, common
+  pitfalls, and an end-to-end worked harness walkthrough.
+- `docs/methodology/versioning.md` § Schema evolution policy —
+  documents the `.vN.json` filename convention, the additive-fields
+  forward-compatibility contract (`additionalProperties: true`), and
+  when a filename bump is required.
+- `tests/test_claims_props.py` — Hypothesis property tests for
+  `ClaimSpec` / `EvidenceGate` invariants (all-pass, any-fail,
+  warning-severity isolation, exception → typed-failure, order
+  independence, `GateResult.name` round-trip).
+- `tests/test_operating_points_props.py` — Hypothesis property
+  tests for `fit_operating_points` / `apply_operating_points`
+  (rank preservation, fit→apply round-trip with tolerance,
+  degenerate input handling, determinism under seed).
+
+### Notes
+
+- See `~/.claude/plans/examine-remote-and-look-parsed-starfish.md`
+  for the audit rationale, the eight findings (none blocking), and
+  the four user scoping decisions that shaped this patch.
+
+## [0.9.0] — 2026-05-12
+
+Evidence-core release. Introduces the `claims`, `artifacts`,
+`evidence`, `operating_points`, `analysis`, and `protocols` modules
+along with `RunResult` field additions for evidence axes, paired
+metadata, aggregate evidence, threshold policy, and claim reports.
+
 ### Added
 
 - v1-prelude evidence core: cross-slice operating-point transfer,
