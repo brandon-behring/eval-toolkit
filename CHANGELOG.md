@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- v1-prelude evidence core: cross-slice operating-point transfer,
+  source-role / guardrail manifest metadata, generic claim gates,
+  `RunResult.claim_report` attachment, and low-FPR feasibility gating.
 
 ## [0.8.3] — 2026-05-09
 

@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import json
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from eval_toolkit.claims import ClaimReport, GateResult
 from eval_toolkit.harness import (
     EvalSlice,
     RunResult,
     Scorer,
     evaluate,
+    with_claim_report,
     write_run_result,
 )
 
@@ -78,8 +81,38 @@ def test_evaluate_pure_no_filesystem(slice_with_data: EvalSlice, tmp_path: Path)
     assert isinstance(result, RunResult)
     assert result.run_id == "pure-test"
     assert result.git_sha is None
+    assert result.claim_report == {}
+    assert result.to_dict()["claim_report"] == {}
     # Nothing should have been written into tmp_path
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.smoke
+def test_with_claim_report_returns_new_frozen_result(slice_with_data: EvalSlice) -> None:
+    rng = np.random.default_rng(42)
+    sc = _StubScorer(rng.uniform(0, 1, size=len(slice_with_data.df)))
+    result = evaluate({"stub": sc}, [slice_with_data], run_id="claim-test", n_resamples=20)
+    report = ClaimReport(claims={"claim": [GateResult(name="gate", passed=True, message="ok")]})
+
+    enriched = with_claim_report(result, report)
+
+    assert result.claim_report == {}
+    assert enriched.claim_report["has_failures"] is False
+    assert enriched.claim_report["claims"]["claim"][0]["passed"] is True
+    assert enriched.run_id == result.run_id
+    with pytest.raises(FrozenInstanceError):
+        enriched.claim_report = {}
+
+
+@pytest.mark.smoke
+def test_with_claim_report_accepts_mapping(slice_with_data: EvalSlice) -> None:
+    rng = np.random.default_rng(42)
+    sc = _StubScorer(rng.uniform(0, 1, size=len(slice_with_data.df)))
+    result = evaluate({"stub": sc}, [slice_with_data], run_id="claim-map", n_resamples=20)
+
+    enriched = with_claim_report(result, {"claims": {}, "has_failures": False})
+
+    assert enriched.to_dict()["claim_report"] == {"claims": {}, "has_failures": False}
 
 
 @pytest.mark.smoke

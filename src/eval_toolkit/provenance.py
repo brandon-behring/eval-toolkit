@@ -13,8 +13,6 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-import matplotlib as mpl
-
 __all__ = [
     "capture_git_sha",
     "figure_metadata",
@@ -161,9 +159,16 @@ def figure_metadata(provenance: dict[str, str], dpi: int = 300) -> dict[str, str
     >>> meta["figure_dpi"]
     '150'
     """
+    try:
+        import matplotlib as mpl  # noqa: PLC0415
+
+        matplotlib_version = str(mpl.__version__)
+    except ImportError:
+        matplotlib_version = "unavailable"
+
     return {
         **provenance,
         "timestamp_utc": datetime.now(UTC).isoformat(timespec="seconds"),
-        "matplotlib_version": str(mpl.__version__),
+        "matplotlib_version": matplotlib_version,
         "figure_dpi": str(dpi),
     }

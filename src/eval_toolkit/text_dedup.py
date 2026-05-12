@@ -68,8 +68,11 @@ __all__ = [
     "ExactNormalizedHashStrategy",
     "JaccardNgramStrategy",
     "MinHashLSHStrategy",
+    "SimilarityAuditFinding",
+    "SimilarityAuditReport",
     "SimilarityStrategy",
     "TfidfCosineStrategy",
+    "audit_source_label_similarity",
     "cross_dedup",
     "near_dedup",
     "normalize_text_for_dedup",
@@ -126,6 +129,78 @@ class DedupReport:
     def n_dropped(self) -> int:
         """Number of input rows dropped as near-duplicates."""
         return len(self.dropped_pairs)
+
+
+SimilarityRelation = Literal[
+    "unspecified",
+    "within_source",
+    "cross_source",
+    "same_label",
+    "cross_label",
+    "within_source_same_label",
+    "within_source_cross_label",
+    "cross_source_same_label",
+    "cross_source_cross_label",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class SimilarityAuditFinding:
+    """One high-similarity pair found during a non-dropping audit."""
+
+    left_index: int
+    right_index: int
+    similarity: float
+    relation: SimilarityRelation = "unspecified"
+    left_source: str | None = None
+    right_source: str | None = None
+    left_label: object | None = None
+    right_label: object | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-serializable representation."""
+        out: dict[str, object] = {
+            "left_index": self.left_index,
+            "right_index": self.right_index,
+            "similarity": self.similarity,
+            "relation": self.relation,
+        }
+        if self.left_source is not None:
+            out["left_source"] = self.left_source
+        if self.right_source is not None:
+            out["right_source"] = self.right_source
+        if self.left_label is not None:
+            out["left_label"] = self.left_label
+        if self.right_label is not None:
+            out["right_label"] = self.right_label
+        return out
+
+
+@dataclass(frozen=True, slots=True)
+class SimilarityAuditReport:
+    """Non-dropping source/label-aware similarity audit report."""
+
+    findings: list[SimilarityAuditFinding]
+    threshold: float
+    n_input: int
+    strategy: str
+    k_neighbors: int
+
+    @property
+    def n_findings(self) -> int:
+        """Number of high-similarity pairs in the report."""
+        return len(self.findings)
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-serializable representation."""
+        return {
+            "findings": [finding.to_dict() for finding in self.findings],
+            "threshold": self.threshold,
+            "n_input": self.n_input,
+            "strategy": self.strategy,
+            "k_neighbors": self.k_neighbors,
+            "n_findings": self.n_findings,
+        }
 
 
 def normalize_text_for_dedup(text: str) -> str:
@@ -1052,6 +1127,148 @@ def near_dedup(
 
     kept_indices = np.where(kept_mask)[0].tolist()
     return DedupReport(kept_indices, dropped, threshold, n)
+
+
+def audit_source_label_similarity(
+    texts: Sequence[str],
+    *,
+    sources: Sequence[str] | None = None,
+    labels: Sequence[object] | None = None,
+    threshold: float = DEFAULT_DEDUP_THRESHOLD,
+    k_neighbors: int = 20,
+    strategy: SimilarityStrategy | None = None,
+    include_within_source: bool = True,
+    include_cross_source: bool = True,
+    include_same_label: bool = True,
+    include_cross_label: bool = True,
+) -> SimilarityAuditReport:
+    """Report high-similarity pairs without dropping rows.
+
+    This is the evidence-first complement to :func:`near_dedup`. It uses the
+    same pluggable similarity strategies but returns pair findings annotated
+    with source/label relationships so consumers can decide whether duplicates
+    are leakage, benign repeated labels, or label conflicts.
+    """
+    text_list = list(texts)
+    n = len(text_list)
+    if not 0.0 < threshold <= 1.0:
+        raise ValueError(f"threshold must be in (0, 1], got {threshold}")
+    if k_neighbors < 1:
+        raise ValueError(f"k_neighbors must be >= 1, got {k_neighbors}")
+    if sources is not None and len(sources) != n:
+        raise ValueError("sources must have the same length as texts")
+    if labels is not None and len(labels) != n:
+        raise ValueError("labels must have the same length as texts")
+    if n == 0:
+        return SimilarityAuditReport([], threshold, 0, "none", k_neighbors)
+
+    source_list = list(sources) if sources is not None else None
+    label_list = list(labels) if labels is not None else None
+    active_strategy: SimilarityStrategy = (
+        strategy if strategy is not None else TfidfCosineStrategy()
+    )
+    similarities, indices = active_strategy.pairs_within(text_list, k_neighbors)
+
+    findings: list[SimilarityAuditFinding] = []
+    seen_pairs: set[tuple[int, int]] = set()
+    for i in range(n):
+        for sim, j in zip(similarities[i], indices[i], strict=True):
+            j_int = int(j)
+            if j_int == i:
+                continue
+            left, right = sorted((i, j_int))
+            pair = (left, right)
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+            similarity = float(sim)
+            if similarity < threshold:
+                continue
+            if not _audit_pair_allowed(
+                left,
+                right,
+                sources=source_list,
+                labels=label_list,
+                include_within_source=include_within_source,
+                include_cross_source=include_cross_source,
+                include_same_label=include_same_label,
+                include_cross_label=include_cross_label,
+            ):
+                continue
+            findings.append(
+                SimilarityAuditFinding(
+                    left_index=left,
+                    right_index=right,
+                    similarity=similarity,
+                    relation=_similarity_relation(left, right, source_list, label_list),
+                    left_source=source_list[left] if source_list is not None else None,
+                    right_source=source_list[right] if source_list is not None else None,
+                    left_label=label_list[left] if label_list is not None else None,
+                    right_label=label_list[right] if label_list is not None else None,
+                )
+            )
+
+    findings.sort(
+        key=lambda finding: (-finding.similarity, finding.left_index, finding.right_index)
+    )
+    return SimilarityAuditReport(
+        findings=findings,
+        threshold=threshold,
+        n_input=n,
+        strategy=type(active_strategy).__name__,
+        k_neighbors=k_neighbors,
+    )
+
+
+def _audit_pair_allowed(
+    left: int,
+    right: int,
+    *,
+    sources: Sequence[str] | None,
+    labels: Sequence[object] | None,
+    include_within_source: bool,
+    include_cross_source: bool,
+    include_same_label: bool,
+    include_cross_label: bool,
+) -> bool:
+    """Return whether a candidate pair should be retained by audit filters."""
+    if sources is not None:
+        same_source = sources[left] == sources[right]
+        if same_source and not include_within_source:
+            return False
+        if not same_source and not include_cross_source:
+            return False
+    if labels is not None:
+        same_label = labels[left] == labels[right]
+        if same_label and not include_same_label:
+            return False
+        if not same_label and not include_cross_label:
+            return False
+    return True
+
+
+def _similarity_relation(
+    left: int,
+    right: int,
+    sources: Sequence[str] | None,
+    labels: Sequence[object] | None,
+) -> SimilarityRelation:
+    """Classify the source/label relationship for an audit finding."""
+    if sources is None and labels is None:
+        return "unspecified"
+    same_source = sources[left] == sources[right] if sources is not None else None
+    same_label = labels[left] == labels[right] if labels is not None else None
+    if same_source is None:
+        return "same_label" if same_label else "cross_label"
+    if same_label is None:
+        return "within_source" if same_source else "cross_source"
+    if same_source and same_label:
+        return "within_source_same_label"
+    if same_source and not same_label:
+        return "within_source_cross_label"
+    if not same_source and same_label:
+        return "cross_source_same_label"
+    return "cross_source_cross_label"
 
 
 def cross_dedup(

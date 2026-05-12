@@ -26,7 +26,7 @@
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "description": "Per-slice block: n, n_positive, by_scorer, paired_diffs."
+        "description": "Per-slice block: n, n_positive, by_scorer, paired_diffs. Scorer blocks may optionally include transferred_operating_points for validation-fit thresholds applied to this slice."
       }
     },
     "by_fold": {
@@ -37,6 +37,49 @@
     "fold_summary": {
       "type": "object",
       "description": "CV-CI summary [slice][scorer][metric] = {mean, ci_low, ci_high, n_folds}. Empty for non-folded runs.",
+      "additionalProperties": true
+    },
+    "claim_report": {
+      "type": "object",
+      "description": "Optional ClaimReport payload from eval_toolkit.claims.evaluate_claims.",
+      "additionalProperties": true
+    },
+    "prediction_artifacts": {
+      "type": "array",
+      "description": "Optional references to retained prediction artifacts associated with the result.",
+      "items": {"type": "object", "additionalProperties": true}
+    },
+    "evidence_axes": {
+      "type": "array",
+      "description": "Optional named axes that scope aggregate evidence.",
+      "items": {
+        "type": "object",
+        "required": ["name", "value"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "value": {"type": "string", "minLength": 1}
+        },
+        "additionalProperties": true
+      }
+    },
+    "pairing_metadata": {
+      "type": "object",
+      "description": "Optional explicit pairing metadata for paired comparisons.",
+      "additionalProperties": true
+    },
+    "aggregate_evidence": {
+      "type": "object",
+      "description": "Optional typed aggregate status: inferential, descriptive, diagnostic, or unsupported.",
+      "properties": {
+        "status": {
+          "enum": ["inferential", "descriptive", "diagnostic", "unsupported"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "threshold_policy": {
+      "type": "object",
+      "description": "Optional threshold policy metadata naming calibration slice, score column, selector, constraints, and claim-enabled status.",
       "additionalProperties": true
     }
   },

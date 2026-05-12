@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eval-toolkit"
-version = "0.8.3"
-description = "Reusable evaluation toolkit for binary classification: metrics, bootstrap CIs, calibration, plotting."
+version = "0.9.0"
+description = "Reusable evaluation contracts for binary classification: metrics, bootstrap CIs, calibration, artifacts, and evidence gates."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -46,6 +46,7 @@ plotting = ["matplotlib>=3.8", "pillow>=10.0"]
 property = ["hypothesis>=6.100"]
 yaml = ["pyyaml>=6.0"]
 parquet = ["pyarrow>=15.0"]
+validation = ["jsonschema>=4.21"]
 all = [
     "pandas>=2.0",
     "matplotlib>=3.8",
@@ -53,6 +54,7 @@ all = [
     "hypothesis>=6.100",
     "pyyaml>=6.0",
     "pyarrow>=15.0",
+    "jsonschema>=4.21",
 ]
 dev = [
     "eval-toolkit[all,parquet]",

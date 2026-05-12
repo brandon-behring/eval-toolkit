@@ -218,6 +218,19 @@ diff = paired_bootstrap_op_point_diff(
 print(f"Δ F1: {diff.delta:.3f}  CI [{diff.ci_low:.3f}, {diff.ci_high:.3f}]")
 ```
 
+## Applying validation thresholds to other slices {#threshold-transfer}
+
+For OOD or diagnostic slices, the common pattern is to fit the
+threshold on a mixed-class validation slice and apply it elsewhere.
+Use [`operating_points.py`](../../src/eval_toolkit/operating_points.py)
+for this instead of hand-rolling post-processing. Mixed-class targets
+report `metrics_at_threshold`; all-positive targets report
+`recall@threshold`; all-negative targets report `fpr@threshold` and
+specificity.
+
+See [evidence.md](evidence.md#threshold-transfer) for the full
+claim-evidence framing.
+
 ## Pitfalls / Common mistakes {#pitfalls}
 
 - **Reporting metrics at threshold = 0.5 by default.** sklearn defaults

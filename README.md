@@ -168,13 +168,15 @@ with tempfile.TemporaryDirectory() as run_dir:
 |---|---|
 | `eval_toolkit.metrics` | PR-AUC, ROC-AUC, ECE variants, Brier decomposition, prior-shift projection |
 | `eval_toolkit.thresholds` | `ThresholdSelector` Protocol + 6 reference impls (max-F1, target-recall/precision/FPR, Youden-J, cost-sensitive) |
+| `eval_toolkit.operating_points` | Fit thresholds on mixed-class slices and apply them to mixed or single-class target slices with provenance |
 | `eval_toolkit.bootstrap` | BCa + paired bootstrap, MDE estimates, two-level operating-point bootstrap, K-fold CLT-corrected CI |
 | `eval_toolkit.calibration` | Reliability curves, Bayes-optimal thresholds, isotonic/Platt/temperature scaling |
 | `eval_toolkit.harness` | `Scorer` Protocol + `evaluate(...)` + `evaluate_folded(...)` slice-aware orchestrators |
 | `eval_toolkit.leakage` | `LeakageCheck` Protocol + 7 reference impls (exact / near / encoding-obfuscated / cross-split / label-conflict / group / temporal); `Versioned` opt-in Protocol |
 | `eval_toolkit.splits` | `Splitter` Protocol + 5 reference impls (holdout / stratified / group / source-disjoint / time-series) |
 | `eval_toolkit.loaders` | `DatasetLoader` Protocol + 4 reference impls (DataFrame / SingleSlice / ParquetGlob / HF datasets) with Croissant-compatible `describe()` |
-| `eval_toolkit.manifest` | `RunManifest` (NeurIPS-aligned) + `build_manifest` / `write_manifest` |
+| `eval_toolkit.manifest` | `RunManifest` (NeurIPS-aligned) + source-role / guardrail metadata + `build_manifest` / `write_manifest` |
+| `eval_toolkit.claims` | Generic evidence gates and `ClaimReport` for claim-mode vs exploratory-mode checks |
 | `eval_toolkit.text_dedup` | `SimilarityStrategy` Protocol + 5 strategies (TF-IDF / hash / embedding / Jaccard / MinHash-LSH); `near_dedup` / `cross_dedup` orchestrators |
 | `eval_toolkit.plotting` | PR curves, reliability diagrams, confusion matrices, score histograms, lift CIs |
 | `eval_toolkit.provenance` | File hashing, run-directory layout, figure metadata sidecar |

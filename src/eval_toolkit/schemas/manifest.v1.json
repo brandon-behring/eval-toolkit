@@ -93,6 +93,62 @@
           }
         }
       }
+    },
+    "source_roles": {
+      "type": "array",
+      "description": "Optional generic source-role metadata for data-quality and evidence audits. Recommended roles: train, calibration, locked_eval, external_diagnostic, excluded; custom roles are allowed.",
+      "items": {
+        "type": "object",
+        "required": ["source", "role"],
+        "properties": {
+          "source": {"type": "string", "minLength": 1},
+          "role": {"type": "string", "minLength": 1},
+          "n_rows": {"type": "integer", "minimum": 0},
+          "notes": {"type": "string"},
+          "metadata": {"type": "object"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "guardrails": {
+      "type": "array",
+      "description": "Optional predeclared guardrails for claim/evidence discipline.",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "prediction_artifacts": {
+      "type": "array",
+      "description": "Optional references to retained prediction artifacts. The toolkit records artifact metadata and column mappings without mandating a storage format.",
+      "items": {
+        "type": "object",
+        "required": ["uri", "media_type", "columns"],
+        "properties": {
+          "uri": {"type": "string", "minLength": 1},
+          "media_type": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string"},
+          "n_rows": {"type": "integer", "minimum": 0},
+          "role": {"type": "string", "minLength": 1},
+          "metadata": {"type": "object"},
+          "columns": {
+            "type": "object",
+            "required": ["label", "score"],
+            "properties": {
+              "row_id": {"type": "string", "minLength": 1},
+              "content_hash": {"type": "string", "minLength": 1},
+              "label": {"type": "string", "minLength": 1},
+              "score": {"type": "string", "minLength": 1},
+              "scorer": {"type": "string", "minLength": 1},
+              "slice": {"type": "string", "minLength": 1},
+              "text": {"type": "string", "minLength": 1},
+              "provenance": {
+                "type": "object",
+                "additionalProperties": {"type": "string"}
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
     }
   },
   "additionalProperties": true

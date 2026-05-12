@@ -25,24 +25,30 @@ References
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
 from typing import Protocol, runtime_checkable
 
 import numpy as np
+from scipy.stats import norm as _scipy_norm
 from sklearn.metrics import precision_recall_curve, roc_curve
 
 from eval_toolkit.calibration import CostMatrix
 from eval_toolkit.metrics import ThresholdResult, _validate_inputs, metrics_at_threshold
 
 __all__ = [
+    "CISafeThresholdSelector",
     "CostSensitiveSelector",
     "MaxF1Selector",
     "TargetFPRSelector",
     "TargetPrecisionSelector",
     "TargetRecallSelector",
+    "ThresholdPolicyMetadata",
     "ThresholdSelector",
+    "WilsonInterval",
     "YoudenJSelector",
     "select_threshold",
+    "wilson_interval",
 ]
 
 
@@ -135,6 +141,311 @@ def _result_at(
         recall=float(m["recall"]),
         criterion=criterion,
     )
+
+
+def _record_float(row: Mapping[str, object], key: str) -> float:
+    """Read a numeric candidate-record field as float."""
+    value = row[key]
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"candidate record field {key!r} must be numeric")
+    return float(value)
+
+
+def _record_float_or_inf(row: Mapping[str, object], key: str) -> float:
+    """Read an optional numeric candidate-record field, defaulting to +inf."""
+    value = row[key]
+    if value is None:
+        return float("inf")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"candidate record field {key!r} must be numeric or null")
+    return float(value)
+
+
+@dataclass(frozen=True, slots=True)
+class WilsonInterval:
+    """Wilson score interval for a binomial rate."""
+
+    low: float | None
+    high: float | None
+    confidence: float
+    successes: int
+    n: int
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-serializable representation."""
+        return {
+            "low": self.low,
+            "high": self.high,
+            "confidence": self.confidence,
+            "successes": self.successes,
+            "n": self.n,
+        }
+
+
+def wilson_interval(successes: int, n: int, *, confidence: float = 0.95) -> WilsonInterval:
+    """Wilson score interval for a binomial rate."""
+    if successes < 0:
+        raise ValueError("successes must be non-negative")
+    if n < 0:
+        raise ValueError("n must be non-negative")
+    if successes > n:
+        raise ValueError("successes cannot exceed n")
+    if not 0.0 < confidence < 1.0:
+        raise ValueError(f"confidence must be in (0, 1), got {confidence}")
+    if n == 0:
+        return WilsonInterval(
+            low=None,
+            high=None,
+            confidence=confidence,
+            successes=successes,
+            n=n,
+        )
+    z = float(_scipy_norm.ppf(0.5 + confidence / 2.0))
+    p_hat = successes / n
+    denom = 1.0 + z * z / n
+    centre = (p_hat + z * z / (2.0 * n)) / denom
+    margin = (z * np.sqrt(p_hat * (1.0 - p_hat) / n + z * z / (4.0 * n * n))) / denom
+    return WilsonInterval(
+        low=float(max(0.0, centre - margin)),
+        high=float(min(1.0, centre + margin)),
+        confidence=confidence,
+        successes=successes,
+        n=n,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ThresholdPolicyMetadata:
+    """Pre-registration metadata for thresholded operating claims."""
+
+    calibration_slice: str
+    score_column: str
+    selector: str
+    constraints: dict[str, float]
+    claim_enabled: bool = False
+    notes: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate the policy metadata."""
+        if not self.calibration_slice:
+            raise ValueError("calibration_slice must be non-empty")
+        if not self.score_column:
+            raise ValueError("score_column must be non-empty")
+        if not self.selector:
+            raise ValueError("selector must be non-empty")
+        if not self.constraints:
+            raise ValueError("constraints must be non-empty")
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-serializable representation."""
+        return {
+            "calibration_slice": self.calibration_slice,
+            "score_column": self.score_column,
+            "selector": self.selector,
+            "constraints": dict(self.constraints),
+            "claim_enabled": self.claim_enabled,
+            "notes": self.notes,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class CISafeThresholdSelector:
+    """Select a threshold whose rate confidence bounds satisfy constraints.
+
+    The selector does not ship target defaults. Callers must provide one or
+    more explicit constraints, for example ``max_fpr`` and
+    ``max_fpr_ci_upper`` for a low-FPR claim.
+    """
+
+    max_fpr: float | None = None
+    max_fpr_ci_upper: float | None = None
+    min_recall: float | None = None
+    min_recall_ci_lower: float | None = None
+    confidence: float = 0.95
+    criterion: str = "ci_safe"
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate constraint shape."""
+        if not 0.0 < self.confidence < 1.0:
+            raise ValueError(f"confidence must be in (0, 1), got {self.confidence}")
+        constraints = (
+            self.max_fpr,
+            self.max_fpr_ci_upper,
+            self.min_recall,
+            self.min_recall_ci_lower,
+        )
+        if all(value is None for value in constraints):
+            raise ValueError("at least one CI-safe threshold constraint is required")
+        for name, value in (
+            ("max_fpr", self.max_fpr),
+            ("max_fpr_ci_upper", self.max_fpr_ci_upper),
+            ("min_recall", self.min_recall),
+            ("min_recall_ci_lower", self.min_recall_ci_lower),
+        ):
+            if value is not None and not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be in [0, 1], got {value}")
+
+    def select(self, y_true: np.ndarray, y_score: np.ndarray) -> ThresholdResult:
+        """Return the best accepted threshold."""
+        accepted = [row for row in self.candidate_records(y_true, y_score) if row["accepted"]]
+        if not accepted:
+            raise RuntimeError("no threshold satisfies the configured CI-safe constraints")
+        best = min(
+            accepted,
+            key=lambda row: (
+                -_record_float(row, "recall"),
+                _record_float_or_inf(row, "fpr_ci_high"),
+                _record_float(row, "fpr"),
+                -_record_float(row, "threshold"),
+            ),
+        )
+        return _result_at(y_true, y_score, _record_float(best, "threshold"), self.criterion)
+
+    def candidate_records(self, y_true: np.ndarray, y_score: np.ndarray) -> list[dict[str, object]]:
+        """Return every candidate threshold with Wilson rate intervals."""
+        _validate_inputs(y_true, y_score)
+        y_true_arr = np.asarray(y_true, dtype=int).ravel()
+        y_score_arr = np.asarray(y_score, dtype=float).ravel()
+        thresholds = np.unique(y_score_arr[np.isfinite(y_score_arr)])
+        if thresholds.size == 0:
+            return []
+        neg_scores = np.sort(y_score_arr[y_true_arr == 0])
+        pos_scores = np.sort(y_score_arr[y_true_arr == 1])
+        n_neg = int(neg_scores.size)
+        n_pos = int(pos_scores.size)
+        rows: list[dict[str, object]] = []
+        for threshold in thresholds:
+            fp = int(n_neg - np.searchsorted(neg_scores, threshold, side="left"))
+            tp = int(n_pos - np.searchsorted(pos_scores, threshold, side="left"))
+            tn = n_neg - fp
+            fn = n_pos - tp
+            rows.append(self._candidate_record(float(threshold), tp=tp, fp=fp, tn=tn, fn=fn))
+        return rows
+
+    def selected_operating_point(
+        self,
+        y_true: np.ndarray,
+        y_score: np.ndarray,
+        *,
+        bootstrap_selected: bool = False,
+        n_resamples: int = 1000,
+        seed: int = 42,
+    ) -> dict[str, object]:
+        """Return selected threshold metadata and optional bootstrap CIs."""
+        selected = self.select(y_true, y_score)
+        records = self.candidate_records(y_true, y_score)
+        selected_record = next(
+            row for row in records if _record_float(row, "threshold") == float(selected.threshold)
+        )
+        out: dict[str, object] = {
+            "threshold_result": asdict(selected),
+            "selected_record": selected_record,
+            "n_candidates": len(records),
+            "n_accepted": sum(1 for row in records if row["accepted"]),
+            "constraints": self.constraints,
+            "metadata": dict(self.metadata),
+        }
+        if bootstrap_selected:
+            out["bootstrap_selected"] = _bootstrap_threshold_metric_cis(
+                y_true,
+                y_score,
+                selected.threshold,
+                n_resamples=n_resamples,
+                seed=seed,
+            )
+        return out
+
+    @property
+    def constraints(self) -> dict[str, float]:
+        """Configured threshold constraints."""
+        out: dict[str, float] = {}
+        for key in ("max_fpr", "max_fpr_ci_upper", "min_recall", "min_recall_ci_lower"):
+            value = getattr(self, key)
+            if value is not None:
+                out[key] = float(value)
+        return out
+
+    def _candidate_record(
+        self,
+        threshold: float,
+        *,
+        tp: int,
+        fp: int,
+        tn: int,
+        fn: int,
+    ) -> dict[str, object]:
+        n_pos = tp + fn
+        n_neg = fp + tn
+        fpr = float(fp / n_neg) if n_neg else 0.0
+        recall = float(tp / n_pos) if n_pos else 0.0
+        precision = float(tp / (tp + fp)) if (tp + fp) else 0.0
+        f1 = _f1(precision, recall)
+        fpr_ci = wilson_interval(fp, n_neg, confidence=self.confidence)
+        recall_ci = wilson_interval(tp, n_pos, confidence=self.confidence)
+        rejection_reasons: list[str] = []
+        if self.max_fpr is not None and fpr > self.max_fpr:
+            rejection_reasons.append("fpr_exceeds_max")
+        if self.max_fpr_ci_upper is not None and (
+            fpr_ci.high is None or fpr_ci.high > self.max_fpr_ci_upper
+        ):
+            rejection_reasons.append("fpr_ci_upper_exceeds_max")
+        if self.min_recall is not None and recall < self.min_recall:
+            rejection_reasons.append("recall_below_min")
+        if self.min_recall_ci_lower is not None and (
+            recall_ci.low is None or recall_ci.low < self.min_recall_ci_lower
+        ):
+            rejection_reasons.append("recall_ci_lower_below_min")
+        return {
+            "threshold": threshold,
+            "fpr": fpr,
+            "recall": recall,
+            "precision": precision,
+            "f1": f1,
+            "tp": tp,
+            "fp": fp,
+            "tn": tn,
+            "fn": fn,
+            "fpr_ci_low": fpr_ci.low,
+            "fpr_ci_high": fpr_ci.high,
+            "recall_ci_low": recall_ci.low,
+            "recall_ci_high": recall_ci.high,
+            "confidence": self.confidence,
+            "accepted": not rejection_reasons,
+            "rejection_reasons": rejection_reasons,
+        }
+
+
+def _bootstrap_threshold_metric_cis(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    threshold: float,
+    *,
+    n_resamples: int,
+    seed: int,
+) -> dict[str, object]:
+    """Percentile bootstrap CIs for selected-threshold operating metrics."""
+    y_true_arr = np.asarray(y_true, dtype=int).ravel()
+    y_score_arr = np.asarray(y_score, dtype=float).ravel()
+    if y_true_arr.shape != y_score_arr.shape:
+        raise ValueError("y_true and y_score must have identical shape")
+    rng = np.random.default_rng(seed)
+    samples: dict[str, list[float]] = {"fpr": [], "recall": [], "precision": [], "f1": []}
+    n = len(y_true_arr)
+    for _ in range(n_resamples):
+        idx = rng.integers(0, n, size=n)
+        metrics = metrics_at_threshold(y_true_arr[idx], y_score_arr[idx], threshold)
+        for key in samples:
+            samples[key].append(float(metrics[key]))
+    return {
+        key: {
+            "ci_low": float(np.quantile(values, 0.025)),
+            "ci_high": float(np.quantile(values, 0.975)),
+            "n_resamples": n_resamples,
+            "method": "percentile",
+        }
+        for key, values in samples.items()
+    }
 
 
 @dataclass(frozen=True, slots=True)

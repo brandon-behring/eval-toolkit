@@ -32,19 +32,49 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from eval_toolkit import __version__ as eval_toolkit_version
-from eval_toolkit.leakage import LeakageReport
+from eval_toolkit._version import __version__ as eval_toolkit_version
+from eval_toolkit.artifacts import PredictionArtifactRef, sanitize_for_json, write_json_strict
 from eval_toolkit.provenance import capture_git_sha, file_sha256
 
 __all__ = [
     "MANIFEST_SCHEMA_VERSION",
     "RunManifest",
+    "SourceRoleRecord",
     "build_manifest",
     "gpu_info",
+    "validate_source_roles",
     "write_manifest",
 ]
 
 MANIFEST_SCHEMA_VERSION = "v1"
+
+
+@dataclass(frozen=True, slots=True)
+class SourceRoleRecord:
+    """Generic source-role metadata for data-quality and evidence audits.
+
+    Roles are intentionally user-defined. Recommended values include
+    ``train``, ``calibration``, ``locked_eval``, ``external_diagnostic``,
+    and ``excluded``.
+    """
+
+    source: str
+    role: str
+    n_rows: int | None = None
+    notes: str = ""
+    metadata: dict[str, object] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, object]:
+        """JSON-serializable representation with ``None`` fields omitted."""
+        out: dict[str, object] = {
+            "source": self.source,
+            "role": self.role,
+            "notes": self.notes,
+            "metadata": self.metadata,
+        }
+        if self.n_rows is not None:
+            out["n_rows"] = self.n_rows
+        return out
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +122,13 @@ class RunManifest:
     leakage_report : dict[str, object] or None
         Serialized :class:`~eval_toolkit.leakage.LeakageReport` produced
         inline by the harness, or ``None`` if no checks ran.
+    source_roles : list[dict[str, object]]
+        Optional generic source-role records for data-quality and evidence
+        audits. Roles are caller-defined; the toolkit only validates shape.
+    guardrails : list[str]
+        Optional predeclared guardrails for claim/evidence discipline.
+    prediction_artifacts : list[dict[str, object]]
+        Optional references to retained prediction artifacts.
     schema_version : str
         Manifest schema version. ``"v1"`` for v0.7.0; downstream tools
         should gate on this.
@@ -110,16 +147,27 @@ class RunManifest:
     wall_clock_seconds: float | None = None
     versioned_objects: dict[str, str] = field(default_factory=dict)
     leakage_report: dict[str, object] | None = None
+    source_roles: list[dict[str, object]] = field(default_factory=list)
+    guardrails: list[str] = field(default_factory=list)
+    prediction_artifacts: list[dict[str, object]] = field(default_factory=list)
     schema_version: str = MANIFEST_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, object]:
         """JSON-serializable representation."""
-        return asdict(self)
+        out = sanitize_for_json(asdict(self))
+        if not isinstance(out, dict):
+            raise TypeError("RunManifest.to_dict expected a mapping payload")
+        return out
 
 
 def _hash_canonical_json(payload: Mapping[str, Any]) -> str:
     """SHA-256 over the JSON-canonical encoding of ``payload``."""
-    blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    blob = json.dumps(
+        sanitize_for_json(dict(payload)),
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
     return f"sha256:{hashlib.sha256(blob.encode()).hexdigest()}"
 
 
@@ -234,6 +282,59 @@ def _collect_versioned(objects: Sequence[object] | Mapping[str, object]) -> dict
     return out
 
 
+def _source_role_to_dict(record: SourceRoleRecord | Mapping[str, object]) -> dict[str, object]:
+    """Normalize a source-role record to a plain dict."""
+    if isinstance(record, SourceRoleRecord):
+        return record.to_dict()
+    return dict(record)
+
+
+def validate_source_roles(
+    source_roles: Sequence[SourceRoleRecord | Mapping[str, object]],
+    *,
+    required_roles: Sequence[str] = (),
+) -> list[str]:
+    """Return validation errors for generic source-role records.
+
+    Validation is deliberately about shape, not taxonomy. Consumers choose
+    role names that fit their domain.
+    """
+    errors: list[str] = []
+    seen_sources: set[str] = set()
+    roles_seen: set[str] = set()
+    for idx, record in enumerate(source_roles):
+        row = _source_role_to_dict(record)
+        prefix = f"source_roles[{idx}]"
+        source = row.get("source")
+        role = row.get("role")
+        if not isinstance(source, str) or not source.strip():
+            errors.append(f"{prefix}: source must be a non-empty string")
+        elif source in seen_sources:
+            errors.append(f"{prefix}: duplicate source {source!r}")
+        else:
+            seen_sources.add(source)
+        if not isinstance(role, str) or not role.strip():
+            errors.append(f"{prefix}: role must be a non-empty string")
+        else:
+            roles_seen.add(role)
+        n_rows = row.get("n_rows")
+        if n_rows is not None and (
+            not isinstance(n_rows, int) or isinstance(n_rows, bool) or n_rows < 0
+        ):
+            errors.append(f"{prefix}: n_rows must be a non-negative integer when present")
+        notes = row.get("notes")
+        if notes is not None and not isinstance(notes, str):
+            errors.append(f"{prefix}: notes must be a string when present")
+        metadata = row.get("metadata")
+        if metadata is not None and not isinstance(metadata, Mapping):
+            errors.append(f"{prefix}: metadata must be an object when present")
+
+    missing = sorted(set(required_roles) - roles_seen)
+    if missing:
+        errors.append(f"missing required source role(s): {missing}")
+    return errors
+
+
 def build_manifest(
     *,
     run_id: str,
@@ -242,7 +343,11 @@ def build_manifest(
     seeds: Mapping[str, int] | None = None,
     extra_code_versions: Mapping[str, str] | None = None,
     versioned: Sequence[object] | Mapping[str, object] | None = None,
-    leakage_report: LeakageReport | None = None,
+    leakage_report: object | None = None,
+    source_roles: Sequence[SourceRoleRecord | Mapping[str, object]] | None = None,
+    required_source_roles: Sequence[str] = (),
+    guardrails: Sequence[str] | None = None,
+    prediction_artifacts: Sequence[PredictionArtifactRef | Mapping[str, object]] | None = None,
     wall_clock_seconds: float | None = None,
     repo_root: Path | str | None = None,
 ) -> RunManifest:
@@ -267,8 +372,19 @@ def build_manifest(
     versioned : sequence of objects or Mapping[str, object] or None
         Tier-2 implementations whose ``version`` attribute should be
         captured. Mapping keys override the default class-name keying.
-    leakage_report : LeakageReport or None
-        Serialized into :attr:`RunManifest.leakage_report`.
+    leakage_report : object or None
+        Mapping or object with ``to_dict()``, serialized into
+        :attr:`RunManifest.leakage_report`.
+    source_roles : sequence of SourceRoleRecord or mapping, optional
+        Generic source-role records. Recommended role names are documented in
+        :class:`SourceRoleRecord`, but not enforced.
+    required_source_roles : sequence of str, optional
+        Roles that must appear in ``source_roles`` if source-role metadata is
+        supplied.
+    guardrails : sequence of str, optional
+        Predeclared guardrails for claim/evidence discipline.
+    prediction_artifacts : sequence, optional
+        Manifest references to retained prediction artifacts.
     wall_clock_seconds : float or None
     repo_root : Path or str or None
         Where to run ``git status`` for the dirty-flag check.
@@ -296,6 +412,28 @@ def build_manifest(
     if extra_code_versions:
         code_versions.update(dict(extra_code_versions))
 
+    source_role_dicts = (
+        [_source_role_to_dict(record) for record in source_roles] if source_roles else []
+    )
+    source_role_errors = validate_source_roles(
+        source_role_dicts,
+        required_roles=required_source_roles,
+    )
+    if source_role_errors:
+        joined = "; ".join(source_role_errors)
+        raise ValueError(f"invalid source_roles: {joined}")
+
+    guardrail_list = list(guardrails) if guardrails else []
+    bad_guardrails = [g for g in guardrail_list if not isinstance(g, str) or not g.strip()]
+    if bad_guardrails:
+        raise ValueError("guardrails must be non-empty strings")
+
+    prediction_artifact_dicts = (
+        [_prediction_artifact_to_dict(record) for record in prediction_artifacts]
+        if prediction_artifacts
+        else []
+    )
+
     g_info, cuda = gpu_info()
 
     return RunManifest(
@@ -311,7 +449,10 @@ def build_manifest(
         cuda_version=cuda,
         wall_clock_seconds=wall_clock_seconds,
         versioned_objects=_collect_versioned(versioned) if versioned else {},
-        leakage_report=leakage_report.to_dict() if leakage_report is not None else None,
+        leakage_report=_object_to_dict(leakage_report) if leakage_report is not None else None,
+        source_roles=source_role_dicts,
+        guardrails=guardrail_list,
+        prediction_artifacts=prediction_artifact_dicts,
         schema_version=MANIFEST_SCHEMA_VERSION,
     )
 
@@ -333,5 +474,41 @@ def write_manifest(manifest: RunManifest, run_dir: Path | str) -> Path:
     out_dir = Path(run_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "manifest.json"
-    out_path.write_text(json.dumps(manifest.to_dict(), indent=2, default=str))
-    return out_path
+    return write_json_strict(manifest.to_dict(), out_path)
+
+
+def _object_to_dict(obj: object) -> dict[str, object]:
+    """Normalize mapping or ``to_dict()`` object to a strict-JSON-safe dict."""
+    if isinstance(obj, Mapping):
+        out = sanitize_for_json(dict(obj))
+    else:
+        to_dict = getattr(obj, "to_dict", None)
+        if not callable(to_dict):
+            raise TypeError(f"expected mapping or object with to_dict(), got {type(obj).__name__}")
+        out = sanitize_for_json(to_dict())
+    if not isinstance(out, dict):
+        raise TypeError(f"expected mapping payload, got {type(out).__name__}")
+    return out
+
+
+def _prediction_artifact_to_dict(
+    artifact: PredictionArtifactRef | Mapping[str, object],
+) -> dict[str, object]:
+    """Normalize a prediction artifact reference to a plain dict."""
+    if isinstance(artifact, PredictionArtifactRef):
+        return artifact.to_dict()
+    out = sanitize_for_json(dict(artifact))
+    if not isinstance(out, dict):
+        raise TypeError("prediction artifact must normalize to a mapping")
+    if not isinstance(out.get("uri"), str) or not out.get("uri"):
+        raise ValueError("prediction artifact must include a non-empty uri")
+    if not isinstance(out.get("media_type"), str) or not out.get("media_type"):
+        raise ValueError("prediction artifact must include a non-empty media_type")
+    columns = out.get("columns")
+    if not isinstance(columns, Mapping):
+        raise ValueError("prediction artifact must include a columns object")
+    if not isinstance(columns.get("label"), str) or not columns.get("label"):
+        raise ValueError("prediction artifact columns must include label")
+    if not isinstance(columns.get("score"), str) or not columns.get("score"):
+        raise ValueError("prediction artifact columns must include score")
+    return out

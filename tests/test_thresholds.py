@@ -14,14 +14,17 @@ import pytest
 from eval_toolkit.calibration import CostMatrix
 from eval_toolkit.metrics import ThresholdResult
 from eval_toolkit.thresholds import (
+    CISafeThresholdSelector,
     CostSensitiveSelector,
     MaxF1Selector,
     TargetFPRSelector,
     TargetPrecisionSelector,
     TargetRecallSelector,
+    ThresholdPolicyMetadata,
     ThresholdSelector,
     YoudenJSelector,
     select_threshold,
+    wilson_interval,
 )
 
 
@@ -94,6 +97,29 @@ def test_cost_sensitive_uses_bayes_optimal_threshold() -> None:
     cm = CostMatrix(prior=0.5, fp_cost=1.0, fn_cost=1.0)
     result = CostSensitiveSelector(cm).select(y, s)
     assert result.threshold == 0.5
+
+
+@pytest.mark.unit
+def test_wilson_interval_and_ci_safe_selector() -> None:
+    y = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+    s = np.array([0.05, 0.15, 0.25, 0.35, 0.45, 0.65, 0.75, 0.9])
+    interval = wilson_interval(0, 4)
+    selector = CISafeThresholdSelector(max_fpr=0.0, max_fpr_ci_upper=0.55, min_recall=0.5)
+
+    selected = selector.select(y, s)
+    metadata = ThresholdPolicyMetadata(
+        calibration_slice="calibration",
+        score_column="score",
+        selector=selector.criterion,
+        constraints=selector.constraints,
+    )
+    operating_point = selector.selected_operating_point(y, s)
+
+    assert interval.high is not None and interval.high > 0.0
+    assert selected.criterion == "ci_safe"
+    assert selected.recall >= 0.5
+    assert metadata.to_dict()["claim_enabled"] is False
+    assert operating_point["selected_record"]["accepted"] is True  # type: ignore[index]
 
 
 @pytest.mark.unit

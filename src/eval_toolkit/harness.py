@@ -10,6 +10,8 @@ Public surface:
 - :func:`evaluate` — pure orchestrator: scores × slices → RunResult (no IO)
 - :func:`evaluate_folded` — fold aggregator: Splitter × seeds → RunResult
   with ``by_fold`` and auto-CV-CI ``fold_summary``
+- :func:`with_claim_report` — attach generic claim-gate evidence to a
+  frozen ``RunResult``
 - :func:`write_run_result` — IO wrapper: write RunResult to ``run_dir/results.json``
 
 The pure/IO split lets callers test :func:`evaluate` deterministically without
@@ -29,18 +31,23 @@ v0.7.0 additions:
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 import traceback
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Final, Literal, Protocol, cast, runtime_checkable
 
 import numpy as np
 import pandas as pd
 
+from eval_toolkit.artifacts import (
+    error_metric,
+    sanitize_for_json,
+    skipped_metric,
+    write_json_strict,
+)
 from eval_toolkit.bootstrap import (
     bootstrap_ci,
     cv_clt_ci,
@@ -48,6 +55,12 @@ from eval_toolkit.bootstrap import (
     paired_bootstrap_diff,
 )
 from eval_toolkit.metrics import headline_metrics, pr_auc
+from eval_toolkit.operating_points import (
+    FittedOperatingPoint,
+    OperatingPointSpec,
+    apply_operating_points,
+    fit_operating_points,
+)
 
 if TYPE_CHECKING:
     from eval_toolkit.leakage import LeakageCheck
@@ -63,6 +76,7 @@ __all__ = [
     "evaluate",
     "evaluate_folded",
     "evaluate_scorer_on_slice",
+    "with_claim_report",
     "write_run_result",
 ]
 
@@ -186,6 +200,9 @@ class RunResult:
         Auto-computed CV-CI summary per (slice, scorer, metric), keyed
         ``[slice_name][scorer_name][metric] = {"mean", "ci_low", "ci_high",
         "n_folds"}``. Populated by :func:`evaluate_folded`; empty otherwise.
+    claim_report : dict[str, object], optional
+        Optional generic :class:`eval_toolkit.claims.ClaimReport` payload.
+        Empty means no claim gates were evaluated for this run.
     schema_version : str
         JSON schema version. ``"v1"`` for v0.7.0+; downstream parsers gate
         on this.
@@ -201,19 +218,73 @@ class RunResult:
     by_slice: dict[str, dict[str, object]] = field(default_factory=dict)
     by_fold: dict[str, RunResult] = field(default_factory=dict)
     fold_summary: dict[str, dict[str, object]] = field(default_factory=dict)
+    claim_report: dict[str, object] = field(default_factory=dict)
+    prediction_artifacts: list[dict[str, object]] = field(default_factory=list)
+    evidence_axes: list[dict[str, object]] = field(default_factory=list)
+    pairing_metadata: dict[str, object] = field(default_factory=dict)
+    aggregate_evidence: dict[str, object] = field(default_factory=dict)
+    threshold_policy: dict[str, object] = field(default_factory=dict)
     schema_version: str = RUN_RESULT_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, object]:
         """Serialize using the stable JSON schema (v1 — see ``schema_version``)."""
-        return {
-            "schema_version": self.schema_version,
-            "run_id": self.run_id,
-            "git_sha": self.git_sha,
-            "config": self.config,
-            "by_slice": self.by_slice,
-            "by_fold": {k: v.to_dict() for k, v in self.by_fold.items()},
-            "fold_summary": self.fold_summary,
-        }
+        out = sanitize_for_json(
+            {
+                "schema_version": self.schema_version,
+                "run_id": self.run_id,
+                "git_sha": self.git_sha,
+                "config": self.config,
+                "by_slice": self.by_slice,
+                "by_fold": {k: v.to_dict() for k, v in self.by_fold.items()},
+                "fold_summary": self.fold_summary,
+                "claim_report": self.claim_report,
+                "prediction_artifacts": self.prediction_artifacts,
+                "evidence_axes": self.evidence_axes,
+                "pairing_metadata": self.pairing_metadata,
+                "aggregate_evidence": self.aggregate_evidence,
+                "threshold_policy": self.threshold_policy,
+            }
+        )
+        if not isinstance(out, dict):
+            raise TypeError("RunResult.to_dict expected a mapping payload")
+        return out
+
+
+def with_claim_report(result: RunResult, report: object) -> RunResult:
+    """Return a copy of ``result`` with a serialized claim report attached.
+
+    ``RunResult`` is frozen, so claim evidence is attached by value rather than
+    mutation. ``report`` may be a mapping or any object exposing ``to_dict()``,
+    including :class:`eval_toolkit.claims.ClaimReport`.
+    """
+    claim_report = _object_to_dict(report, what="claim report")
+    return RunResult(
+        run_id=result.run_id,
+        git_sha=result.git_sha,
+        config=result.config,
+        by_slice=result.by_slice,
+        by_fold=result.by_fold,
+        fold_summary=result.fold_summary,
+        claim_report=claim_report,
+        prediction_artifacts=result.prediction_artifacts,
+        evidence_axes=result.evidence_axes,
+        pairing_metadata=result.pairing_metadata,
+        aggregate_evidence=result.aggregate_evidence,
+        threshold_policy=result.threshold_policy,
+        schema_version=result.schema_version,
+    )
+
+
+def _object_to_dict(obj: object, *, what: str) -> dict[str, object]:
+    """Normalize a mapping or ``to_dict`` object to a plain dict."""
+    if isinstance(obj, Mapping):
+        return dict(obj)
+    to_dict = getattr(obj, "to_dict", None)
+    if callable(to_dict):
+        out = to_dict()
+        if isinstance(out, Mapping):
+            return dict(out)
+    raise TypeError(f"expected {what} mapping or object with to_dict(), got {type(obj).__name__}")
 
 
 def _should_score_slice(scorer: Scorer, slice_name: str) -> bool:
@@ -283,6 +354,7 @@ def evaluate_scorer_on_slice(
             raise
         return {
             "error": str(exc),
+            "error_state": error_metric(str(exc), exc_type=type(exc).__name__),
             "exc_type": type(exc).__name__,
             "traceback": traceback.format_exc(),
             "n": int(len(slice_.df)),
@@ -294,7 +366,7 @@ def evaluate_scorer_on_slice(
     metrics["is_single_class"] = is_single_class
 
     if is_single_class:
-        metrics["pr_auc_ci"] = {"skipped": "single-class slice; PR-AUC is not meaningful"}
+        metrics["pr_auc_ci"] = skipped_metric("single-class slice; PR-AUC is not meaningful")
     elif len(y_true) >= 30:
         try:
             ci = bootstrap_ci(
@@ -302,9 +374,9 @@ def evaluate_scorer_on_slice(
             )
             metrics["pr_auc_ci"] = ci.to_dict()
         except (ValueError, RuntimeError) as exc:
-            metrics["pr_auc_ci"] = {"error": str(exc)}
+            metrics["pr_auc_ci"] = error_metric(str(exc))
     else:
-        metrics["pr_auc_ci"] = {"skipped": f"n={len(y_true)} < 30"}
+        metrics["pr_auc_ci"] = skipped_metric(f"n={len(y_true)} < 30")
 
     metrics["scores"] = y_score.tolist()
     return dict(metrics)
@@ -323,6 +395,7 @@ def evaluate(
     leakage_checks: Sequence[LeakageCheck] = (),
     on_leakage: Literal["raise", "record", "skip"] = "raise",
     on_scorer_error: Literal["raise", "record"] = "raise",
+    operating_point_specs: Sequence[OperatingPointSpec] = (),
 ) -> RunResult:
     """Run every scorer on every slice; return a pure :class:`RunResult` (no IO).
 
@@ -360,6 +433,10 @@ def evaluate(
         v0.7.0 — Threaded into every :func:`evaluate_scorer_on_slice` call.
         ``"record"`` captures Scorer exceptions per (slice, scorer) instead
         of failing the whole run.
+    operating_point_specs : sequence of OperatingPointSpec, optional
+        Fit thresholds on one mixed-class slice and apply them to named target
+        slices. Results are attached under each scorer's
+        ``"transferred_operating_points"`` block. Default empty (skip).
 
     Returns
     -------
@@ -410,6 +487,8 @@ def evaluate(
             )
 
     by_slice: dict[str, dict[str, object]] = {}
+    score_cache: dict[tuple[str, str], np.ndarray] = {}
+    slices_by_name = {s.name: s for s in slices}
 
     for slice_ in slices:
         _logger.info(
@@ -439,6 +518,7 @@ def evaluate(
             # short-circuit on the same len-check it already does for skipped
             # scorers; no special-case needed.
             scores_by_scorer[sname] = np.asarray(slice_data[sname]["scores"], dtype=np.float64)
+            score_cache[(slice_.name, sname)] = scores_by_scorer[sname]
             elapsed = time.time() - t0
             pr = slice_data[sname].get("pr_auc")
             pr_display = f"{pr:.4f}" if isinstance(pr, float) else "N/A"
@@ -483,7 +563,151 @@ def evaluate(
             "paired_diffs": diffs,
         }
 
+    if operating_point_specs:
+        _attach_transferred_operating_points(
+            by_slice=by_slice,
+            slices_by_name=slices_by_name,
+            score_cache=score_cache,
+            scorer_names=list(scorers.keys()),
+            specs=operating_point_specs,
+        )
+
     return RunResult(run_id=run_id, git_sha=git_sha, config=config, by_slice=by_slice)
+
+
+def _attach_transferred_operating_points(
+    *,
+    by_slice: dict[str, dict[str, object]],
+    slices_by_name: Mapping[str, EvalSlice],
+    score_cache: Mapping[tuple[str, str], np.ndarray],
+    scorer_names: Sequence[str],
+    specs: Sequence[OperatingPointSpec],
+) -> None:
+    """Mutate ``by_slice`` to attach opt-in cross-slice operating-point metrics."""
+    for spec in specs:
+        names = list(spec.scorer_names) if spec.scorer_names else list(scorer_names)
+        if spec.fit_slice not in slices_by_name:
+            _record_spec_error(by_slice, spec, names, f"fit slice {spec.fit_slice!r} not found")
+            continue
+
+        fit_slice = slices_by_name[spec.fit_slice]
+        fitted_by_scorer: dict[str, object] = {}
+        for scorer_name in names:
+            fit_scores = score_cache.get((spec.fit_slice, scorer_name))
+            if fit_scores is None or len(fit_scores) != len(fit_slice.y_true):
+                fitted_by_scorer[scorer_name] = {
+                    "error": "fit scorer skipped, errored, or produced no scores"
+                }
+                continue
+            try:
+                fitted_by_scorer[scorer_name] = fit_operating_points(
+                    fit_slice.y_true,
+                    fit_scores,
+                    spec.selectors,
+                    fitted_on_slice=spec.fit_slice,
+                    scorer_name=scorer_name,
+                )
+            except (ValueError, RuntimeError) as exc:
+                fitted_by_scorer[scorer_name] = {"error": str(exc)}
+
+        for target_name in spec.apply_slices:
+            if target_name not in slices_by_name:
+                _record_spec_error(
+                    by_slice,
+                    spec,
+                    names,
+                    f"apply slice {target_name!r} not found",
+                    target_slice=target_name,
+                )
+                continue
+            target_slice = slices_by_name[target_name]
+            for scorer_name in names:
+                scorer_block = _scorer_result_block(by_slice, target_name, scorer_name)
+                transfer_block = _transfer_result_block(scorer_block)
+                spec_block: dict[str, object] = {}
+                transfer_block[spec.name] = spec_block
+
+                fitted = fitted_by_scorer.get(scorer_name)
+                if not isinstance(fitted, dict) or "error" in fitted:
+                    spec_block["error"] = (
+                        str(fitted.get("error", "threshold fitting failed"))
+                        if isinstance(fitted, dict)
+                        else "threshold fitting failed"
+                    )
+                    continue
+
+                target_scores = score_cache.get((target_name, scorer_name))
+                if target_scores is None or len(target_scores) != len(target_slice.y_true):
+                    spec_block["skipped"] = "target scorer skipped, errored, or produced no scores"
+                    continue
+                try:
+                    spec_block.update(
+                        apply_operating_points(
+                            target_slice.y_true,
+                            target_scores,
+                            cast(Mapping[str, FittedOperatingPoint], fitted),
+                            applied_to_slice=target_name,
+                            scorer_name=scorer_name,
+                        )
+                    )
+                except (ValueError, RuntimeError) as exc:
+                    spec_block["error"] = str(exc)
+
+
+def _scorer_result_block(
+    by_slice: dict[str, dict[str, object]],
+    slice_name: str,
+    scorer_name: str,
+) -> dict[str, object]:
+    """Return the mutable scorer result block, creating a minimal one if absent."""
+    slice_block = by_slice.get(slice_name)
+    if not isinstance(slice_block, dict):
+        slice_block = {}
+        by_slice[slice_name] = slice_block
+
+    raw_by_scorer = slice_block.get("by_scorer")
+    if not isinstance(raw_by_scorer, dict):
+        slice_block["by_scorer"] = {}
+        raw_by_scorer = slice_block["by_scorer"]
+    by_scorer = cast(dict[str, object], raw_by_scorer)
+
+    raw_scorer_block = by_scorer.get(scorer_name)
+    if not isinstance(raw_scorer_block, dict):
+        raw_scorer_block = {}
+        by_scorer[scorer_name] = raw_scorer_block
+    scorer_block = cast(dict[str, object], raw_scorer_block)
+    return scorer_block
+
+
+def _transfer_result_block(scorer_block: dict[str, object]) -> dict[str, object]:
+    """Return/create the mutable transferred-operating-points block."""
+    raw_transfer = scorer_block.get("transferred_operating_points")
+    if not isinstance(raw_transfer, dict):
+        raw_transfer = {}
+        scorer_block["transferred_operating_points"] = raw_transfer
+    transfer_block: dict[str, object] = raw_transfer
+    return transfer_block
+
+
+def _record_spec_error(
+    by_slice: dict[str, dict[str, object]],
+    spec: OperatingPointSpec,
+    scorer_names: Sequence[str],
+    message: str,
+    *,
+    target_slice: str | None = None,
+) -> None:
+    """Attach a spec-level error under target scorer blocks."""
+    targets = [target_slice] if target_slice is not None else list(spec.apply_slices)
+    for slice_name in targets:
+        by_slice.setdefault(
+            slice_name,
+            {"n": 0, "n_positive": 0, "by_scorer": {}, "paired_diffs": {}},
+        )
+        for scorer_name in scorer_names:
+            scorer_block = _scorer_result_block(by_slice, slice_name, scorer_name)
+            transfer_block = _transfer_result_block(scorer_block)
+            transfer_block[spec.name] = {"error": message}
 
 
 def _extract_metric_value(slice_dict: object, metric: str) -> float | None:
@@ -699,14 +923,16 @@ def write_run_result(result: RunResult, run_dir: Path) -> tuple[Path, Path]:
     run_dir.mkdir(parents=True, exist_ok=True)
     full_path = run_dir / "results_full.json"
     compact_path = run_dir / "results.json"
-    full_path.write_text(json.dumps(result.to_dict(), indent=2, default=str))
-    compact_path.write_text(json.dumps(_strip_scores(result.to_dict()), indent=2, default=str))
+    write_json_strict(result.to_dict(), full_path)
+    write_json_strict(_strip_scores(result.to_dict()), compact_path)
     return compact_path, full_path
 
 
 def _strip_scores(d: dict[str, object]) -> dict[str, object]:
     """Drop the per-row ``scores`` arrays from the headline JSON."""
-    out: dict[str, object] = json.loads(json.dumps(d, default=str))  # deep copy via JSON
+    out = sanitize_for_json(d)
+    if not isinstance(out, dict):
+        raise TypeError("_strip_scores expected a mapping payload")
     by_slice = out.get("by_slice", {})
     if isinstance(by_slice, dict):
         for slice_data in by_slice.values():

@@ -8,10 +8,13 @@ from pathlib import Path
 
 import pytest
 
+from eval_toolkit.artifacts import PredictionArtifactRef, PredictionColumns
 from eval_toolkit.manifest import (
     MANIFEST_SCHEMA_VERSION,
     RunManifest,
+    SourceRoleRecord,
     build_manifest,
+    validate_source_roles,
     write_manifest,
 )
 
@@ -57,6 +60,57 @@ def test_build_manifest_collects_versioned_objects() -> None:
         versioned={"my_scorer": WithVersion(), "no_v": WithoutVersion()},
     )
     assert m.versioned_objects == {"my_scorer": "1.2.3"}
+
+
+@pytest.mark.unit
+def test_build_manifest_captures_source_roles_and_guardrails() -> None:
+    m = build_manifest(
+        run_id="demo",
+        config={},
+        source_roles=[
+            SourceRoleRecord(source="train_pool", role="train", n_rows=10),
+            {"source": "diagnostic", "role": "external_diagnostic", "notes": "held out"},
+        ],
+        required_source_roles=("train", "external_diagnostic"),
+        guardrails=["do not tune on diagnostics"],
+    )
+    assert m.source_roles[0]["source"] == "train_pool"
+    assert m.source_roles[1]["role"] == "external_diagnostic"
+    assert m.guardrails == ["do not tune on diagnostics"]
+
+
+@pytest.mark.unit
+def test_build_manifest_captures_prediction_artifact_refs() -> None:
+    ref = PredictionArtifactRef(
+        uri="predictions.csv",
+        media_type="text/csv",
+        n_rows=2,
+        columns=PredictionColumns(row_id="id", label="label", score="score"),
+    )
+
+    m = build_manifest(run_id="demo", config={}, prediction_artifacts=[ref])
+
+    assert m.prediction_artifacts[0]["uri"] == "predictions.csv"
+    assert m.prediction_artifacts[0]["columns"]["score"] == "score"  # type: ignore[index]
+
+
+@pytest.mark.unit
+def test_validate_source_roles_reports_missing_required_role() -> None:
+    errors = validate_source_roles(
+        [SourceRoleRecord(source="train_pool", role="train")],
+        required_roles=("train", "locked_final_holdout"),
+    )
+    assert "missing required source role" in errors[-1]
+
+
+@pytest.mark.unit
+def test_build_manifest_rejects_invalid_source_roles() -> None:
+    with pytest.raises(ValueError, match="invalid source_roles"):
+        build_manifest(
+            run_id="demo",
+            config={},
+            source_roles=[{"source": "", "role": "train"}],
+        )
 
 
 @pytest.mark.unit

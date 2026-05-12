@@ -74,6 +74,21 @@ release-blockers; ship as feedback dictates.
 - **`paths.py` / `provenance.py` / `seeds.py` / `docs.py` doctests in
   CI.** Currently CI doctests only the math kernels.
 
+## v1-prelude evidence core
+
+The next stabilization step is the generic evidence layer now used by
+consumer migrations:
+
+- Validation-fit operating points can be applied to mixed-class,
+  all-positive, or all-negative target slices with threshold provenance.
+- `RunManifest` can carry optional source-role records and guardrails.
+- Generic claim gates can fail missing headline comparisons, inadequate
+  slice sizes, scorer/leakage errors, missing source roles, and metric
+  caps such as hard-negative FPR.
+
+These stay library-first: no prompt-injection datasets, presets, CLI,
+or markdown report generator.
+
 ## v1.0.0 path (long-term, gated)
 
 v1.0.0 signals API stability — breaking changes after v1.0 require
@@ -90,6 +105,8 @@ v2.0. Gated on:
    v0.9 might (e.g., the Versioned-canonical-impl shape if v0.9 ships
    the canonical Platt flag). v1.0 means we're *confident* the shapes
    are durable.
+   The v1-prelude evidence APIs must also survive one V3-shaped and one
+   SDD-shaped consumer migration check.
 3. **Methodology docs peer-reviewed** by an external reader (statistics
    / methodology background, ideally not part of the
    `prompt_injection_*` core team).

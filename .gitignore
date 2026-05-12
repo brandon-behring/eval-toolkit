@@ -37,3 +37,6 @@ coverage.xml
 
 # Logs
 *.log
+
+# Claude Code project settings (machine-local)
+.claude/

@@ -29,13 +29,14 @@ underlying canon.
 | 9 | [versioning.md](versioning.md) | Adopting the `Versioned` Protocol on consumer Scorers so `RunManifest.versioned_objects` auto-collects per-object versions. |
 | 10 | [fairness.md](fairness.md) | Auditing per-subgroup metrics, computing demographic parity / equalized odds on top of the toolkit's primitives, picking a fairness criterion. |
 | 11 | [reproducibility.md](reproducibility.md) | Setting up a reproducible run, mapping to the NeurIPS Reproducibility Checklist, navigating PyTorch determinism, replaying an old result from its manifest. |
-| 12 | [testing.md](testing.md) | Testing your *own* evaluation code — property / reference-equivalence / golden / visual-regression patterns. |
-| 13 | [reading_list.md](reading_list.md) | Citation lookup, future-work pointers, cross-link to the v0.3 research audit. |
+| 12 | [evidence.md](evidence.md) | Separating exploratory evidence from claim-bearing evidence with source roles, threshold transfer, and generic gates. |
+| 13 | [testing.md](testing.md) | Testing your *own* evaluation code — property / reference-equivalence / golden / visual-regression patterns. |
+| 14 | [reading_list.md](reading_list.md) | Citation lookup, future-work pointers, cross-link to the v0.3 research audit. |
 
 ## Reading paths
 
 - **"I'm new to eval-toolkit and want the conceptual map."** Read in
-  order 1 → 13 above; ~4 hours total. Skip the *Background* admonitions
+  order 1 → 14 above; ~4 hours total. Skip the *Background* admonitions
   if you're sklearn-fluent.
 
 - **"I'm migrating prompt_injection_detector / -showcase / -sdd to

@@ -18,7 +18,8 @@ import pytest
 from jsonschema import Draft202012Validator
 
 import eval_toolkit
-from eval_toolkit.harness import EvalSlice, evaluate, write_run_result
+from eval_toolkit.claims import ClaimReport, GateResult
+from eval_toolkit.harness import EvalSlice, evaluate, with_claim_report, write_run_result
 from eval_toolkit.manifest import build_manifest, write_manifest
 
 SCHEMAS_DIR = Path(eval_toolkit.__file__).parent / "schemas"
@@ -84,11 +85,50 @@ def test_results_compact_validates_against_v1_schema(fixture_run_result: dict) -
 
 
 @pytest.mark.unit
+def test_results_with_claim_report_validate_against_v1_schemas() -> None:
+    class _Scorer:
+        def predict_proba(self, X):
+            return np.full(len(X), 0.5)
+
+    df = pd.DataFrame({"text": [f"r{i}" for i in range(40)], "label": [i % 2 for i in range(40)]})
+    result = evaluate({"s": _Scorer()}, [EvalSlice(name="test", df=df)], run_id="claims")
+    report = ClaimReport(claims={"claim": [GateResult(name="gate", passed=True, message="ok")]})
+    result = with_claim_report(result, report)
+
+    with tempfile.TemporaryDirectory() as d:
+        compact_path, full_path = write_run_result(result, Path(d))
+        compact = json.loads(compact_path.read_text())
+        full = json.loads(full_path.read_text())
+
+    Draft202012Validator(_load_schema("results.v1.json")).validate(compact)
+    Draft202012Validator(_load_schema("results_full.v1.json")).validate(full)
+    assert compact["claim_report"]["has_failures"] is False
+    assert full["claim_report"]["claims"]["claim"][0]["passed"] is True
+
+
+@pytest.mark.unit
 def test_manifest_validates_against_v1_schema() -> None:
     m = build_manifest(run_id="r", config={"k": 5})
     with tempfile.TemporaryDirectory() as d:
         path = write_manifest(m, d)
         loaded = json.loads(path.read_text())
+    schema = _load_schema("manifest.v1.json")
+    Draft202012Validator(schema).validate(loaded)
+
+
+@pytest.mark.unit
+def test_manifest_with_source_roles_and_guardrails_validates() -> None:
+    m = build_manifest(
+        run_id="r",
+        config={},
+        source_roles=[
+            {"source": "train_pool", "role": "train", "n_rows": 10},
+            {"source": "final", "role": "locked_final_holdout", "metadata": {"locked": True}},
+        ],
+        guardrails=["do not tune on final holdout"],
+    )
+    with tempfile.TemporaryDirectory() as d:
+        loaded = json.loads(write_manifest(m, d).read_text())
     schema = _load_schema("manifest.v1.json")
     Draft202012Validator(schema).validate(loaded)
 
