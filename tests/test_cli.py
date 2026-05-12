@@ -184,3 +184,71 @@ def test_main_in_process_show_rejects_unknown(capsys) -> None:
     assert rc == 2
     captured = capsys.readouterr()
     assert "unknown schema" in captured.err
+
+
+@pytest.mark.unit
+def test_main_in_process_show_happy_path(capsys) -> None:
+    rc = main(["schemas", "show", "results.v1"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["title"].startswith("eval-toolkit")
+
+
+@pytest.mark.unit
+def test_main_in_process_show_full_filename(capsys) -> None:
+    """`results.v1.json` (full filename) is accepted."""
+    rc = main(["schemas", "show", "results.v1.json"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["title"]
+
+
+@pytest.mark.unit
+def test_main_in_process_validate_happy_path(tmp_path: Path, capsys) -> None:
+    pytest.importorskip("jsonschema")
+    payload = _well_formed_results_payload()
+    path = tmp_path / "good.json"
+    path.write_text(json.dumps(payload))
+    rc = main(["validate", str(path), "results.v1"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "OK against results.v1" in captured.out
+
+
+@pytest.mark.unit
+def test_main_in_process_validate_full_filename_schema(tmp_path: Path, capsys) -> None:
+    """validate accepts the full schema filename like 'results.v1.json'."""
+    pytest.importorskip("jsonschema")
+    path = tmp_path / "good.json"
+    path.write_text(json.dumps(_well_formed_results_payload()))
+    rc = main(["validate", str(path), "results.v1.json"])
+    assert rc == 0
+
+
+@pytest.mark.unit
+def test_main_in_process_validate_bad_payload(tmp_path: Path, capsys) -> None:
+    pytest.importorskip("jsonschema")
+    path = tmp_path / "bad.json"
+    path.write_text("{}")
+    rc = main(["validate", str(path), "results.v1"])
+    assert rc == 1
+    assert "VALIDATION ERROR" in capsys.readouterr().err
+
+
+@pytest.mark.unit
+def test_main_in_process_validate_missing_file(tmp_path: Path, capsys) -> None:
+    pytest.importorskip("jsonschema")
+    rc = main(["validate", str(tmp_path / "nope.json"), "results.v1"])
+    assert rc == 2
+    assert "file not found" in capsys.readouterr().err
+
+
+@pytest.mark.unit
+def test_main_in_process_validate_unknown_schema(tmp_path: Path, capsys) -> None:
+    pytest.importorskip("jsonschema")
+    path = tmp_path / "x.json"
+    path.write_text("{}")
+    rc = main(["validate", str(path), "definitely_not_a_schema"])
+    assert rc == 2
+    assert "unknown schema" in capsys.readouterr().err
