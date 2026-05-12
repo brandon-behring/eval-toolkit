@@ -47,17 +47,12 @@ property = ["hypothesis>=6.100"]
 yaml = ["pyyaml>=6.0"]
 parquet = ["pyarrow>=15.0"]
 validation = ["jsonschema>=4.21"]
-all = [
-    "pandas>=2.0",
-    "matplotlib>=3.8",
-    "pillow>=10.0",
-    "hypothesis>=6.100",
-    "pyyaml>=6.0",
-    "pyarrow>=15.0",
-    "jsonschema>=4.21",
-]
+# `all` references the sub-extras directly (PEP 685 self-reference). This
+# avoids drift: adding a dep to e.g. `dataframe` no longer requires a
+# mirroring edit here.
+all = ["eval-toolkit[dataframe,plotting,property,yaml,parquet,validation]"]
 dev = [
-    "eval-toolkit[all,parquet]",
+    "eval-toolkit[all]",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-mpl>=0.16",
@@ -66,6 +61,9 @@ dev = [
     "black>=24.0",
     "mypy>=1.10",
 ]
+
+[project.scripts]
+eval-toolkit = "eval_toolkit.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/eval_toolkit"]

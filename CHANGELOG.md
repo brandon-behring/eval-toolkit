@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `pyproject.toml` `all` extra refactored to reference sub-extras via
+  PEP 685 self-reference: `all =
+  ["eval-toolkit[dataframe,plotting,property,yaml,parquet,validation]"]`
+  (was a flat list of every dep). Eliminates drift risk when a dep is
+  added to a sub-extra. The `dev` extra now references `all` (no
+  longer `all,parquet` since `all` includes parquet directly).
 - Aggregate coverage floor raised from 90% to 92%
   (`pyproject.toml [tool.coverage.report] fail_under`, `tox.ini`,
   `noxfile.py`, `.github/workflows/ci.yml`). Reflects the new per-module
@@ -16,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `eval-toolkit` console script (`python -m eval_toolkit ...`) with
+  three subcommands: `schemas list` (enumerate bundled schemas),
+  `schemas show <name>` (pretty-print a single schema, accepts both
+  `results.v1` and `results.v1.json`), and `validate <file>
+  <schema>` (dogfoods `[validation]` extra; exit codes 0/1/2/3 for
+  ok/validation-failed/bad-arg/missing-extra). Stdlib argparse —
+  no new runtime deps.
 - `docs/getting-started.md` — linear newcomer-first end-to-end
   walkthrough (~480 lines): install, define a Scorer, build slices,
   run `evaluate()`, read the output, persist results, validate JSON,
