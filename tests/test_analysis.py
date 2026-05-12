@@ -1,0 +1,255 @@
+"""Tests for eval_toolkit.analysis — prediction-artifact readers and bootstrap wrappers.
+
+Complements the smoke-level coverage from `test_v09_contracts.py` with
+targeted edge cases for each public helper and validation path.
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from eval_toolkit.analysis import (
+    CsvPredictionReader,
+    JsonlPredictionReader,
+    PredictionArrays,
+    bootstrap_metric_from_predictions,
+    load_prediction_arrays,
+    paired_diff_from_prediction_refs,
+)
+
+
+def _csv_ref(path: Path, *, media_type: str = "text/csv") -> dict[str, object]:
+    return {
+        "uri": str(path),
+        "media_type": media_type,
+        "columns": {
+            "label": "label",
+            "score": "score",
+            "row_id": "row_id",
+            "content_hash": "content_hash",
+        },
+    }
+
+
+def _jsonl_ref(path: Path, *, media_type: str = "application/jsonl") -> dict[str, object]:
+    return {
+        "uri": str(path),
+        "media_type": media_type,
+        "columns": {
+            "label": "label",
+            "score": "score",
+        },
+    }
+
+
+def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
+    with path.open("w") as fh:
+        for row in rows:
+            fh.write(json.dumps(row) + "\n")
+
+
+@pytest.mark.unit
+def test_prediction_arrays_rejects_shape_mismatch() -> None:
+    with pytest.raises(ValueError, match="identical shape"):
+        PredictionArrays(labels=np.array([0, 1]), scores=np.array([0.1, 0.5, 0.9]))
+
+
+@pytest.mark.unit
+def test_jsonl_reader_round_trip(tmp_path: Path) -> None:
+    rows = [
+        {"label": 0, "score": 0.1, "extra": "ignored"},
+        {"label": 1, "score": 0.8},
+    ]
+    path = tmp_path / "preds.jsonl"
+    _write_jsonl(path, rows)
+    reader = JsonlPredictionReader()
+    table = reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
+    assert list(table["label"]) == [0, 1]
+    assert list(table["score"]) == [0.1, 0.8]
+
+
+@pytest.mark.unit
+def test_jsonl_reader_skips_blank_lines(tmp_path: Path) -> None:
+    path = tmp_path / "preds.jsonl"
+    path.write_text(
+        json.dumps({"label": 0, "score": 0.2})
+        + "\n"
+        + "\n"  # blank line
+        + json.dumps({"label": 1, "score": 0.7})
+        + "\n"
+    )
+    reader = JsonlPredictionReader()
+    table = reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
+    assert len(table["label"]) == 2
+
+
+@pytest.mark.unit
+def test_load_prediction_arrays_routes_to_csv_via_media_type(tmp_path: Path) -> None:
+    rows = [
+        {"label": 0, "score": 0.1, "row_id": "r0", "content_hash": "h0"},
+        {"label": 1, "score": 0.8, "row_id": "r1", "content_hash": "h1"},
+    ]
+    path = tmp_path / "preds.csv"
+    _write_csv(path, rows)
+    arrays = load_prediction_arrays(_csv_ref(path))
+    assert arrays.labels.tolist() == [0, 1]
+    assert arrays.scores.tolist() == [0.1, 0.8]
+    assert arrays.row_ids == ("r0", "r1")
+    assert arrays.content_hashes == ("h0", "h1")
+
+
+@pytest.mark.unit
+def test_load_prediction_arrays_routes_to_jsonl_via_extension(tmp_path: Path) -> None:
+    """A .jsonl extension picks the JsonlPredictionReader when media_type is generic."""
+    rows = [{"label": 0, "score": 0.3}, {"label": 1, "score": 0.6}]
+    path = tmp_path / "preds.jsonl"
+    _write_jsonl(path, rows)
+    ref = {"uri": str(path), "media_type": "", "columns": {"label": "label", "score": "score"}}
+    arrays = load_prediction_arrays(ref)
+    assert arrays.labels.tolist() == [0, 1]
+
+
+@pytest.mark.unit
+def test_load_prediction_arrays_rejects_missing_columns_mapping(tmp_path: Path) -> None:
+    path = tmp_path / "preds.csv"
+    path.write_text("label,score\n0,0.1\n")
+    bad_ref = {"uri": str(path), "media_type": "text/csv"}  # no columns
+    with pytest.raises(ValueError, match="columns mapping"):
+        load_prediction_arrays(bad_ref)
+
+
+@pytest.mark.unit
+def test_load_prediction_arrays_rejects_missing_uri() -> None:
+    bad_ref = {
+        "media_type": "text/csv",
+        "columns": {"label": "label", "score": "score"},
+    }
+    with pytest.raises(ValueError, match="non-empty uri"):
+        load_prediction_arrays(bad_ref)
+
+
+@pytest.mark.unit
+def test_load_prediction_arrays_rejects_missing_label_column(tmp_path: Path) -> None:
+    path = tmp_path / "preds.csv"
+    path.write_text("score\n0.1\n")
+    bad_ref = {
+        "uri": str(path),
+        "media_type": "text/csv",
+        "columns": {"score": "score"},  # no label
+    }
+    with pytest.raises(ValueError, match="label"):
+        load_prediction_arrays(bad_ref)
+
+
+@pytest.mark.unit
+def test_reader_routing_rejects_unsupported_media_type(tmp_path: Path) -> None:
+    path = tmp_path / "preds.parquet"
+    path.write_bytes(b"\x00\x01")  # nonsense bytes; we never actually read
+    ref = {
+        "uri": str(path),
+        "media_type": "application/parquet",
+        "columns": {"label": "label", "score": "score"},
+    }
+    with pytest.raises(ValueError, match="no built-in prediction reader"):
+        load_prediction_arrays(ref)
+
+
+@pytest.mark.unit
+def test_bootstrap_metric_from_predictions_returns_ci(tmp_path: Path) -> None:
+    rng = np.random.default_rng(0)
+    n = 60
+    labels = np.array([0, 1] * (n // 2), dtype=int)
+    scores = np.clip(0.3 + 0.4 * labels + rng.normal(0, 0.15, size=n), 0, 1)
+    path = tmp_path / "preds.csv"
+    rows = [
+        {"label": int(lab), "score": float(s), "row_id": f"r{i}", "content_hash": f"h{i}"}
+        for i, (lab, s) in enumerate(zip(labels, scores, strict=True))
+    ]
+    _write_csv(path, rows)
+    out = bootstrap_metric_from_predictions(_csv_ref(path), n_resamples=20, seed=7)
+    assert out["n_resamples"] == 20
+    ci = out["ci_95"]
+    assert isinstance(ci, list) and len(ci) == 2
+    assert ci[0] <= ci[1]
+
+
+@pytest.mark.unit
+def test_paired_diff_rejects_shape_mismatch(tmp_path: Path) -> None:
+    p1 = tmp_path / "a.csv"
+    p2 = tmp_path / "b.csv"
+    _write_csv(p1, [{"label": 0, "score": 0.1, "row_id": "r0", "content_hash": "h0"}])
+    _write_csv(
+        p2,
+        [
+            {"label": 0, "score": 0.1, "row_id": "r0", "content_hash": "h0"},
+            {"label": 1, "score": 0.8, "row_id": "r1", "content_hash": "h1"},
+        ],
+    )
+    with pytest.raises(ValueError, match="same number of rows"):
+        paired_diff_from_prediction_refs(_csv_ref(p1), _csv_ref(p2), n_resamples=5, seed=1)
+
+
+@pytest.mark.unit
+def test_paired_diff_rejects_label_mismatch(tmp_path: Path) -> None:
+    p1 = tmp_path / "a.csv"
+    p2 = tmp_path / "b.csv"
+    _write_csv(p1, [{"label": 0, "score": 0.1, "row_id": "r0", "content_hash": "h0"}])
+    _write_csv(p2, [{"label": 1, "score": 0.1, "row_id": "r0", "content_hash": "h0"}])
+    with pytest.raises(ValueError, match="identical labels"):
+        paired_diff_from_prediction_refs(_csv_ref(p1), _csv_ref(p2), n_resamples=5, seed=1)
+
+
+@pytest.mark.unit
+def test_paired_diff_rejects_row_id_mismatch(tmp_path: Path) -> None:
+    p1 = tmp_path / "a.csv"
+    p2 = tmp_path / "b.csv"
+    _write_csv(p1, [{"label": 0, "score": 0.1, "row_id": "r0", "content_hash": "h0"}])
+    _write_csv(p2, [{"label": 0, "score": 0.2, "row_id": "rZ", "content_hash": "h0"}])
+    with pytest.raises(ValueError, match="identical row_ids"):
+        paired_diff_from_prediction_refs(_csv_ref(p1), _csv_ref(p2), n_resamples=5, seed=1)
+
+
+@pytest.mark.unit
+def test_paired_diff_rejects_content_hash_mismatch(tmp_path: Path) -> None:
+    """row_ids match (both empty), but content hashes differ → reject."""
+    p1 = tmp_path / "a.csv"
+    p2 = tmp_path / "b.csv"
+    _write_csv(p1, [{"label": 0, "score": 0.1, "content_hash": "h0"}])
+    _write_csv(p2, [{"label": 0, "score": 0.2, "content_hash": "hZ"}])
+    ref1 = {
+        "uri": str(p1),
+        "media_type": "text/csv",
+        "columns": {"label": "label", "score": "score", "content_hash": "content_hash"},
+    }
+    ref2 = {
+        "uri": str(p2),
+        "media_type": "text/csv",
+        "columns": {"label": "label", "score": "score", "content_hash": "content_hash"},
+    }
+    with pytest.raises(ValueError, match="identical content_hashes"):
+        paired_diff_from_prediction_refs(ref1, ref2, n_resamples=5, seed=1)
+
+
+@pytest.mark.unit
+def test_csv_reader_used_directly(tmp_path: Path) -> None:
+    """Exercise CsvPredictionReader's public read_predictions API directly."""
+    rows = [{"label": 0, "score": 0.4}, {"label": 1, "score": 0.7}]
+    path = tmp_path / "p.csv"
+    _write_csv(path, rows)
+    reader = CsvPredictionReader()
+    table = reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
+    assert table["label"] == ["0", "1"]
+    assert table["score"] == ["0.4", "0.7"]

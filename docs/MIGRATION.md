@@ -11,6 +11,7 @@ update consumer code.
 |---|---|---|
 | v0.6.x → v0.7.x | BREAKING | [`migration/v0.7.md`](migration/v0.7.md) — `select_threshold` API + new Protocol surfaces |
 | v0.7.x → v0.8.0 | BREAKING (small) | [`migration/v0.8.md`](migration/v0.8.md) — ECE input validation enforced; `__version__` mismatch closed; `[parquet]` extra |
+| v0.8.x → v0.9.0 | ADDITIVE | [`migration/v0.9.md`](migration/v0.9.md) — evidence core: `claims`, `artifacts`, `operating_points`, `evidence`, `analysis`, `protocols`; six new optional `RunResult` fields; `[validation]` extra |
 
 ## Conventions
 

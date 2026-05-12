@@ -67,6 +67,14 @@ migration guide.
   tests for `fit_operating_points` / `apply_operating_points`
   (rank preservation, fit→apply round-trip with tolerance,
   degenerate input handling, determinism under seed).
+- `tests/test_analysis.py`, `tests/test_manifest_validation.py`,
+  `tests/test_harness_edge_cases.py`, plus expanded
+  `tests/test_artifacts.py` — coverage-chase suites that close
+  the 90% global gate which v0.9.0 had inadvertently dropped to
+  86.46%. The chase brought `analysis.py` 68 → 98%, `artifacts.py`
+  82 → 99%, `manifest.py` 71 → 96%, and added targeted
+  evidence-of-error tests across `harness.py`'s operating-point
+  branches. Total coverage now sits at 90.01% with 807 tests.
 
 ### Notes
 

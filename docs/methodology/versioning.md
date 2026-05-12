@@ -221,6 +221,95 @@ with tempfile.TemporaryDirectory() as d:
     print(json.loads(path.read_text())["versioned_objects"])
 ```
 
+## Schema evolution policy {#schema-evolution}
+
+The toolkit's JSON Schemas live in
+[`src/eval_toolkit/schemas/`](../../src/eval_toolkit/schemas/) and
+follow a `.vN.json` filename convention (`results.v1.json`,
+`results_full.v1.json`, `manifest.v1.json`). This section documents
+when the filename bumps and when it stays.
+
+### Filename stays the same (additive changes)
+
+A `.vN.json` filename is **stable** so long as every change is
+additive and optional. Concretely, the filename does NOT bump when:
+
+- A new top-level optional field is added.
+- A new optional sub-field is added inside an existing object.
+- A field's `enum` gains a value (consumers using older enums still
+  validate; their value is just one of several allowed).
+- Documentation strings (`description`) change.
+
+The forward-compatibility contract is `additionalProperties: true`
+on every object node: v0.8 consumers reading a v0.9 result silently
+tolerate the new fields. v0.9 consumers reading a hypothetical v0.10
+result tolerate that version's additions in the same way, as long as
+v0.10 stays additive.
+
+**v0.9 case study**: `results.v1.json` gained six new top-level
+optional fields (`claim_report`, `prediction_artifacts`,
+`evidence_axes`, `pairing_metadata`, `aggregate_evidence`,
+`threshold_policy`) without a filename bump. v0.8 consumers continue
+to read v0.9 outputs cleanly.
+
+### Filename bumps (`.vN.json` → `.v(N+1).json`)
+
+A new schema file ships under a bumped filename when any of these
+apply:
+
+- A field is **removed** from the schema.
+- A field is **renamed**.
+- A field's **semantic meaning** changes (same name, different
+  interpretation downstream).
+- A field's **type** changes (e.g., `string` → `integer`).
+- A field is **moved** between `properties` and `required`.
+- An object node's `additionalProperties` policy tightens from
+  `true` to `false`.
+
+Filename bumps are announced in the per-version migration guide
+under `docs/migration/` and called out in `CHANGELOG.md`. When `v2`
+ships, `v1` stays on disk for one more release cycle to give
+consumers time to migrate; consumers can pin to the `.v1.json`
+filename until they upgrade.
+
+### The `schema_version` field inside each schema
+
+Each schema also declares a top-level
+`"version": "<N>"` and (for result schemas) a `schema_version` const
+mirroring the filename:
+
+```json
+{
+  "$id": "https://eval-toolkit/schemas/results.v1.json",
+  "version": "1",
+  "properties": {
+    "schema_version": {"const": "v1"}
+  }
+}
+```
+
+The two fields are redundant on purpose: `$id` and `version` are for
+schema-aware tools; `schema_version` is for human consumers who'd
+rather grep a result file than its schema. Both are bumped together
+on a filename change.
+
+### Why not semantic versioning (`v1.1.json`)?
+
+The `.vN.json` convention is intentionally coarser than semver. Any
+breaking change → new file. There's no notion of a backward-
+compatible-but-non-additive bump (`v1.1` adding a new required
+field would still break v1 consumers; calling it `v1.1` would
+mislead). Additive changes — the only ones that don't break — get
+no filename change at all. This keeps consumer code simple: pin to
+`.v1.json` and you're guaranteed forward-compat within the v1 line.
+
+### See also
+
+- [`migration/v0.9.md`](../migration/v0.9.md) §5 for the v0.9
+  schema additions.
+- [`CHANGELOG.md`](../../CHANGELOG.md) for the per-version record
+  of which schemas grew.
+
 ## Further reading
 
 - EleutherAI lm-evaluation-harness, [`task_guide`](https://github.com/EleutherAI/lm-evaluation-harness/blob/main/docs/task_guide.md)
