@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `docs/methodology/claims.md` — worked-walkthrough chapter for the
+  v0.9 claims pipeline (`ClaimSpec` / `EvidenceGate` / `GateResult` /
+  `ClaimReport`). Covers the exception-handling contract, severity
+  policy, and common pitfalls. Sybil-runnable code blocks.
+- `docs/methodology/artifacts.md` — worked-walkthrough chapter for
+  the v0.9 prediction-artifact contract (`PredictionArtifactRef`,
+  `PredictionColumns`, `MetricState`). Covers `validate_payload` and
+  the `[validation]` extra, paired-diff `content_hash` requirements,
+  and `MetricState` status taxonomy (`ok` / `skipped` / `error`).
+  Sybil-runnable code blocks.
+- `docs/methodology/README.md`: reading-order rows 15-16 for the
+  two new chapters.
 - Per-module coverage tests pushing every `src/eval_toolkit/*.py` to
   ≥90% individually: `tests/test_claims_coverage.py` (gate exception
   paths, defensive `not isinstance(Mapping)` branches, every

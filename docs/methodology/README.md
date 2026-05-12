@@ -32,11 +32,13 @@ underlying canon.
 | 12 | [evidence.md](evidence.md) | Separating exploratory evidence from claim-bearing evidence with source roles, threshold transfer, and generic gates. |
 | 13 | [testing.md](testing.md) | Testing your *own* evaluation code — property / reference-equivalence / golden / visual-regression patterns. |
 | 14 | [reading_list.md](reading_list.md) | Citation lookup, future-work pointers, cross-link to the v0.3 research audit. |
+| 15 | [claims.md](claims.md) | Defining release-time go/no-go gates over evaluation results; understanding the v0.9 `ClaimSpec` / `EvidenceGate` / `GateResult` / `ClaimReport` pipeline; writing a custom gate. |
+| 16 | [artifacts.md](artifacts.md) | Persisting predictions for replay; computing bootstrap CIs / paired diffs from on-disk artifacts; understanding the v0.9 `PredictionArtifactRef` / `MetricState` contract. |
 
 ## Reading paths
 
 - **"I'm new to eval-toolkit and want the conceptual map."** Read in
-  order 1 → 14 above; ~4 hours total. Skip the *Background* admonitions
+  order 1 → 16 above; ~5 hours total. Skip the *Background* admonitions
   if you're sklearn-fluent.
 
 - **"I'm migrating prompt_injection_detector / -showcase / -sdd to
