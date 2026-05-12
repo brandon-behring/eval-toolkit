@@ -8,9 +8,12 @@ or filesystem-oriented helpers.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 __all__ = [
     "EvalSliceLike",
@@ -23,9 +26,16 @@ __all__ = [
 
 @runtime_checkable
 class Scorer(Protocol):
-    """Anything exposing ``predict_proba(X) -> np.ndarray``."""
+    """Anything exposing ``predict_proba(X) -> np.ndarray of P(positive)``.
 
-    def predict_proba(self, X: Sequence[str] | np.ndarray) -> np.ndarray:  # pragma: no cover
+    Accepts ``list[str]``, ``np.ndarray``, or ``pd.Series`` of features.
+    Pandas is imported under ``TYPE_CHECKING`` only, so this Protocol
+    has no runtime pandas dependency.
+    """
+
+    def predict_proba(  # pragma: no cover
+        self, X: Sequence[str] | np.ndarray | pd.Series
+    ) -> np.ndarray:
         """Return one P(positive) score per input row."""
         ...
 

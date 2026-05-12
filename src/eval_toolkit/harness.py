@@ -37,7 +37,7 @@ import traceback
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Final, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -61,6 +61,7 @@ from eval_toolkit.operating_points import (
     apply_operating_points,
     fit_operating_points,
 )
+from eval_toolkit.protocols import Scorer, SliceAwareScorer
 
 if TYPE_CHECKING:
     from eval_toolkit.leakage import LeakageCheck
@@ -84,32 +85,6 @@ DEFAULT_BOOTSTRAP_RESAMPLES: Final[int] = 1000
 RUN_RESULT_SCHEMA_VERSION: Final[str] = "v1"
 
 _logger = logging.getLogger(__name__)
-
-
-@runtime_checkable
-class Scorer(Protocol):
-    """Anything exposing ``predict_proba(X) -> np.ndarray of P(positive)``.
-
-    Runtime-checkable: ``isinstance(obj, Scorer)`` returns True for any object
-    that exposes ``predict_proba``. Mirrors the
-    :class:`eval_toolkit.text_dedup.SimilarityStrategy` Protocol pattern from
-    v0.2.0.
-    """
-
-    def predict_proba(  # pragma: no cover
-        self, X: list[str] | pd.Series | np.ndarray
-    ) -> np.ndarray:
-        """Return one P(positive) score per input feature row."""
-        ...
-
-
-@runtime_checkable
-class SliceAwareScorer(Scorer, Protocol):
-    """Optional scorer contract for cost-controlled slice skipping."""
-
-    def should_score_slice(self, slice_name: str) -> bool:  # pragma: no cover
-        """Return whether this scorer should run on the named slice."""
-        ...
 
 
 @dataclass(frozen=True, slots=True)
