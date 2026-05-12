@@ -16,6 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `docs/getting-started.md` — linear newcomer-first end-to-end
+  walkthrough (~480 lines): install, define a Scorer, build slices,
+  run `evaluate()`, read the output, persist results, validate JSON,
+  add a claim, render a plot, common errors, where-to-go-next.
+  Sybil-runnable.
+- `docs/schemas.md` — field-by-field reference for the three bundled
+  JSON Schemas (`results.v1.json`, `results_full.v1.json`,
+  `manifest.v1.json`): inventory table, per-field type/required/
+  semantics/since-version, programmatic discovery snippet,
+  validation example. Sybil-runnable.
+- `README.md` — new top-level Documentation section linking the four
+  docs entry points (getting-started, methodology curriculum, schema
+  reference, migration, extending). Updated methodology link text to
+  reflect 16 chapters (was 12).
+- `conftest.py` — Sybil now collects `docs/getting-started.md` and
+  `docs/schemas.md` in addition to the existing docs tree.
 - `docs/methodology/claims.md` — worked-walkthrough chapter for the
   v0.9 claims pipeline (`ClaimSpec` / `EvidenceGate` / `GateResult` /
   `ClaimReport`). Covers the exception-handling contract, severity

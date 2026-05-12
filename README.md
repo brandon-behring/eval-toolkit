@@ -37,13 +37,29 @@ Pick the tier your task needs. Ad-hoc analysis: just call the
 functional core. Full eval pipelines: implement the Protocols. Every
 run: capture the manifest.
 
+## Documentation
+
+- **[Getting started](docs/getting-started.md)** — end-to-end
+  walkthrough for new users: install, define a Scorer, build slices,
+  run `evaluate()`, persist results, add a claim, render a plot.
+- **[Methodology curriculum](docs/methodology/README.md)** — 16
+  chapters on splits, metrics, calibration, evidence gates,
+  prediction artifacts, and more.
+- **[Schema reference](docs/schemas.md)** — field-by-field semantics
+  for `results.v1.json`, `results_full.v1.json`, `manifest.v1.json`.
+- **[Migration guides](docs/MIGRATION.md)** — v0.6→v0.7, v0.7→v0.8,
+  v0.8→v0.9.
+- **[Extending](docs/extending.md)** — Protocol-by-Protocol guide for
+  custom Scorers, Splitters, LeakageChecks, ThresholdSelectors,
+  DatasetLoaders, EvidenceGates.
+
 ## Methodology
 
 What good binary-classification evaluation looks like, with each
 concern mapped to the toolkit primitive that operationalizes it.
 
 - [`docs/methodology/`](docs/methodology/README.md) — the curriculum
-  (12 chapters). Recommended reading order:
+  (16 chapters). Recommended reading order:
   [`leakage`](docs/methodology/leakage.md) →
   [`splits`](docs/methodology/splits.md) →
   [`thresholds`](docs/methodology/thresholds.md) →
