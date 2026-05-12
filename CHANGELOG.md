@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Aggregate coverage floor raised from 90% to 92%
+  (`pyproject.toml [tool.coverage.report] fail_under`, `tox.ini`,
+  `noxfile.py`, `.github/workflows/ci.yml`). Reflects the new per-module
+  ≥90% baseline; current aggregate ~95%.
+
+### Added
+
+- Per-module coverage tests pushing every `src/eval_toolkit/*.py` to
+  ≥90% individually: `tests/test_claims_coverage.py` (gate exception
+  paths, defensive `not isinstance(Mapping)` branches, every
+  `_compare` operator); `tests/test_text_dedup_coverage.py` (all 5
+  similarity strategies on degenerate inputs, MinHash LSH edge cases,
+  audit-pair filter combinations, `_similarity_relation` mode table);
+  `tests/test_thresholds_coverage.py` (every selector's
+  `__post_init__` guards, `WilsonInterval` validation, no-eligible
+  RuntimeErrors); `tests/test_plotting_edge.py` (shape/NaN/empty
+  validation across all plot helpers, optional rendering paths);
+  `tests/test_loaders_coverage.py` (HFDatasetsLoader mocked via
+  `sys.modules['datasets']` injection, ParquetGlobLoader column
+  errors); `tests/test_misc_coverage.py` (evidence, config,
+  `__init__` lazy-import, `OperatingPointSpec` validation). Net +153
+  tests; per-module coverage now ranges 91–100%.
+
 ## [0.9.1] — 2026-05-12
 
 Post-v0.9.0 polish patch from an independent fresh-eyes audit. No

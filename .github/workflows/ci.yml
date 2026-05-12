@@ -40,7 +40,7 @@ jobs:
         run: .venv/bin/python -m mypy src
 
       - name: Run tests with coverage
-        run: .venv/bin/python -m pytest --cov=eval_toolkit --cov-fail-under=90
+        run: .venv/bin/python -m pytest --cov=eval_toolkit --cov-fail-under=92
 
       - name: Run doctests on math kernels + utility modules
         run: |

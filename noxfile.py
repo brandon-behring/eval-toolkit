@@ -27,7 +27,7 @@ PY_VERSIONS = ["3.11", "3.12", "3.13"]
 def tests(session: nox.Session) -> None:
     """Run the full pytest suite with coverage gate."""
     session.install("-e", ".[dev]")
-    session.run("pytest", "--cov=eval_toolkit", "--cov-fail-under=90", *session.posargs)
+    session.run("pytest", "--cov=eval_toolkit", "--cov-fail-under=92", *session.posargs)
 
 
 @nox.session

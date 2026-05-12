@@ -140,10 +140,10 @@ source = ["src/eval_toolkit"]
 branch = true
 
 [tool.coverage.report]
-# Restored to 90 in v0.7.1 after PR 1.5 added property tests for the new
-# v0.7.0 modules (thresholds / leakage / splits / loaders / manifest).
-# v0.7.0 had this temporarily lowered to 85 — see CHANGELOG.md history.
-fail_under = 90
+# Raised to 92 in v0.10.0 after the per-module coverage chase (every
+# src/eval_toolkit/*.py now ≥90% individually; aggregate ~95%).
+# Restored to 90 in v0.7.1, was 85 temporarily in v0.7.0.
+fail_under = 92
 exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
