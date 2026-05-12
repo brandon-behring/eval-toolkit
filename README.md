@@ -202,6 +202,21 @@ with tempfile.TemporaryDirectory() as run_dir:
 | `eval_toolkit.config` | `frozen_config` decorator + `from_yaml` loader |
 | `eval_toolkit.docs` | Anchor-based markdown rendering with formatter registry |
 
+## Fast iteration loop
+
+For development, skip slow tests with:
+
+```bash
+make fast              # or: nox -s fast
+# under the hood: uv run pytest -m "not slow" -q
+```
+
+CI runs the full suite (including `slow`) on every push. The `slow`
+marker is applied to tests exceeding ~2s (mostly Hypothesis property
+tests with large `max_examples` and a few bootstrap tests with
+`n_resamples >= 200`). `make fast` keeps the developer iteration loop
+under ~30 seconds.
+
 ## Standards
 
 See [`STYLE.md`](STYLE.md) for the full reconciled coding standards (formatting,

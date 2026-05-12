@@ -30,6 +30,15 @@ def tests(session: nox.Session) -> None:
     session.run("pytest", "--cov=eval_toolkit", "--cov-fail-under=92", *session.posargs)
 
 
+@nox.session(python=False)
+def fast(session: nox.Session) -> None:
+    """Run the fast subset (skip @pytest.mark.slow) for the local iteration loop.
+
+    CI runs the full suite; this session is for developer-side velocity.
+    """
+    session.run("uv", "run", "pytest", "-m", "not slow", "-q", external=True)
+
+
 @nox.session
 def lint(session: nox.Session) -> None:
     """ruff + black --check."""
@@ -47,7 +56,7 @@ def type(session: nox.Session) -> None:
 
 @nox.session
 def doctest(session: nox.Session) -> None:
-    """Run doctests on the math-kernel modules."""
+    """Run doctests on the math-kernel + utility modules."""
     session.install("-e", ".[dev]")
     session.run(
         "pytest",
@@ -61,6 +70,8 @@ def doctest(session: nox.Session) -> None:
         "src/eval_toolkit/manifest.py",
         "src/eval_toolkit/paths.py",
         "src/eval_toolkit/provenance.py",
+        "src/eval_toolkit/seeds.py",
+        "src/eval_toolkit/docs.py",
     )
 
 

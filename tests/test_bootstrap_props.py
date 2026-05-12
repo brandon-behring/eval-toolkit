@@ -55,6 +55,7 @@ def test_bootstrap_determinism(y: np.ndarray, s: np.ndarray, seed: int) -> None:
 
 
 @pytest.mark.property
+@pytest.mark.slow
 @given(
     y=_balanced_binary_array(50),
     s_a=_score_array(50),

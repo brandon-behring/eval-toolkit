@@ -1,4 +1,4 @@
-.PHONY: help install lint format test test-unit test-property test-smoke test-doctest type ci coverage clean
+.PHONY: help install lint format test test-fast test-unit test-property test-smoke test-doctest type ci coverage clean
 
 PYTHON := .venv/bin/python
 VENV := .venv
@@ -9,6 +9,7 @@ help:
 	@echo "  lint          ruff check + black --check + mypy"
 	@echo "  format        black + ruff --fix"
 	@echo "  test          pytest (all markers + doctests)"
+	@echo "  test-fast     pytest -m 'not slow' (fast iteration loop)"
 	@echo "  test-unit     pytest -m unit"
 	@echo "  test-property pytest -m property"
 	@echo "  test-smoke    pytest -m smoke"
@@ -38,7 +39,11 @@ test:
 		src/eval_toolkit/calibration.py src/eval_toolkit/text_dedup.py \
 		src/eval_toolkit/thresholds.py src/eval_toolkit/leakage.py \
 		src/eval_toolkit/manifest.py src/eval_toolkit/paths.py \
-		src/eval_toolkit/provenance.py
+		src/eval_toolkit/provenance.py src/eval_toolkit/seeds.py \
+		src/eval_toolkit/docs.py
+
+test-fast:
+	$(PYTHON) -m pytest -m "not slow" -q
 
 test-unit:
 	$(PYTHON) -m pytest -m unit
@@ -55,13 +60,14 @@ test-doctest:
 		src/eval_toolkit/calibration.py src/eval_toolkit/text_dedup.py \
 		src/eval_toolkit/thresholds.py src/eval_toolkit/leakage.py \
 		src/eval_toolkit/manifest.py src/eval_toolkit/paths.py \
-		src/eval_toolkit/provenance.py
+		src/eval_toolkit/provenance.py src/eval_toolkit/seeds.py \
+		src/eval_toolkit/docs.py
 
 type:
 	$(PYTHON) -m mypy src
 
 coverage:
-	$(PYTHON) -m pytest --cov=eval_toolkit --cov-report=term-missing --cov-fail-under=90
+	$(PYTHON) -m pytest --cov=eval_toolkit --cov-report=term-missing --cov-fail-under=92
 
 ci: lint test coverage
 

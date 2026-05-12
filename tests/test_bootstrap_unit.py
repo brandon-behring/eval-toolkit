@@ -51,6 +51,7 @@ def test_bootstrap_ci_contains_point_estimate(
 
 
 @pytest.mark.unit
+@pytest.mark.slow
 def test_bootstrap_ci_width_shrinks_with_n() -> None:
     rng = np.random.default_rng(0)
     big_y = rng.binomial(1, 0.3, size=2000)

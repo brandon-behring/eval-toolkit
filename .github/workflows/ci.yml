@@ -8,11 +8,17 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.11", "3.12", "3.13"]
+        include:
+          - os: macos-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +59,9 @@ jobs:
             src/eval_toolkit/leakage.py \
             src/eval_toolkit/manifest.py \
             src/eval_toolkit/paths.py \
-            src/eval_toolkit/provenance.py
+            src/eval_toolkit/provenance.py \
+            src/eval_toolkit/seeds.py \
+            src/eval_toolkit/docs.py
 
       - name: Validate JSON Schemas (jsonschema)
         run: |

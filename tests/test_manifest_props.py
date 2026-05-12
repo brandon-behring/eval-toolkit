@@ -36,6 +36,7 @@ from eval_toolkit.manifest import (
     ),
     values=st.lists(st.integers(-1000, 1000), min_size=1, max_size=8),
 )
+@pytest.mark.slow
 @settings(deadline=None, max_examples=20, suppress_health_check=[HealthCheck.filter_too_much])
 def test_config_hash_invariant_to_key_order(keys: list[str], values: list[int]) -> None:
     """SHA-256 over canonical-JSON is invariant to dict key order."""
@@ -61,6 +62,7 @@ def test_config_hash_invariant_to_key_order(keys: list[str], values: list[int]) 
         max_size=5,
     ),
 )
+@pytest.mark.slow
 @settings(deadline=None, max_examples=15)
 def test_config_hash_changes_when_config_changes(config: dict[str, int]) -> None:
     """If we mutate ANY value in the config, the hash changes."""

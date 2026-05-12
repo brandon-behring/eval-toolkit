@@ -7,8 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-05-12 — Maturity Release
+
+A docs-and-hygiene minor release. Closes the v0.9 documentation gap
+(new methodology chapters for claims + artifacts; new getting-started
+tutorial; new schemas field reference) and the per-module coverage
+gap (every `src/eval_toolkit/*.py` is now ≥90% individually;
+aggregate ~95%). Adds an `eval-toolkit` console script for schema
+discovery + payload validation, expands CI to macOS and Windows,
+caps Python at `<3.14`, and adds a `make fast` / `nox -s fast` target
+that skips `@pytest.mark.slow` tests for the local iteration loop.
+No breaking changes; no API removals.
+
 ### Changed
 
+- `pyproject.toml` `requires-python = ">=3.11,<3.14"` (upper bound).
+  Reflects what's actually tested in CI; re-evaluate when Python 3.14
+  stabilizes.
 - `pyproject.toml` `all` extra refactored to reference sub-extras via
   PEP 685 self-reference: `all =
   ["eval-toolkit[dataframe,plotting,property,yaml,parquet,validation]"]`
@@ -17,11 +32,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer `all,parquet` since `all` includes parquet directly).
 - Aggregate coverage floor raised from 90% to 92%
   (`pyproject.toml [tool.coverage.report] fail_under`, `tox.ini`,
-  `noxfile.py`, `.github/workflows/ci.yml`). Reflects the new per-module
-  ≥90% baseline; current aggregate ~95%.
+  `noxfile.py`, `.github/workflows/ci.yml`, `Makefile`). Reflects the
+  new per-module ≥90% baseline; current aggregate ~95%.
+- CI matrix: previously Linux-only on Python 3.11/3.12/3.13. Now adds
+  `macos-latest` and `windows-latest` jobs on Python 3.13 (5 jobs
+  total). Backs up the `OS Independent` package classifier with
+  actual platform validation.
+- Methodology curriculum total updated to 16 chapters (was 12;
+  `claims.md` + `artifacts.md` added in this release; the migration
+  guide and methodology README cross-links updated accordingly).
 
 ### Added
 
+- `make fast` and `nox -s fast` — fast iteration loop that runs
+  `pytest -m 'not slow'`. CI continues to run the full suite on
+  every push.
+- `@pytest.mark.slow` markers added to tests >2s identified via
+  `pytest --durations=50`:
+  `test_manifest_props.test_config_hash_invariant_to_key_order`,
+  `test_manifest_props.test_config_hash_changes_when_config_changes`,
+  `test_bootstrap_props.test_paired_bootstrap_diff_anti_symmetry`,
+  `test_bootstrap_unit.test_bootstrap_ci_width_shrinks_with_n`.
+- `seeds.py` and `docs.py` added to the doctest pass in
+  `.github/workflows/ci.yml`, `Makefile`, `tox.ini`, and
+  `noxfile.py`. Previously listed in roadmap.md as deferred; now
+  caught by CI.
 - `eval-toolkit` console script (`python -m eval_toolkit ...`) with
   three subcommands: `schemas list` (enumerate bundled schemas),
   `schemas show <name>` (pretty-print a single schema, accepts both
