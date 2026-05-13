@@ -372,6 +372,7 @@ def build_manifest(
     prediction_artifacts: Sequence[PredictionArtifactRef | Mapping[str, object]] | None = None,
     wall_clock_seconds: float | None = None,
     repo_root: Path | str | None = None,
+    git_sha: str | None = None,
 ) -> RunManifest:
     """Pure builder: assemble a :class:`RunManifest` from components.
 
@@ -417,6 +418,13 @@ def build_manifest(
     wall_clock_seconds : float or None
     repo_root : Path or str or None
         Where to run ``git status`` for the dirty-flag check.
+    git_sha : str or None, optional
+        Explicit git SHA override. When provided, used as
+        :attr:`RunManifest.git_sha` directly (callers that have already
+        captured the SHA — e.g. from a CI environment variable on a pod
+        with no ``.git/`` directory — skip the
+        :func:`~eval_toolkit.provenance.capture_git_sha` fallback). When
+        ``None`` (default), :func:`capture_git_sha` is used to auto-detect.
 
     Returns
     -------
@@ -470,7 +478,7 @@ def build_manifest(
     return RunManifest(
         run_id=run_id,
         captured_at=_utc_now_iso8601(),
-        git_sha=capture_git_sha(repo_root),
+        git_sha=git_sha if git_sha is not None else capture_git_sha(repo_root),
         dirty_flag=_is_git_dirty(repo_root),
         code_versions=code_versions,
         data_revisions=dict(data_revisions) if data_revisions else {},

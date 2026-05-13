@@ -65,6 +65,27 @@ def test_manifest_schema_version_is_v2() -> None:
 
 
 @pytest.mark.unit
+def test_build_manifest_accepts_explicit_git_sha() -> None:
+    """v0.14.1 — explicit git_sha kwarg overrides capture_git_sha.
+
+    Use case: pods / CI runners that rsync the source tree without
+    ``.git/`` and capture the SHA out-of-band via an environment variable.
+    """
+    explicit = "deadbeef" * 5
+    m = build_manifest(run_id="demo", config={}, git_sha=explicit)
+    assert m.git_sha == explicit
+
+
+@pytest.mark.unit
+def test_build_manifest_falls_back_to_capture_when_git_sha_none() -> None:
+    """Default behavior unchanged: git_sha=None invokes capture_git_sha."""
+    m = build_manifest(run_id="demo", config={})
+    # capture_git_sha returns either a 40-char SHA or None depending on
+    # the test environment; we only assert the override didn't activate.
+    assert m.git_sha is None or len(m.git_sha) >= 7
+
+
+@pytest.mark.unit
 def test_build_manifest_captures_env() -> None:
     m = build_manifest(run_id="demo", config={})
     assert "python" in m.env

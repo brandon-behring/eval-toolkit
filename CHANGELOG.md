@@ -17,6 +17,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.14.1] — 2026-05-13 — explicit `git_sha` kwarg on `build_manifest`
+
+Patch release adding an opt-in override to bypass
+:func:`capture_git_sha`. Closes F10.1 from the V4 consumer feedback log:
+pods / CI runners that rsync source without ``.git/`` no longer need to
+post-mutate ``manifest_payload["git_sha"]`` after building.
+
+### Added
+
+- `build_manifest(..., git_sha=...)` — explicit kwarg. When ``None``
+  (default), behavior is unchanged: ``capture_git_sha(repo_root)`` runs.
+  When provided, the kwarg is used directly as
+  :attr:`RunManifest.git_sha`.
+
+### Tests
+
+- 2 new unit tests covering the explicit-override path and the
+  fall-back-to-capture path.
+
 ## [0.14.0] — 2026-05-13 — manifest.v2 + typed validate_* helpers
 
 Manifest schema migrates v1 → v2 with three additive structural fixes and
