@@ -10,7 +10,9 @@ Public surface:
 - :func:`bayes_optimal_threshold` — closed-form cost-sensitive decision boundary
   (Elkan 2001 [#elkan]_); :class:`CostMatrix` packages prior + costs + abstain cost.
 - :func:`fit_isotonic_calibrator` — Niculescu-Mizil & Caruana 2005 [#nm05]_
-- :func:`fit_platt_calibrator` — Platt 1999 [#platt]_ sigmoid scaling
+- :func:`fit_platt_calibrator` — Platt 1999 [#platt]_ sigmoid scaling; returns a
+  :class:`PlattFit` dataclass exposing the fitted ``(a, b)`` parameters alongside
+  the transform callable (frozen, ``__call__``-able for back-compat with v0.11).
 - :func:`fit_temperature` — Guo et al. 2017 [#guo]_ — fits T on val *logits* (literature standard)
 - :func:`fit_temperature_oracle` — Guo et al. 2017 [#guo]_ — fits T on *probabilities*; diagnostic
   upper-bound only (T is fit on the data it then scores).
@@ -49,6 +51,7 @@ __all__ = [
     "DEFAULT_PRIOR",
     "DEFAULT_STRATEGY",
     "CostMatrix",
+    "PlattFit",
     "bayes_optimal_threshold",
     "fit_beta_calibrator",
     "fit_isotonic_calibrator",
@@ -588,9 +591,50 @@ def _platt_loss_grad(
     return loss, grad
 
 
-def fit_platt_calibrator(
-    y_true: np.ndarray, y_score: np.ndarray
-) -> Callable[[np.ndarray], np.ndarray]:
+@dataclass(frozen=True, slots=True)
+class PlattFit:
+    r"""Fitted Platt sigmoid calibrator: ``(a, b)`` parameters + transform.
+
+    Returned by :func:`fit_platt_calibrator` so callers can both apply the
+    calibrator (via ``__call__``) and serialize / inspect / reuse the fitted
+    parameters without reverse-engineering them from the closure.
+
+    The ``__call__`` delegation preserves back-compat with eval-toolkit ≤ 0.11.0,
+    where ``fit_platt_calibrator`` returned a plain ``Callable``: any caller
+    that used the return value as ``g(scores)`` continues to work unchanged.
+
+    Attributes
+    ----------
+    transform : Callable[[np.ndarray], np.ndarray]
+        Maps raw scores to calibrated probabilities via :math:`\sigma(a s + b)`.
+    a : float
+        Fitted slope.
+    b : float
+        Fitted intercept.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(42)
+    >>> y = rng.integers(0, 2, size=200)
+    >>> s = (y + rng.normal(0, 0.5, size=200))
+    >>> fit = fit_platt_calibrator(y, s)
+    >>> bool(fit.a > 0.0)  # well-separated → positive slope
+    True
+    >>> calibrated = fit(s)  # __call__ delegates to transform
+    >>> bool(calibrated.min() > 0.0 and calibrated.max() < 1.0)
+    True
+    """
+
+    transform: Callable[[np.ndarray], np.ndarray]
+    a: float
+    b: float
+
+    def __call__(self, scores: np.ndarray) -> np.ndarray:
+        return self.transform(scores)
+
+
+def fit_platt_calibrator(y_true: np.ndarray, y_score: np.ndarray) -> PlattFit:
     r"""Platt 1999 [#platt]_ sigmoid scaling with Lin 2007 [#lin]_ Laplace-smoothed targets.
 
     Canonical Platt scaling: fits :math:`\sigma(a \cdot s + b)` to maximize
@@ -615,9 +659,11 @@ def fit_platt_calibrator(
 
     Returns
     -------
-    callable
-        Maps raw scores to calibrated probabilities via the fitted sigmoid
-        :math:`\sigma(a \cdot s + b)`.
+    PlattFit
+        Frozen dataclass exposing the fitted ``a`` (slope) and ``b``
+        (intercept) parameters alongside a ``transform`` callable. The
+        instance itself is ``__call__``-able for back-compat with v0.11
+        and earlier (a plain ``Callable`` annotation accepts a ``PlattFit``).
 
     Raises
     ------
@@ -631,8 +677,10 @@ def fit_platt_calibrator(
     >>> rng = np.random.default_rng(42)
     >>> y = rng.integers(0, 2, size=200)
     >>> s = (y + rng.normal(0, 0.5, size=200))
-    >>> g = fit_platt_calibrator(y, s)
-    >>> out = g(s)
+    >>> fit = fit_platt_calibrator(y, s)
+    >>> isinstance(fit.a, float) and isinstance(fit.b, float)
+    True
+    >>> out = fit(s)  # __call__ delegates to transform
     >>> bool(out.min() > 0.0 and out.max() < 1.0)
     True
 
@@ -654,6 +702,12 @@ def fit_platt_calibrator(
     regularization. v0.3.0 implements canonical Platt directly to match
     :class:`sklearn.calibration._SigmoidCalibration` (Lin 2007). Empirical
     delta on imbalanced data is ~1–3% ECE.
+
+    Return-type change vs eval-toolkit ≤ 0.11.0: previously returned a plain
+    ``Callable[[np.ndarray], np.ndarray]``. v0.12.0 returns a :class:`PlattFit`
+    dataclass that exposes the fitted ``(a, b)`` and delegates ``__call__``
+    to the transform. Existing callers typed as ``Callable`` keep working;
+    new callers can read ``fit.a`` / ``fit.b`` directly (no logit-probe).
 
     References
     ----------
@@ -692,7 +746,7 @@ def fit_platt_calibrator(
         out: np.ndarray = (1.0 / (1.0 + np.exp(-z))).astype(float)
         return out
 
-    return apply
+    return PlattFit(transform=apply, a=a_fit, b=b_fit)
 
 
 def fit_beta_calibrator(

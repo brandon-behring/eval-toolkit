@@ -17,6 +17,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.12.0] — 2026-05-13 — PlattFit dataclass
+
+`fit_platt_calibrator()` now returns a `PlattFit` frozen dataclass that
+exposes the fitted `(a, b)` parameters alongside the `transform` callable.
+Closes F2.2 from the V4 consumer feedback log: previous versions returned
+a plain `Callable[[np.ndarray], np.ndarray]`, forcing serialization callers
+to recover `(a, b)` by probing the closure at `s=0` and `s=1` and inverting
+the sigmoid (the "logit-probe" trick in
+`prompt-injection-v4/src/pid/orchestrate.py` `fit_platt_scaler`).
+
+**Backward-compatible**: `PlattFit.__call__` delegates to `transform`, so any
+caller annotated as `Callable[[np.ndarray], np.ndarray]` and using the
+return value as `g(scores)` continues to work unchanged. Existing tests
+exercising this pattern (`test_calibration_props.py:88,103`) all pass
+without modification.
+
+### Added
+
+- `eval_toolkit.calibration.PlattFit(transform: Callable, a: float, b: float)`
+  — frozen, slots-equipped dataclass returned from `fit_platt_calibrator`.
+  Re-exported via `__all__`; module docstring's Public surface section
+  references it inline with `fit_platt_calibrator`.
+
+### Changed
+
+- `eval_toolkit.calibration.fit_platt_calibrator` return type annotation
+  `Callable[[np.ndarray], np.ndarray]` → `PlattFit`. The transform behavior
+  is unchanged; the return wrapping happens at the final `return`.
+
+### Tests
+
+- Five new unit tests in `tests/test_calibration_unit.py`: returns
+  `PlattFit` dataclass with float `a`/`b`, `__call__` delegates to
+  `transform` (back-compat), `(a, b)` parameterize `sigmoid(a·s + b)` per
+  the closed form, frozen-dataclass write protection. The existing
+  `test_fit_platt_matches_sklearn_canonical` and property tests continue
+  to pass — they exercise the `__call__` back-compat path implicitly.
+
 ## [0.11.0] — 2026-05-13 — Maximum Calibration Error
 
 Adds `maximum_calibration_error()` as a top-level public symbol —

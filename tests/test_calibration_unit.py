@@ -11,6 +11,7 @@ import pytest
 
 from eval_toolkit.calibration import (
     CostMatrix,
+    PlattFit,
     bayes_optimal_threshold,
     fit_isotonic_calibrator,
     fit_platt_calibrator,
@@ -127,6 +128,65 @@ def test_maximum_calibration_error_ge_expected_calibration_error(
         ece = float(rc[ece_key])
         assert mce is not None
         assert mce + 1e-12 >= ece, f"strategy={strategy}: MCE {mce} < ECE {ece}"
+
+
+@pytest.mark.unit
+def test_fit_platt_returns_platt_fit_dataclass(
+    well_separated: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """v0.12.0: fit_platt_calibrator returns PlattFit, not a plain Callable.
+
+    PlattFit exposes (a, b) and delegates __call__ to transform, preserving
+    back-compat with v0.11.0 and earlier (where the return was a Callable).
+    """
+    y, s = well_separated
+    fit = fit_platt_calibrator(y, s)
+    assert isinstance(fit, PlattFit)
+    assert isinstance(fit.a, float)
+    assert isinstance(fit.b, float)
+    # Well-separated → positive slope (high score → high P)
+    assert fit.a > 0.0
+
+
+@pytest.mark.unit
+def test_platt_fit_call_delegates_to_transform(
+    well_separated: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """PlattFit.__call__(scores) === PlattFit.transform(scores) (back-compat)."""
+    y, s = well_separated
+    fit = fit_platt_calibrator(y, s)
+    test_scores = np.array([0.0, 0.3, 0.7, 1.0])
+    via_call = fit(test_scores)
+    via_transform = fit.transform(test_scores)
+    np.testing.assert_array_equal(via_call, via_transform)
+
+
+@pytest.mark.unit
+def test_platt_fit_a_b_match_sigmoid_parameterization(
+    well_separated: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """PlattFit.a, PlattFit.b parameterize sigmoid(a·s + b).
+
+    Verify the closed-form: transform(0) = σ(b) = 1/(1+exp(-b)) and
+    transform(1) = σ(a + b). Tolerance 1e-9.
+    """
+    y, s = well_separated
+    fit = fit_platt_calibrator(y, s)
+    out = fit(np.array([0.0, 1.0]))
+    expected_at_0 = 1.0 / (1.0 + np.exp(-fit.b))
+    expected_at_1 = 1.0 / (1.0 + np.exp(-(fit.a + fit.b)))
+    assert float(out[0]) == pytest.approx(expected_at_0, abs=1e-9)
+    assert float(out[1]) == pytest.approx(expected_at_1, abs=1e-9)
+
+
+@pytest.mark.unit
+def test_platt_fit_is_frozen() -> None:
+    """PlattFit is a frozen dataclass — assigning fields raises."""
+    y = np.array([0, 1, 0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8, 0.15, 0.85])
+    fit = fit_platt_calibrator(y, s)
+    with pytest.raises((AttributeError, Exception)):  # FrozenInstanceError or dataclasses-specific
+        fit.a = 0.0  # type: ignore[misc]
 
 
 @pytest.mark.unit
