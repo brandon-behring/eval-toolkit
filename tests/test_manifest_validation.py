@@ -26,14 +26,27 @@ from eval_toolkit.manifest import (
 
 
 @pytest.mark.unit
-def test_validate_source_roles_flags_duplicate_source() -> None:
+def test_validate_source_roles_allows_same_source_with_different_roles() -> None:
+    """v0.14.2 — relaxed to (source, role) uniqueness (F4.5)."""
     errors = validate_source_roles(
         [
             SourceRoleRecord(source="train_pool", role="train"),
             SourceRoleRecord(source="train_pool", role="extra"),
         ],
     )
-    assert any("duplicate source" in err for err in errors)
+    assert errors == []
+
+
+@pytest.mark.unit
+def test_validate_source_roles_flags_duplicate_source_role_pair() -> None:
+    """v0.14.2 — uniqueness is on the (source, role) pair, not just source."""
+    errors = validate_source_roles(
+        [
+            SourceRoleRecord(source="train_pool", role="train"),
+            SourceRoleRecord(source="train_pool", role="train"),
+        ],
+    )
+    assert any("duplicate (source, role) pair" in err for err in errors)
 
 
 @pytest.mark.unit

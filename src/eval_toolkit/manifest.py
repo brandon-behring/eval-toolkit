@@ -313,24 +313,41 @@ def validate_source_roles(
 
     Validation is deliberately about shape, not taxonomy. Consumers choose
     role names that fit their domain.
+
+    Uniqueness contract (relaxed in v0.14.2, closing F4.5): each
+    ``(source, role)`` pair must be unique. The same upstream ``source``
+    may appear multiple times as long as each occurrence has a distinct
+    ``role`` (e.g. the same dataset feeding both a training pool and an
+    OOD diagnostic slice). Prior versions required ``source`` to be
+    globally unique, which forced callers to synthesize per-slice source
+    names like ``notinject_train_neg_pool`` and ``notinject_ood_fpr_only``
+    just to satisfy the validator.
     """
     errors: list[str] = []
-    seen_sources: set[str] = set()
+    seen_pairs: set[tuple[str, str]] = set()
     roles_seen: set[str] = set()
     for idx, record in enumerate(source_roles):
         row = _source_role_to_dict(record)
         prefix = f"source_roles[{idx}]"
         source = row.get("source")
         role = row.get("role")
-        if not isinstance(source, str) or not source.strip():
+        source_ok = isinstance(source, str) and source.strip()
+        role_ok = isinstance(role, str) and role.strip()
+        if not source_ok:
             errors.append(f"{prefix}: source must be a non-empty string")
-        elif source in seen_sources:
-            errors.append(f"{prefix}: duplicate source {source!r}")
-        else:
-            seen_sources.add(source)
-        if not isinstance(role, str) or not role.strip():
+        if not role_ok:
             errors.append(f"{prefix}: role must be a non-empty string")
-        else:
+        if source_ok and role_ok:
+            assert isinstance(source, str)
+            assert isinstance(role, str)
+            pair = (source, role)
+            if pair in seen_pairs:
+                errors.append(
+                    f"{prefix}: duplicate (source, role) pair "
+                    f"({source!r}, {role!r})"
+                )
+            else:
+                seen_pairs.add(pair)
             roles_seen.add(role)
         n_rows = row.get("n_rows")
         if n_rows is not None and (

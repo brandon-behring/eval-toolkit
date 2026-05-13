@@ -17,6 +17,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.14.2] — 2026-05-13 — relaxed source_roles uniqueness ((source, role) pair)
+
+Closes F4.5 from the V4 consumer feedback log: ``validate_source_roles``
+relaxes its uniqueness contract from "unique ``source``" to
+"unique ``(source, role)`` pair". The same upstream source may now appear
+multiple times as long as each occurrence carries a distinct role.
+
+This unlocks the natural usage pattern of one dataset feeding multiple
+slices (training pool + OOD diagnostic, calibration + locked eval, etc.)
+without consumers having to synthesize per-slice source names just to
+satisfy the validator.
+
+### Changed
+
+- `eval_toolkit.manifest.validate_source_roles` — uniqueness is now on
+  the `(source, role)` pair. Error message wording changes from
+  ``"duplicate source"`` to ``"duplicate (source, role) pair"``.
+- `manifest.v2.json` — no schema change required (uniqueness was always
+  a producer-side contract, not a schema constraint).
+
+### Tests
+
+- 1 new unit test covering the relaxed contract (same source + different
+  roles passes).
+- 1 renamed test (`flags_duplicate_source_role_pair`) covering the
+  duplicate-pair detection. The pre-v0.14.2 test was
+  `flags_duplicate_source` and asserted on a (source) pair only.
+
 ## [0.14.1] — 2026-05-13 — explicit `git_sha` kwarg on `build_manifest`
 
 Patch release adding an opt-in override to bypass
