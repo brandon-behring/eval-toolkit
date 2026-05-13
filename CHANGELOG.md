@@ -17,6 +17,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.17.0] — 2026-05-13 — `label_aware` leakage findings
+
+Closes F6.1 from the V4 consumer feedback log. ``NearDuplicateCheck``
+and ``CrossSplitLeakageCheck`` gain a ``label_aware: bool = False``
+field and a new ``validate_label_split(splits) -> tuple[LeakageFinding,
+LeakageFinding]`` method that decomposes near-duplicate hits into
+same-label and cross-label findings with independent severities.
+
+**Backward-compatible**: the existing ``validate(splits) ->
+LeakageFinding`` single-finding contract is preserved. Callers
+explicitly opt into the dual emission by invoking
+``validate_label_split``.
+
+Motivation: within-split near-duplicate pairs that share a label are a
+mild label-noise signal; pairs with opposing labels are conflicting
+supervision (catastrophic for training). Cross-split near-duplicates
+that share a label are a memorization signal; opposing-label matches
+are memorization + supervision conflict. Treating the two cases
+identically (single severity) loses signal.
+
+### Added
+
+- `NearDuplicateCheck.label_aware: bool` (default `False`),
+  `severity_same_label: Severity` (default `"warning"`),
+  `severity_cross_label: Severity` (default `"error"`).
+- `NearDuplicateCheck.validate_label_split(splits) -> tuple[
+  LeakageFinding, LeakageFinding]` — emits `(same_label, cross_label)`
+  findings. `check_name` becomes `"NearDuplicateCheck.same_label"` /
+  `"NearDuplicateCheck.cross_label"`; evidence carries `label_polarity`.
+- `CrossSplitLeakageCheck.label_aware: bool` (default `False`),
+  `severity_same_label`, `severity_cross_label` — same shape.
+- `CrossSplitLeakageCheck.validate_label_split(splits)` — same dual
+  emission, splitting by matched train neighbor's label.
+- `eval_toolkit.text_dedup.cross_dedup_pairs(train_texts, eval_texts,
+  threshold, k_neighbors, *, strategy) -> list[tuple[int, int, float]]`
+  — exposes the `(eval_idx, train_idx, similarity)` tuples backing
+  `cross_dedup`. Required for the label-aware cross-split decomposition.
+
+### Tests
+
+- 5 new unit tests covering the dual emission (same/cross-label
+  separation), default severities, single-finding back-compat, and
+  `cross_dedup_pairs` shape.
+
 ## [0.16.0] — 2026-05-13 — `jsonschema` promoted to a hard dependency
 
 Closes F9.1 from the V4 consumer feedback log. Schema validation is the

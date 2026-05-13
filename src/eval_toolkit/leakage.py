@@ -51,6 +51,7 @@ from eval_toolkit.text_dedup import (
     SimilarityStrategy,
     TfidfCosineStrategy,
     cross_dedup,
+    cross_dedup_pairs,
     near_dedup,
     sha256_text,
 )
@@ -327,12 +328,29 @@ class NearDuplicateCheck:
         Splits to scan. ``None`` = all.
     severity : {"error", "warning", "info"}, optional
         Default ``"warning"``.
+    label_aware : bool, optional
+        When ``True``, :meth:`validate_label_split` emits two findings per
+        check — one for same-label pairs and one for cross-label pairs —
+        with their own severities (see ``severity_same_label`` /
+        ``severity_cross_label``). Cross-label near-duplicates within a
+        split are a label-noise signal (the same text carries conflicting
+        supervision) and typically warrant a stricter severity. Default
+        ``False`` preserves the single-finding contract.
+    severity_same_label : {"error", "warning", "info"}, optional
+        Severity for the same-label finding when ``label_aware=True``.
+        Default ``"warning"``.
+    severity_cross_label : {"error", "warning", "info"}, optional
+        Severity for the cross-label finding when ``label_aware=True``.
+        Default ``"error"``.
     """
 
     threshold: float = DEFAULT_DEDUP_THRESHOLD
     strategy: SimilarityStrategy | None = None
     target_splits: Sequence[str] | None = None
     severity: Severity = "warning"
+    label_aware: bool = False
+    severity_same_label: Severity = "warning"
+    severity_cross_label: Severity = "error"
 
     @property
     def name(self) -> str:
@@ -374,6 +392,85 @@ class NearDuplicateCheck:
             ),
             n_affected=n_affected,
         )
+
+    def validate_label_split(
+        self, splits: Mapping[str, EvalSlice]
+    ) -> tuple[LeakageFinding, LeakageFinding]:
+        """Emit (same_label, cross_label) findings for the label-aware mode.
+
+        Pairs each near-duplicate pair within a split by whether the two
+        ends share the slice's ``y_true`` label. Requires the slice to
+        carry binary labels (eval-toolkit's standard EvalSlice contract).
+        Always available regardless of ``label_aware`` value — callers
+        opt in by invoking this method rather than :meth:`validate`.
+        """
+        targets = _select_targets(splits, self.target_splits)
+        active = self.strategy if self.strategy is not None else TfidfCosineStrategy()
+        same_drop: dict[str, list[int]] = {}
+        cross_drop: dict[str, list[int]] = {}
+        same_pairs_by_split: dict[str, list[tuple[int, int, float]]] = {}
+        cross_pairs_by_split: dict[str, list[tuple[int, int, float]]] = {}
+        n_same = 0
+        n_cross = 0
+        for split_name in targets:
+            slice_ = splits[split_name]
+            texts = slice_.features
+            if len(texts) <= 1:
+                continue
+            labels = slice_.y_true
+            report = near_dedup(texts, threshold=self.threshold, strategy=active)
+            same_pairs: list[tuple[int, int, float]] = []
+            cross_pairs: list[tuple[int, int, float]] = []
+            for i, j, sim in report.dropped_pairs:
+                if labels[i] == labels[j]:
+                    same_pairs.append((i, j, sim))
+                else:
+                    cross_pairs.append((i, j, sim))
+            if same_pairs:
+                same_drop[split_name] = sorted({p[0] for p in same_pairs})
+                same_pairs_by_split[split_name] = same_pairs
+                n_same += len(same_drop[split_name])
+            if cross_pairs:
+                cross_drop[split_name] = sorted({p[0] for p in cross_pairs})
+                cross_pairs_by_split[split_name] = cross_pairs
+                n_cross += len(cross_drop[split_name])
+        same_finding = LeakageFinding(
+            check_name=f"{self.name}.same_label",
+            severity=self.severity_same_label,
+            drop_indices=same_drop,
+            evidence={
+                "threshold": self.threshold,
+                "strategy": type(active).__name__,
+                "dropped_pairs_by_split": same_pairs_by_split,
+                "label_polarity": "same",
+            },
+            message=(
+                f"same-label near-duplicates affected {n_same} rows "
+                f"(threshold={self.threshold:.2f})"
+                if n_same
+                else f"no same-label near-duplicates above threshold={self.threshold:.2f}"
+            ),
+            n_affected=n_same,
+        )
+        cross_finding = LeakageFinding(
+            check_name=f"{self.name}.cross_label",
+            severity=self.severity_cross_label,
+            drop_indices=cross_drop,
+            evidence={
+                "threshold": self.threshold,
+                "strategy": type(active).__name__,
+                "dropped_pairs_by_split": cross_pairs_by_split,
+                "label_polarity": "cross",
+            },
+            message=(
+                f"cross-label near-duplicates affected {n_cross} rows "
+                f"(threshold={self.threshold:.2f}) — label-conflict signal"
+                if n_cross
+                else f"no cross-label near-duplicates above threshold={self.threshold:.2f}"
+            ),
+            n_affected=n_cross,
+        )
+        return same_finding, cross_finding
 
 
 @dataclass(frozen=True, slots=True)
@@ -536,6 +633,18 @@ class CrossSplitLeakageCheck:
         Backend. ``None`` instantiates :class:`TfidfCosineStrategy`.
     severity : {"error", "warning", "info"}, optional
         Default ``"error"``.
+    label_aware : bool, optional
+        When ``True``, :meth:`validate_label_split` emits two findings — one
+        for eval rows whose matched train neighbor shares the eval row's
+        label (same-label leakage = memorization risk) and one for
+        cross-label matches (supervision conflict + memorization). Default
+        ``False`` preserves the single-finding contract.
+    severity_same_label : {"error", "warning", "info"}, optional
+        Severity for the same-label finding when ``label_aware=True``.
+        Default ``"warning"``.
+    severity_cross_label : {"error", "warning", "info"}, optional
+        Severity for the cross-label finding when ``label_aware=True``.
+        Default ``"error"``.
     """
 
     train_split: str = "train"
@@ -543,6 +652,9 @@ class CrossSplitLeakageCheck:
     threshold: float = DEFAULT_DEDUP_THRESHOLD
     strategy: SimilarityStrategy | None = None
     severity: Severity = "error"
+    label_aware: bool = False
+    severity_same_label: Severity = "warning"
+    severity_cross_label: Severity = "error"
 
     @property
     def name(self) -> str:
@@ -597,6 +709,106 @@ class CrossSplitLeakageCheck:
             ),
             n_affected=n_affected,
         )
+
+    def validate_label_split(
+        self, splits: Mapping[str, EvalSlice]
+    ) -> tuple[LeakageFinding, LeakageFinding]:
+        """Emit (same_label, cross_label) findings for cross-split leakage.
+
+        Pairs each cross-split near-duplicate by whether the matched train
+        and eval rows carry the same label. Uses
+        :func:`cross_dedup_pairs` (v0.17.0) so the train-side index of each
+        match is preserved. Same-label = memorization risk; cross-label =
+        supervision conflict + memorization.
+        """
+        if self.train_split not in splits:
+            raise KeyError(f"train_split {self.train_split!r} not in splits")
+        eval_targets = (
+            list(self.eval_splits)
+            if self.eval_splits is not None
+            else [k for k in splits if k != self.train_split]
+        )
+        train_slice = splits[self.train_split]
+        train_texts = train_slice.features
+        train_labels = train_slice.y_true
+        active = self.strategy if self.strategy is not None else TfidfCosineStrategy()
+        same_drop: dict[str, list[int]] = {}
+        cross_drop: dict[str, list[int]] = {}
+        same_pairs_by_split: dict[str, list[tuple[int, int, float]]] = {}
+        cross_pairs_by_split: dict[str, list[tuple[int, int, float]]] = {}
+        n_same = 0
+        n_cross = 0
+        for eval_name in eval_targets:
+            if eval_name not in splits:
+                raise KeyError(f"eval split {eval_name!r} not in splits")
+            eval_slice = splits[eval_name]
+            eval_texts = eval_slice.features
+            eval_labels = eval_slice.y_true
+            if not train_texts or not eval_texts:
+                continue
+            pairs = cross_dedup_pairs(
+                train_texts,
+                eval_texts,
+                threshold=self.threshold,
+                strategy=active,
+            )
+            same_pairs: list[tuple[int, int, float]] = []
+            cross_pairs: list[tuple[int, int, float]] = []
+            for eval_idx, train_idx, sim in pairs:
+                if eval_labels[eval_idx] == train_labels[train_idx]:
+                    same_pairs.append((eval_idx, train_idx, sim))
+                else:
+                    cross_pairs.append((eval_idx, train_idx, sim))
+            if same_pairs:
+                same_drop[eval_name] = sorted({p[0] for p in same_pairs})
+                same_pairs_by_split[eval_name] = same_pairs
+                n_same += len(same_drop[eval_name])
+            if cross_pairs:
+                cross_drop[eval_name] = sorted({p[0] for p in cross_pairs})
+                cross_pairs_by_split[eval_name] = cross_pairs
+                n_cross += len(cross_drop[eval_name])
+        evidence_base: dict[str, object] = {
+            "train_split": self.train_split,
+            "eval_splits": eval_targets,
+            "threshold": self.threshold,
+            "strategy": type(active).__name__,
+        }
+        same_finding = LeakageFinding(
+            check_name=f"{self.name}.same_label",
+            severity=self.severity_same_label,
+            drop_indices=same_drop,
+            evidence={
+                **evidence_base,
+                "pairs_by_split": same_pairs_by_split,
+                "label_polarity": "same",
+            },
+            message=(
+                f"same-label cross-split leakage: {n_same} eval rows near-duplicate "
+                f"to {self.train_split!r} sharing label (threshold={self.threshold:.2f})"
+                if n_same
+                else f"no same-label cross-split leakage above threshold={self.threshold:.2f}"
+            ),
+            n_affected=n_same,
+        )
+        cross_finding = LeakageFinding(
+            check_name=f"{self.name}.cross_label",
+            severity=self.severity_cross_label,
+            drop_indices=cross_drop,
+            evidence={
+                **evidence_base,
+                "pairs_by_split": cross_pairs_by_split,
+                "label_polarity": "cross",
+            },
+            message=(
+                f"cross-label cross-split leakage: {n_cross} eval rows near-duplicate "
+                f"to {self.train_split!r} with opposing label "
+                f"(threshold={self.threshold:.2f}) — supervision conflict"
+                if n_cross
+                else f"no cross-label cross-split leakage above threshold={self.threshold:.2f}"
+            ),
+            n_affected=n_cross,
+        )
+        return same_finding, cross_finding
 
 
 @dataclass(frozen=True, slots=True)

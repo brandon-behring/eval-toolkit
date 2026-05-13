@@ -74,6 +74,7 @@ __all__ = [
     "TfidfCosineStrategy",
     "audit_source_label_similarity",
     "cross_dedup",
+    "cross_dedup_pairs",
     "near_dedup",
     "normalize_text_for_dedup",
     "sha256_text",
@@ -1269,6 +1270,46 @@ def _similarity_relation(
     if not same_source and same_label:
         return "cross_source_same_label"
     return "cross_source_cross_label"
+
+
+def cross_dedup_pairs(
+    train_texts: list[str],
+    eval_texts: list[str],
+    threshold: float = DEFAULT_DEDUP_THRESHOLD,
+    k_neighbors: int = 20,
+    *,
+    strategy: SimilarityStrategy | None = None,
+) -> list[tuple[int, int, float]]:
+    """Return all (eval_idx, train_idx, similarity) tuples at or above threshold.
+
+    Companion to :func:`cross_dedup` that exposes the matched train neighbor
+    indices instead of only the eval-side keep set. Used by
+    :class:`eval_toolkit.leakage.CrossSplitLeakageCheck` in
+    ``label_aware`` mode (v0.17.0) to split near-duplicate hits into
+    same-label and cross-label findings.
+
+    Parameters mirror :func:`cross_dedup`. Returns ``[]`` when either side
+    is empty.
+    """
+    if not 0.0 < threshold < 1.0:
+        raise ValueError(f"threshold must be in (0, 1), got {threshold}")
+    if not train_texts or not eval_texts:
+        return []
+    active_strategy: SimilarityStrategy = (
+        strategy if strategy is not None else TfidfCosineStrategy()
+    )
+    similarities, indices = active_strategy.pairs_across(
+        eval_texts, train_texts, k_neighbors
+    )
+    if similarities.size == 0:
+        return []
+    out: list[tuple[int, int, float]] = []
+    for eval_idx in range(similarities.shape[0]):
+        for col in range(similarities.shape[1]):
+            sim = float(similarities[eval_idx, col])
+            if sim >= threshold:
+                out.append((eval_idx, int(indices[eval_idx, col]), sim))
+    return out
 
 
 def cross_dedup(
