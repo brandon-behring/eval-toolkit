@@ -36,10 +36,12 @@ from eval_toolkit.harness import EvalSlice
 __all__ = [
     "GroupKFoldSplitter",
     "HoldoutSplitter",
+    "PoolBuilder",
     "SourceDisjointKFoldSplitter",
     "Splitter",
     "StratifiedKFoldSplitter",
     "TimeSeriesSplitter",
+    "iter_folds_with_pool",
 ]
 
 
@@ -381,6 +383,119 @@ class TimeSeriesSplitter:
     def get_n_splits(self, slice_: EvalSlice) -> int:
         """Return ``self.k``."""
         return self.k
+
+
+# ---------------------------------------------------------------------------
+# PoolBuilder Protocol + iter_folds_with_pool composition (v0.19.0)
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class PoolBuilder(Protocol):
+    """Augment a fold's train slice with an external pool and split off val.
+
+    Composes with :class:`Splitter`: the Splitter produces a fold's
+    ``{"train", "test"}``; the PoolBuilder enriches ``train`` (typically
+    by injecting an external negative pool or a domain-specific corpus)
+    and carves a ``val`` slice off the augmented training set.
+
+    Implementations carry their pool state in instance attributes so the
+    composition helper :func:`iter_folds_with_pool` can be configured
+    once outside the fold loop.
+    """
+
+    def build(  # pragma: no cover
+        self,
+        train: EvalSlice,
+        *,
+        fold_idx: int,
+    ) -> dict[str, EvalSlice]:
+        """Return at least ``{"train": ..., "val": ...}`` for this fold.
+
+        The original ``test`` slice from the Splitter is reattached by
+        :func:`iter_folds_with_pool`. Implementations may return additional
+        keys (e.g. ``"calibration"``) which the helper forwards verbatim.
+        """
+        ...
+
+
+def iter_folds_with_pool(
+    splitter: Splitter,
+    slice_: EvalSlice,
+    *,
+    pool_builder: PoolBuilder,
+    groups: np.ndarray | None = None,
+) -> Iterator[dict[str, EvalSlice]]:
+    """Compose a :class:`Splitter` with a :class:`PoolBuilder`.
+
+    Each yielded fold-dict contains the PoolBuilder's ``train``/``val``
+    plus the Splitter's original ``test``. Additional keys returned by
+    the PoolBuilder are forwarded unchanged.
+
+    Parameters
+    ----------
+    splitter : Splitter
+        Yields per-fold ``{"train", "test"}`` (or richer) dicts.
+    slice_ : EvalSlice
+        The parent slice whose rows the splitter partitions.
+    pool_builder : PoolBuilder
+        Carved-train/val builder; sees one fold's ``train`` at a time.
+    groups : np.ndarray or None, optional
+        Forwarded to ``splitter.iter_folds`` (e.g. for
+        :class:`GroupKFoldSplitter`).
+
+    Yields
+    ------
+    dict[str, EvalSlice]
+        Per-fold dict with at minimum ``train``, ``val``, ``test``.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from eval_toolkit.harness import EvalSlice
+    >>> from eval_toolkit.splits import (
+    ...     StratifiedKFoldSplitter,
+    ...     PoolBuilder,
+    ...     iter_folds_with_pool,
+    ... )
+    >>> df = pd.DataFrame({
+    ...     "text": [f"t{i}" for i in range(20)],
+    ...     "label": [i % 2 for i in range(20)],
+    ... })
+    >>> parent = EvalSlice(name="all", df=df)
+    >>> class TrivialPool:
+    ...     def build(self, train, *, fold_idx):
+    ...         # Identity pool builder: train passes through; val carved 50/50.
+    ...         n = len(train.df)
+    ...         half = n // 2
+    ...         val_df = train.df.iloc[:half].copy()
+    ...         tr_df = train.df.iloc[half:].copy()
+    ...         return {
+    ...             "train": EvalSlice(name=f"fold{fold_idx}_train", df=tr_df),
+    ...             "val": EvalSlice(name=f"fold{fold_idx}_val", df=val_df),
+    ...         }
+    >>> folds = list(iter_folds_with_pool(
+    ...     StratifiedKFoldSplitter(k=2, seed=0),
+    ...     parent,
+    ...     pool_builder=TrivialPool(),
+    ... ))
+    >>> len(folds)
+    2
+    >>> sorted(folds[0].keys())
+    ['test', 'train', 'val']
+    """
+    for fold_idx, fold in enumerate(splitter.iter_folds(slice_, groups=groups)):
+        train = fold["train"]
+        test = fold["test"]
+        built = pool_builder.build(train, fold_idx=fold_idx)
+        if "train" not in built or "val" not in built:
+            raise ValueError(
+                "PoolBuilder.build must return at least {'train', 'val'}; "
+                f"got keys {sorted(built.keys())}"
+            )
+        # PoolBuilder's keys (train, val, possibly more) take precedence;
+        # test is reattached from the Splitter.
+        yield {**built, "test": test}
 
 
 # Suppress unused-import warnings: pd / Sequence are referenced indirectly.

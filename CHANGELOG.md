@@ -17,6 +17,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.19.0] — 2026-05-13 — `PoolBuilder` Protocol + `iter_folds_with_pool`
+
+Closes F7.1 from the V4 consumer feedback log: the `Splitter` Protocol
+alone could not express domain-specific train-pool augmentation (the
+canonical V4 pattern is "fold's positives + a stable benign pool, with
+a stratified val carve"). Splitting the responsibility into a
+``Splitter`` (rotates rows) + ``PoolBuilder`` (augments train, carves
+val) lets generic CV machinery compose with research-specific pool
+semantics.
+
+### Added
+
+- `eval_toolkit.splits.PoolBuilder` — runtime-checkable Protocol with
+  `build(train: EvalSlice, *, fold_idx: int) -> dict[str, EvalSlice]`.
+  Implementations carry pool state in instance attributes (so the
+  composition helper can configure once outside the fold loop).
+- `eval_toolkit.splits.iter_folds_with_pool(splitter, slice_, *,
+  pool_builder, groups=None) -> Iterator[dict[str, EvalSlice]]` — yields
+  per-fold dicts combining the PoolBuilder's `train`/`val` with the
+  Splitter's `test`. Additional keys returned by the PoolBuilder are
+  forwarded verbatim. Validates the contract: PoolBuilder must return
+  at least `{"train", "val"}`.
+
+### Tests
+
+- 2 new unit tests covering the happy path (composition yields
+  `{train, val, test}`) and the contract violation (PoolBuilder missing
+  `val` raises).
+- 1 doctest in `iter_folds_with_pool` exercising the trivial pool
+  pattern.
+
 ## [0.18.0] — 2026-05-13 — `LeakageFinding.drop_indices` optional
 
 Closes F6.2 from the V4 consumer feedback log. ``LeakageFinding.drop_indices``

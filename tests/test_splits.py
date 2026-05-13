@@ -14,6 +14,7 @@ from eval_toolkit.splits import (
     Splitter,
     StratifiedKFoldSplitter,
     TimeSeriesSplitter,
+    iter_folds_with_pool,
 )
 
 
@@ -109,3 +110,53 @@ def test_holdout_rejects_invalid_test_size() -> None:
         HoldoutSplitter(test_size=0.0)
     with pytest.raises(ValueError, match="test_size must be"):
         HoldoutSplitter(test_size=1.0)
+
+
+# --- v0.19.0: PoolBuilder Protocol + iter_folds_with_pool (F7.1) ---
+
+
+@pytest.mark.unit
+def test_iter_folds_with_pool_attaches_test_and_forwards_pool_keys(
+    parent_slice: EvalSlice,
+) -> None:
+    """v0.19.0 — composition helper yields {train, val, test} per fold."""
+
+    class _Pool:
+        """50/50 train/val carve from the splitter's train slice."""
+
+        def build(self, train: EvalSlice, *, fold_idx: int) -> dict[str, EvalSlice]:
+            n = len(train.df)
+            half = n // 2
+            return {
+                "train": EvalSlice(name=f"fold{fold_idx}_train", df=train.df.iloc[half:].copy()),
+                "val": EvalSlice(name=f"fold{fold_idx}_val", df=train.df.iloc[:half].copy()),
+            }
+
+    folds = list(
+        iter_folds_with_pool(
+            StratifiedKFoldSplitter(k=2, seed=0),
+            parent_slice,
+            pool_builder=_Pool(),
+        )
+    )
+    assert len(folds) == 2
+    for fold in folds:
+        assert sorted(fold.keys()) == ["test", "train", "val"]
+
+
+@pytest.mark.unit
+def test_iter_folds_with_pool_rejects_missing_val(parent_slice: EvalSlice) -> None:
+    """PoolBuilder.build must return at least train + val."""
+
+    class _BadPool:
+        def build(self, train: EvalSlice, *, fold_idx: int) -> dict[str, EvalSlice]:
+            return {"train": train}  # missing 'val'
+
+    with pytest.raises(ValueError, match="must return at least"):
+        list(
+            iter_folds_with_pool(
+                StratifiedKFoldSplitter(k=2, seed=0),
+                parent_slice,
+                pool_builder=_BadPool(),
+            )
+        )
