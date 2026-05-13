@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eval-toolkit"
-version = "0.15.0"
+version = "0.16.0"
 description = "Reusable evaluation contracts for binary classification: metrics, bootstrap CIs, calibration, artifacts, and evidence gates."
 readme = "README.md"
 license = "MIT"
@@ -38,6 +38,12 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "scikit-learn>=1.4",
+    # v0.16.0 (F9.1): jsonschema is now a hard dep so validate_manifest /
+    # validate_results / validate_prediction_artifact_ref are always
+    # available without an optional extra. Schema validation is the
+    # NeurIPS-aligned manifest contract; the optional-extra split forced
+    # consumers to install [validation] just to run the toolkit safely.
+    "jsonschema>=4.21",
 ]
 
 [project.optional-dependencies]
@@ -46,7 +52,10 @@ plotting = ["matplotlib>=3.8", "pillow>=10.0"]
 property = ["hypothesis>=6.100"]
 yaml = ["pyyaml>=6.0"]
 parquet = ["pyarrow>=15.0"]
-validation = ["jsonschema>=4.21"]
+# Retained as a transitive no-op so [eval-toolkit[validation]] / dev still
+# resolve cleanly; jsonschema is now in the base deps. Remove in v0.17.0
+# after a deprecation window if no downstream consumer complains.
+validation = []
 # `all` references the sub-extras directly (PEP 685 self-reference). This
 # avoids drift: adding a dep to e.g. `dataframe` no longer requires a
 # mirroring edit here.

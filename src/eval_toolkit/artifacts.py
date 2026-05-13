@@ -253,16 +253,12 @@ def write_json_strict(
 def validate_payload(payload: object, schema_name: str) -> None:
     """Validate a payload against a bundled schema.
 
-    ``jsonschema`` is intentionally optional at runtime. Install
-    ``eval-toolkit[validation]`` or the dev extra to use this helper.
+    ``jsonschema`` is a hard dependency since v0.16.0 (closing F9.1):
+    schema validation is the NeurIPS-aligned manifest contract, not an
+    optional polish, so consumers no longer need to install
+    ``eval-toolkit[validation]`` to use this helper.
     """
-    try:
-        from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
-    except ImportError as exc:  # pragma: no cover - exercised without optional extra
-        raise ImportError(
-            "validate_payload requires the optional validation extra: "
-            "install 'eval-toolkit[validation]'"
-        ) from exc
+    from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 
     schema_path = resources.files("eval_toolkit") / "schemas" / schema_name
     schema = json.loads(schema_path.read_text())
@@ -378,11 +374,6 @@ def validate_prediction_artifact_ref(payload: Mapping[str, object]) -> None:
     jsonschema.ValidationError
         If the payload does not conform.
     """
-    try:
-        from jsonschema import Draft202012Validator
-    except ImportError as exc:  # pragma: no cover - exercised without optional extra
-        raise ImportError(
-            "validate_prediction_artifact_ref requires the optional validation extra: "
-            "install 'eval-toolkit[validation]'"
-        ) from exc
+    from jsonschema import Draft202012Validator
+
     Draft202012Validator(_PREDICTION_ARTIFACT_REF_SCHEMA).validate(sanitize_for_json(payload))

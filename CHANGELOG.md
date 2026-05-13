@@ -17,6 +17,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.16.0] — 2026-05-13 — `jsonschema` promoted to a hard dependency
+
+Closes F9.1 from the V4 consumer feedback log. Schema validation is the
+NeurIPS-aligned manifest contract, not an optional polish; consumers
+should not need to install ``eval-toolkit[validation]`` to call
+``validate_manifest`` / ``validate_results`` / ``validate_payload``.
+
+### Changed
+
+- `jsonschema>=4.21` moved from `[project.optional-dependencies.validation]`
+  to base `[project.dependencies]`.
+- `[project.optional-dependencies.validation]` is now an empty list,
+  preserved as a transitive no-op so existing
+  `pip install eval-toolkit[validation]` invocations keep resolving. The
+  empty extra may be removed in a future minor after a deprecation
+  window.
+- `validate_payload` and `validate_prediction_artifact_ref` drop their
+  try/except `ImportError` ladders around `from jsonschema import
+  Draft202012Validator`. The "install the optional extra" `ImportError`
+  branch is gone.
+
+### Tests
+
+- Pre-existing `pytest.importorskip("jsonschema")` calls become harmless
+  no-ops; left in place for defensive intent.
+
 ## [0.15.0] — 2026-05-13 — FileHash sentinel + PredictionArtifactRef.role union
 
 Closes F5.1 (file_sha256 None ambiguity) and F5.2 (PredictionArtifactRef.role
