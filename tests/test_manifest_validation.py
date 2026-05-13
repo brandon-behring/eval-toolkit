@@ -197,14 +197,14 @@ def test_gpu_info_handles_short_csv_row() -> None:
 
 @pytest.mark.unit
 def test_gpu_info_handles_non_integer_memory() -> None:
-    """nvidia-smi with a non-integer memory column still parses but memory_gb is empty."""
+    """nvidia-smi with a non-integer memory column drops memory_gb (v0.14: was empty string)."""
     completed = subprocess.CompletedProcess(
         args=[], returncode=0, stdout="A100,not-a-number,535.86\n", stderr=""
     )
     with patch("eval_toolkit.manifest.subprocess.run", return_value=completed):
         info, cuda = gpu_info()
     assert info["name"] == "A100"
-    assert info["memory_gb"] == ""
+    assert "memory_gb" not in info  # v2: omit on parse failure (was "" in v1)
     assert cuda == "535.86"
 
 
@@ -216,8 +216,8 @@ def test_gpu_info_parses_well_formed_output() -> None:
     with patch("eval_toolkit.manifest.subprocess.run", return_value=completed):
         info, cuda = gpu_info()
     assert info["name"] == "A100"
-    assert info["count"] == "1"
-    assert info["memory_gb"] == "40.0"
+    assert info["count"] == 1  # v0.14: int (was "1" string in v1)
+    assert info["memory_gb"] == 40.0  # v0.14: float (was "40.0" string in v1)
     assert cuda == "535.86.10"
 
 

@@ -20,7 +20,10 @@ __all__ = [
     "error_metric",
     "sanitize_for_json",
     "skipped_metric",
+    "validate_manifest",
     "validate_payload",
+    "validate_prediction_artifact_ref",
+    "validate_results",
     "write_json_strict",
 ]
 
@@ -240,3 +243,112 @@ def validate_payload(payload: object, schema_name: str) -> None:
     schema_path = resources.files("eval_toolkit") / "schemas" / schema_name
     schema = json.loads(schema_path.read_text())
     Draft202012Validator(schema).validate(sanitize_for_json(payload))
+
+
+_KNOWN_MANIFEST_VERSIONS: frozenset[str] = frozenset({"v1", "v2"})
+
+
+def validate_manifest(payload: Mapping[str, object]) -> None:
+    """Validate a serialized ``RunManifest`` payload.
+
+    Dispatches on ``payload["schema_version"]`` (``"v1"`` or ``"v2"``); falls
+    back to the current default (``"v2"``) when the field is absent. Closes
+    F9.2: callers no longer pass magic schema-name strings to
+    :func:`validate_payload` and risk drift when the version bumps.
+
+    Parameters
+    ----------
+    payload : Mapping[str, object]
+        Serialized manifest dict (typically ``RunManifest.to_dict()``).
+
+    Raises
+    ------
+    ImportError
+        If the optional ``validation`` extra is not installed.
+    jsonschema.ValidationError
+        If the payload does not conform to the schema for its declared
+        ``schema_version``.
+    ValueError
+        If ``schema_version`` is set but unrecognized.
+    """
+    raw_version = payload.get("schema_version", "v2")
+    version = raw_version if isinstance(raw_version, str) else "v2"
+    if version not in _KNOWN_MANIFEST_VERSIONS:
+        raise ValueError(
+            f"unknown manifest schema_version {version!r}; "
+            f"expected one of {sorted(_KNOWN_MANIFEST_VERSIONS)}"
+        )
+    validate_payload(payload, f"manifest.{version}.json")
+
+
+def validate_results(payload: Mapping[str, object]) -> None:
+    """Validate a serialized ``RunResult`` payload against ``results.v1.json``.
+
+    Thin wrapper over :func:`validate_payload` so callers do not pass magic
+    schema-name strings (F9.2).
+    """
+    validate_payload(payload, "results.v1.json")
+
+
+_PREDICTION_ARTIFACT_REF_SCHEMA: dict[str, object] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["uri", "media_type", "columns"],
+    "properties": {
+        "uri": {"type": "string", "minLength": 1},
+        "media_type": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string"},
+        "n_rows": {"type": "integer", "minimum": 0},
+        "role": {"type": "string", "minLength": 1},
+        "metadata": {"type": "object"},
+        "columns": {
+            "type": "object",
+            "required": ["label", "score"],
+            "properties": {
+                "row_id": {"type": "string", "minLength": 1},
+                "content_hash": {"type": "string", "minLength": 1},
+                "label": {"type": "string", "minLength": 1},
+                "score": {"type": "string", "minLength": 1},
+                "scorer": {"type": "string", "minLength": 1},
+                "slice": {"type": "string", "minLength": 1},
+                "text": {"type": "string", "minLength": 1},
+                "provenance": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                },
+            },
+            "additionalProperties": True,
+        },
+    },
+    "additionalProperties": True,
+}
+
+
+def validate_prediction_artifact_ref(payload: Mapping[str, object]) -> None:
+    """Validate a single serialized :class:`PredictionArtifactRef` payload.
+
+    Mirrors the inline schema embedded in ``manifest.v2.json`` for
+    ``prediction_artifacts`` items, so callers can validate refs
+    independently of the surrounding manifest. Closes F9.2.
+
+    Parameters
+    ----------
+    payload : Mapping[str, object]
+        Serialized prediction artifact reference (typically
+        ``PredictionArtifactRef.to_dict()``).
+
+    Raises
+    ------
+    ImportError
+        If the optional ``validation`` extra is not installed.
+    jsonschema.ValidationError
+        If the payload does not conform.
+    """
+    try:
+        from jsonschema import Draft202012Validator
+    except ImportError as exc:  # pragma: no cover - exercised without optional extra
+        raise ImportError(
+            "validate_prediction_artifact_ref requires the optional validation extra: "
+            "install 'eval-toolkit[validation]'"
+        ) from exc
+    Draft202012Validator(_PREDICTION_ARTIFACT_REF_SCHEMA).validate(sanitize_for_json(payload))

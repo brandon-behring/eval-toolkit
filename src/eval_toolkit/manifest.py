@@ -22,6 +22,7 @@ deterministic and side-effect-free; :func:`write_manifest` is the sole IO sink.
 
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import json
 import platform
@@ -46,7 +47,7 @@ __all__ = [
     "write_manifest",
 ]
 
-MANIFEST_SCHEMA_VERSION = "v1"
+MANIFEST_SCHEMA_VERSION = "v2"
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +89,10 @@ class RunManifest:
     ----------
     run_id : str
         Caller-supplied run identifier (timestamp / UUID).
+    captured_at : str
+        ISO-8601 UTC timestamp captured at :func:`build_manifest` call time
+        (``"YYYY-MM-DDTHH:MM:SSZ"``). v2 field — distinguishes wall-clock
+        capture from caller-meaningful ``run_id``.
     git_sha : str or None
         Repo HEAD commit SHA. ``None`` if not in a git repo or git unavailable.
     dirty_flag : bool
@@ -97,6 +102,16 @@ class RunManifest:
     code_versions : dict[str, str]
         ``{package_name: version_string}`` for the toolkit and any caller-
         declared key dependencies (e.g. transformers, torch, sklearn).
+    data_revisions : dict[str, str]
+        ``{logical_name: revision_string}`` for input dataset and model
+        revisions. v2 field — extracts dataset/model provenance out of
+        ``code_versions`` (where it sat awkwardly with prefixes like
+        ``hf_dataset:`` and ``hf_model:`` in v1 consumers).
+    metadata : dict[str, str]
+        ``{label_name: label_value}`` for caller-supplied run-time labels
+        (CLI arguments, environment selectors, etc.). v2 field — replaces
+        the v1 pattern of stuffing labels into ``code_versions`` under a
+        ``meta:`` prefix.
     seeds : dict[str, int]
         Per-source seeds (``"global"``, ``"bootstrap"``, ``"torch"``, etc.)
         as captured by the caller.
@@ -107,9 +122,11 @@ class RunManifest:
         SHA-256 of the canonical-JSON eval config (sorted keys, no whitespace).
     env : dict[str, str]
         Environment fingerprint: Python version, platform, key dep versions.
-    gpu_info : dict[str, str]
+    gpu_info : dict[str, object]
         GPU model / count / memory captured via ``nvidia-smi`` (empty dict if
-        unavailable). NeurIPS compute-resources field.
+        unavailable). NeurIPS compute-resources field. v2 tightens
+        ``count`` to ``int`` and ``memory_gb`` to ``float``; ``name``
+        remains ``str``.
     cuda_version : str or None
         CUDA toolkit / driver version (empty if no CUDA).
     wall_clock_seconds : float or None
@@ -130,19 +147,22 @@ class RunManifest:
     prediction_artifacts : list[dict[str, object]]
         Optional references to retained prediction artifacts.
     schema_version : str
-        Manifest schema version. ``"v1"`` for v0.7.0; downstream tools
-        should gate on this.
+        Manifest schema version. ``"v2"`` starting v0.14.0; ``"v1"`` for
+        manifests written by v0.7.0–v0.13.x.
     """
 
     run_id: str
+    captured_at: str = ""
     git_sha: str | None = None
     dirty_flag: bool = False
     code_versions: dict[str, str] = field(default_factory=dict)
+    data_revisions: dict[str, str] = field(default_factory=dict)
+    metadata: dict[str, str] = field(default_factory=dict)
     seeds: dict[str, int] = field(default_factory=dict)
     data_hashes: dict[str, str] = field(default_factory=dict)
     config_hash: str = ""
     env: dict[str, str] = field(default_factory=dict)
-    gpu_info: dict[str, str] = field(default_factory=dict)
+    gpu_info: dict[str, object] = field(default_factory=dict)
     cuda_version: str | None = None
     wall_clock_seconds: float | None = None
     versioned_objects: dict[str, str] = field(default_factory=dict)
@@ -191,7 +211,7 @@ def _is_git_dirty(repo_root: Path | str | None = None) -> bool:
     return bool(result.stdout.strip())
 
 
-def gpu_info() -> tuple[dict[str, str], str | None]:
+def gpu_info() -> tuple[dict[str, object], str | None]:
     """Capture ``(gpu_info_dict, cuda_version)`` via ``nvidia-smi``.
 
     Returns ``({}, None)`` if ``nvidia-smi`` is unavailable, fails, or
@@ -200,10 +220,11 @@ def gpu_info() -> tuple[dict[str, str], str | None]:
 
     Returns
     -------
-    tuple[dict[str, str], str | None]
-        First element: ``{"name": "...", "count": "1", "memory_gb": "40.0"}``
-        or ``{}`` if no GPU. Second element: CUDA driver version string, or
-        ``None``.
+    tuple[dict[str, object], str | None]
+        First element: ``{"name": "...", "count": 1, "memory_gb": 40.0}``
+        or ``{}`` if no GPU. ``count`` is ``int`` and ``memory_gb`` is
+        ``float`` since v0.14.0 (v0.13.x and earlier returned strings).
+        Second element: CUDA driver version string, or ``None``.
     """
     try:
         result = subprocess.run(
@@ -231,18 +252,12 @@ def gpu_info() -> tuple[dict[str, str], str | None]:
     name = first_parts[0]
     memory_mb = first_parts[1]
     driver_version = first_parts[2]
+    info: dict[str, object] = {"name": name, "count": len(rows)}
     try:
-        memory_gb = f"{int(memory_mb) / 1024:.1f}"
+        info["memory_gb"] = round(int(memory_mb) / 1024, 1)
     except ValueError:
-        memory_gb = ""
-    return (
-        {
-            "name": name,
-            "count": str(len(rows)),
-            "memory_gb": memory_gb,
-        },
-        driver_version,
-    )
+        pass
+    return info, driver_version
 
 
 def _capture_env() -> dict[str, str]:
@@ -335,6 +350,11 @@ def validate_source_roles(
     return errors
 
 
+def _utc_now_iso8601() -> str:
+    """Return current UTC time as ``YYYY-MM-DDTHH:MM:SSZ`` (1-second resolution)."""
+    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def build_manifest(
     *,
     run_id: str,
@@ -342,6 +362,8 @@ def build_manifest(
     data_files: Mapping[str, Path | str] | None = None,
     seeds: Mapping[str, int] | None = None,
     extra_code_versions: Mapping[str, str] | None = None,
+    data_revisions: Mapping[str, str] | None = None,
+    metadata: Mapping[str, str] | None = None,
     versioned: Sequence[object] | Mapping[str, object] | None = None,
     leakage_report: object | None = None,
     source_roles: Sequence[SourceRoleRecord | Mapping[str, object]] | None = None,
@@ -369,6 +391,13 @@ def build_manifest(
     extra_code_versions : Mapping[str, str] or None
         Caller-declared package versions to record alongside the auto-
         captured env (e.g. for in-repo subpackages with no PyPI version).
+    data_revisions : Mapping[str, str] or None
+        v2 — dataset / model revisions, keyed by logical name. Recommended
+        key prefixes: ``"hf_dataset:<name>"`` and ``"hf_model:<name>"``.
+    metadata : Mapping[str, str] or None
+        v2 — caller-supplied run-time labels (CLI arguments, environment
+        selectors, etc.). Use this for non-semantic provenance that does
+        not belong in ``config`` (which feeds ``config_hash``).
     versioned : sequence of objects or Mapping[str, object] or None
         Tier-2 implementations whose ``version`` attribute should be
         captured. Mapping keys override the default class-name keying.
@@ -392,13 +421,15 @@ def build_manifest(
     Returns
     -------
     RunManifest
+        With ``captured_at`` auto-populated to the current UTC time (ISO-8601,
+        1-second resolution).
 
     Examples
     --------
     >>> from eval_toolkit.manifest import build_manifest
     >>> m = build_manifest(run_id="demo", config={"k": 5})
     >>> m.run_id, m.schema_version
-    ('demo', 'v1')
+    ('demo', 'v2')
     """
     data_hashes: dict[str, str] = {}
     if data_files:
@@ -438,9 +469,12 @@ def build_manifest(
 
     return RunManifest(
         run_id=run_id,
+        captured_at=_utc_now_iso8601(),
         git_sha=capture_git_sha(repo_root),
         dirty_flag=_is_git_dirty(repo_root),
         code_versions=code_versions,
+        data_revisions=dict(data_revisions) if data_revisions else {},
+        metadata=dict(metadata) if metadata else {},
         seeds=dict(seeds) if seeds else {},
         data_hashes=data_hashes,
         config_hash=_hash_canonical_json(dict(config)),

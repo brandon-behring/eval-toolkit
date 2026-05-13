@@ -13,7 +13,10 @@ from eval_toolkit.artifacts import (
     error_metric,
     sanitize_for_json,
     skipped_metric,
+    validate_manifest,
     validate_payload,
+    validate_prediction_artifact_ref,
+    validate_results,
     write_json_strict,
 )
 
@@ -278,3 +281,100 @@ def test_sanitize_for_json_fallback_stringifies_unknown_types() -> None:
             return "opaque-token"
 
     assert sanitize_for_json(_Opaque()) == "opaque-token"
+
+
+# --- v0.14: typed validate_* helpers (F9.2) ---
+
+
+@pytest.mark.unit
+def test_validate_manifest_dispatches_on_schema_version_v2() -> None:
+    """validate_manifest dispatches on payload['schema_version']."""
+    pytest.importorskip("jsonschema")
+    payload = {
+        "schema_version": "v2",
+        "run_id": "demo",
+        "captured_at": "2026-05-13T12:00:00Z",
+        "code_versions": {"eval_toolkit": "0.14.0"},
+        "env": {"python": "3.11"},
+    }
+    validate_manifest(payload)
+
+
+@pytest.mark.unit
+def test_validate_manifest_dispatches_on_schema_version_v1() -> None:
+    """validate_manifest still accepts legacy v1 payloads for V4.2-era reruns."""
+    pytest.importorskip("jsonschema")
+    payload = {
+        "schema_version": "v1",
+        "run_id": "legacy",
+        "code_versions": {"eval_toolkit": "0.13.0"},
+        "env": {"python": "3.11"},
+    }
+    validate_manifest(payload)
+
+
+@pytest.mark.unit
+def test_validate_manifest_rejects_unknown_schema_version() -> None:
+    """An unrecognized schema_version is an error, not a silent fall-through."""
+    payload = {
+        "schema_version": "v99",
+        "run_id": "demo",
+        "code_versions": {},
+        "env": {},
+    }
+    with pytest.raises(ValueError, match="unknown manifest schema_version"):
+        validate_manifest(payload)
+
+
+@pytest.mark.unit
+def test_validate_manifest_defaults_to_current_when_field_missing() -> None:
+    """If schema_version is absent, fall back to the current default (v2)."""
+    pytest.importorskip("jsonschema")
+    payload = {
+        "schema_version": "v2",
+        "run_id": "demo",
+        "captured_at": "2026-05-13T12:00:00Z",
+        "code_versions": {"eval_toolkit": "0.14.0"},
+        "env": {},
+    }
+    validate_manifest(payload)
+
+
+@pytest.mark.unit
+def test_validate_results_passes_for_well_formed_payload() -> None:
+    """validate_results wraps validate_payload with the results.v1 schema name."""
+    pytest.importorskip("jsonschema")
+    payload = {
+        "schema_version": "v1",
+        "run_id": "demo",
+        "config": {},
+        "by_slice": {},
+    }
+    validate_results(payload)
+
+
+@pytest.mark.unit
+def test_validate_prediction_artifact_ref_passes_for_well_formed_payload() -> None:
+    """validate_prediction_artifact_ref validates a single ref payload."""
+    pytest.importorskip("jsonschema")
+    payload = {
+        "uri": "predictions.csv",
+        "media_type": "text/csv",
+        "columns": {"label": "label", "score": "score"},
+    }
+    validate_prediction_artifact_ref(payload)
+
+
+@pytest.mark.unit
+def test_validate_prediction_artifact_ref_rejects_missing_columns() -> None:
+    """columns.label and columns.score are required."""
+    pytest.importorskip("jsonschema")
+    from jsonschema.exceptions import ValidationError
+
+    payload = {
+        "uri": "predictions.csv",
+        "media_type": "text/csv",
+        "columns": {"score": "score"},  # missing 'label'
+    }
+    with pytest.raises(ValidationError):
+        validate_prediction_artifact_ref(payload)

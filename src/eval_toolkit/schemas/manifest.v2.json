@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eval-toolkit/schemas/manifest.v2.json",
+  "version": "2",
+  "title": "eval-toolkit RunManifest (v2)",
+  "description": "Schema for run_dir/manifest.json. Produced by eval_toolkit.manifest.write_manifest. NeurIPS Reproducibility Checklist-aligned. v2 adds: captured_at (auto-populated ISO-8601 UTC); top-level data_revisions and metadata (replacing meta:/hf_*: prefixed extra_code_versions); tightened gpu_info typing (count: integer, memory_gb: number).",
+  "type": "object",
+  "required": ["schema_version", "run_id", "captured_at", "code_versions", "env"],
+  "properties": {
+    "schema_version": {
+      "const": "v2"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "captured_at": {
+      "type": "string",
+      "description": "ISO-8601 UTC timestamp captured at build_manifest() call time. Replaces meta:run_timestamp_utc abuse of extra_code_versions in v1 consumers.",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "git_sha": {
+      "type": ["string", "null"]
+    },
+    "dirty_flag": {
+      "type": "boolean",
+      "description": "True iff the working tree had uncommitted changes at run time (NeurIPS clean-replay concern)."
+    },
+    "code_versions": {
+      "type": "object",
+      "description": "{package_name: version_string} — at minimum eval_toolkit. Caller-declared key dependencies (e.g. transformers, torch, sklearn). For dataset / model revisions use data_revisions; for run-time metadata use metadata.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "data_revisions": {
+      "type": "object",
+      "description": "{logical_name: revision_string} for input dataset and model revisions. v2 addition (was crammed under extra_code_versions in v1). Recommended key prefixes: 'hf_dataset:<name>' and 'hf_model:<name>'.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "{label_name: label_value} for caller-supplied run-time labels (cli_args, environment selectors, etc.). v2 addition (was crammed under extra_code_versions in v1).",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "seeds": {
+      "type": "object",
+      "description": "{source: seed} for global / bootstrap / torch / dataloader RNGs.",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "data_hashes": {
+      "type": "object",
+      "description": "{logical_name: 'sha256:...'} for input artifacts.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "config_hash": {
+      "type": "string",
+      "description": "SHA-256 over the canonical-JSON encoding of the eval config."
+    },
+    "env": {
+      "type": "object",
+      "description": "Environment fingerprint (python, platform, key dep versions).",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "gpu_info": {
+      "type": "object",
+      "description": "{name, count, memory_gb} from nvidia-smi (empty dict if unavailable). v2 tightens count to integer and memory_gb to number.",
+      "properties": {
+        "name": {"type": "string"},
+        "count": {"type": "integer", "minimum": 0},
+        "memory_gb": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "cuda_version": {
+      "type": ["string", "null"]
+    },
+    "wall_clock_seconds": {
+      "type": ["number", "null"]
+    },
+    "versioned_objects": {
+      "type": "object",
+      "description": "{name: version} for any Tier-2 implementation exposing a `version` attribute.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "leakage_report": {
+      "type": ["object", "null"],
+      "description": "Serialized LeakageReport (or null if no leakage checks ran).",
+      "properties": {
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["check_name", "severity", "drop_indices", "evidence", "message", "n_affected"],
+            "properties": {
+              "check_name": {"type": "string"},
+              "severity": {"enum": ["error", "warning", "info"]},
+              "drop_indices": {"type": "object"},
+              "evidence": {"type": "object"},
+              "message": {"type": "string"},
+              "n_affected": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "source_roles": {
+      "type": "array",
+      "description": "Optional generic source-role metadata for data-quality and evidence audits. Recommended roles: train, calibration, locked_eval, external_diagnostic, excluded; custom roles are allowed.",
+      "items": {
+        "type": "object",
+        "required": ["source", "role"],
+        "properties": {
+          "source": {"type": "string", "minLength": 1},
+          "role": {"type": "string", "minLength": 1},
+          "n_rows": {"type": "integer", "minimum": 0},
+          "notes": {"type": "string"},
+          "metadata": {"type": "object"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "guardrails": {
+      "type": "array",
+      "description": "Optional predeclared guardrails for claim/evidence discipline.",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "prediction_artifacts": {
+      "type": "array",
+      "description": "Optional references to retained prediction artifacts.",
+      "items": {
+        "type": "object",
+        "required": ["uri", "media_type", "columns"],
+        "properties": {
+          "uri": {"type": "string", "minLength": 1},
+          "media_type": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string"},
+          "n_rows": {"type": "integer", "minimum": 0},
+          "role": {"type": "string", "minLength": 1},
+          "metadata": {"type": "object"},
+          "columns": {
+            "type": "object",
+            "required": ["label", "score"],
+            "properties": {
+              "row_id": {"type": "string", "minLength": 1},
+              "content_hash": {"type": "string", "minLength": 1},
+              "label": {"type": "string", "minLength": 1},
+              "score": {"type": "string", "minLength": 1},
+              "scorer": {"type": "string", "minLength": 1},
+              "slice": {"type": "string", "minLength": 1},
+              "text": {"type": "string", "minLength": 1},
+              "provenance": {
+                "type": "object",
+                "additionalProperties": {"type": "string"}
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

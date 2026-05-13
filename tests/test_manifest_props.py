@@ -82,10 +82,9 @@ def test_config_hash_changes_when_config_changes(config: dict[str, int]) -> None
 @pytest.mark.property
 @given(run_id=st.text(min_size=1, max_size=30))
 @settings(deadline=None, max_examples=10)
-def test_schema_version_always_v1(run_id: str) -> None:
-    """Every build_manifest result has schema_version='v1'."""
+def test_schema_version_always_current(run_id: str) -> None:
+    """Every build_manifest result has the current MANIFEST_SCHEMA_VERSION."""
     m = build_manifest(run_id=run_id, config={"k": 5})
-    assert m.schema_version == "v1"
     assert m.schema_version == MANIFEST_SCHEMA_VERSION
 
 
@@ -136,7 +135,7 @@ def test_manifest_json_round_trip(run_id: str, seeds: dict[str, int]) -> None:
         path = write_manifest(m, d)
         loaded = json.loads(path.read_text())
     assert loaded["run_id"] == run_id
-    assert loaded["schema_version"] == "v1"
+    assert loaded["schema_version"] == MANIFEST_SCHEMA_VERSION
     assert loaded["seeds"] == seeds
 
 

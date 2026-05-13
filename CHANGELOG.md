@@ -17,6 +17,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.14.0] — 2026-05-13 — manifest.v2 + typed validate_* helpers
+
+Manifest schema migrates v1 → v2 with three additive structural fixes and
+two new typed validation entry points. Closes F4.2 (auto-captured
+timestamp), F4.3 (`gpu_info.memory_gb` typing), F4.4
+(`extra_code_versions` split), and F9.2 (typed schema-validation helpers)
+from the V4 consumer feedback log.
+
+**Forward-compat**: `manifest.v1.json` ships unchanged. `validate_manifest`
+dispatches on `payload["schema_version"]`, so legacy V4.2-era manifests
+revalidate against v1; new manifests produced by `build_manifest()` carry
+`schema_version="v2"`.
+
+### Added
+
+- `manifest.v2.json` — new top-level fields `captured_at` (ISO-8601 UTC,
+  required), `data_revisions: object<string,string>`, `metadata:
+  object<string,string>`. `gpu_info.count` tightened from `string` to
+  `integer`; `gpu_info.memory_gb` from `string` to `number`. Other v1
+  fields are byte-equivalent.
+- `RunManifest.captured_at: str` — auto-populated by `build_manifest()`
+  with the current UTC time. Separates wall-clock capture from caller-
+  meaningful `run_id`.
+- `RunManifest.data_revisions: dict[str, str]` and
+  `RunManifest.metadata: dict[str, str]` — replaces the v1 pattern of
+  cramming dataset/model revisions and run-time labels into
+  `code_versions` under `hf_dataset:` / `hf_model:` / `meta:` prefixes.
+- `build_manifest(..., data_revisions=..., metadata=...)` — new kwargs.
+  Backward-compatible (defaults: empty dicts).
+- `eval_toolkit.artifacts.validate_manifest(payload)` — dispatches on
+  `payload["schema_version"]` (v1 or v2); falls back to v2 when absent;
+  raises `ValueError` on unknown versions.
+- `eval_toolkit.artifacts.validate_results(payload)` — thin wrapper over
+  `validate_payload(payload, "results.v1.json")`.
+- `eval_toolkit.artifacts.validate_prediction_artifact_ref(payload)` —
+  validates a single `PredictionArtifactRef` payload against the inline
+  schema (the same shape embedded in `manifest.v2.json` for
+  `prediction_artifacts` items). Useful for callers handing out refs
+  outside of a manifest.
+
+### Changed
+
+- `gpu_info()` now returns `dict[str, object]` where `count: int` and
+  `memory_gb: float` (was `dict[str, str]` with stringified values).
+  Caller-visible only when `nvidia-smi` is present (no behavior change on
+  CPU-only environments where it returned `{}`).
+- `RunManifest.gpu_info` field annotation widened from `dict[str, str]`
+  to `dict[str, object]` to accommodate the mixed value types.
+- `MANIFEST_SCHEMA_VERSION` bumped from `"v1"` to `"v2"`.
+- `_version.py` bumped from `0.10.0` to `0.14.0`, catching up to
+  `pyproject.toml` (the two had drifted across v0.11–v0.13; both now sync
+  on every release).
+
+### Tests
+
+- 5 new manifest-side unit tests covering `captured_at` auto-population,
+  `data_revisions` / `metadata` round-trip, default-empty behavior,
+  schema_version invariant.
+- 6 new artifacts-side unit tests covering `validate_manifest` v1 / v2
+  dispatch, unknown-version rejection, default-to-current fallback,
+  `validate_results` happy path, `validate_prediction_artifact_ref` happy
+  path + missing-columns rejection.
+- 2 new schema tests: v2 schema accepts `data_revisions`/`metadata`; v2
+  rejects string `memory_gb`; v1 schema still accepts legacy payloads.
+- 2 updated `gpu_info` tests reflecting the new int/float types.
+- Existing manifest schema tests retargeted from `manifest.v1.json` to
+  `manifest.v2.json`.
+
 ## [0.13.0] — 2026-05-13 — empty_strategy / nan_strategy kwargs
 
 Adds opt-in degenerate-input handling to the Tier-1 metric primitives and

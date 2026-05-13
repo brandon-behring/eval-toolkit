@@ -13,7 +13,12 @@ from eval_toolkit.analysis import (
     bootstrap_metric_from_predictions,
     paired_diff_from_prediction_refs,
 )
-from eval_toolkit.artifacts import PredictionArtifactRef, PredictionColumns, validate_payload
+from eval_toolkit.artifacts import (
+    PredictionArtifactRef,
+    PredictionColumns,
+    validate_manifest,
+    validate_payload,
+)
 from eval_toolkit.claims import (
     ClaimSpec,
     evaluate_claims,
@@ -159,7 +164,7 @@ def test_v09_generic_contract_roundtrip(tmp_path: Path) -> None:
     result_payload = result.to_dict()
     manifest_payload = manifest.to_dict()
     validate_payload(result_payload, "results_full.v1.json")
-    validate_payload(manifest_payload, "manifest.v1.json")
+    validate_manifest(manifest_payload)
     loaded_manifest = json.loads(write_manifest(manifest, tmp_path / "run").read_text())
     assert loaded_manifest["prediction_artifacts"][0]["n_rows"] == len(labels)
 

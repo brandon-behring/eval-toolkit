@@ -1,9 +1,13 @@
-"""Validate runtime JSON outputs against the v1 schemas in src/eval_toolkit/schemas/.
+"""Validate runtime JSON outputs against the bundled schemas in src/eval_toolkit/schemas/.
 
 A breaking change to the JSON shape without bumping ``schema_version`` fails
 this test loudly. Per-file schemas (``results.v1.json``,
-``results_full.v1.json``, ``manifest.v1.json``) live alongside the package
-so downstream consumers can pin against them.
+``results_full.v1.json``, ``manifest.v1.json``, ``manifest.v2.json``) live
+alongside the package so downstream consumers can pin against them.
+
+The manifest schema migrated v1 → v2 in v0.14.0 (adds ``captured_at``,
+``data_revisions``, ``metadata``; tightens ``gpu_info`` numeric types).
+``manifest.v1.json`` ships unchanged for legacy reruns.
 """
 
 from __future__ import annotations
@@ -31,15 +35,25 @@ def _load_schema(filename: str) -> dict:
 
 @pytest.mark.unit
 def test_schemas_exist() -> None:
-    """All three v1 schemas ship with the package."""
-    for name in ("results.v1.json", "results_full.v1.json", "manifest.v1.json"):
+    """The shipped JSON schemas (both manifest versions, results) are present."""
+    for name in (
+        "results.v1.json",
+        "results_full.v1.json",
+        "manifest.v1.json",
+        "manifest.v2.json",
+    ):
         assert (SCHEMAS_DIR / name).exists(), f"missing schema: {name}"
 
 
 @pytest.mark.unit
 def test_schemas_are_valid_json_schemas() -> None:
     """Each schema itself validates against draft 2020-12."""
-    for name in ("results.v1.json", "results_full.v1.json", "manifest.v1.json"):
+    for name in (
+        "results.v1.json",
+        "results_full.v1.json",
+        "manifest.v1.json",
+        "manifest.v2.json",
+    ):
         schema = _load_schema(name)
         # Constructor validates the schema against the meta-schema.
         Draft202012Validator(schema)
@@ -107,12 +121,12 @@ def test_results_with_claim_report_validate_against_v1_schemas() -> None:
 
 
 @pytest.mark.unit
-def test_manifest_validates_against_v1_schema() -> None:
+def test_manifest_validates_against_v2_schema() -> None:
     m = build_manifest(run_id="r", config={"k": 5})
     with tempfile.TemporaryDirectory() as d:
         path = write_manifest(m, d)
         loaded = json.loads(path.read_text())
-    schema = _load_schema("manifest.v1.json")
+    schema = _load_schema("manifest.v2.json")
     Draft202012Validator(schema).validate(loaded)
 
 
@@ -129,7 +143,7 @@ def test_manifest_with_source_roles_and_guardrails_validates() -> None:
     )
     with tempfile.TemporaryDirectory() as d:
         loaded = json.loads(write_manifest(m, d).read_text())
-    schema = _load_schema("manifest.v1.json")
+    schema = _load_schema("manifest.v2.json")
     Draft202012Validator(schema).validate(loaded)
 
 
@@ -150,5 +164,46 @@ def test_manifest_with_leakage_report_validates() -> None:
     m = build_manifest(run_id="r", config={}, leakage_report=report)
     with tempfile.TemporaryDirectory() as d:
         loaded = json.loads(write_manifest(m, d).read_text())
-    schema = _load_schema("manifest.v1.json")
+    schema = _load_schema("manifest.v2.json")
     Draft202012Validator(schema).validate(loaded)
+
+
+@pytest.mark.unit
+def test_manifest_v2_captures_data_revisions_and_metadata_in_schema() -> None:
+    """v2 schema accepts the new top-level data_revisions / metadata fields."""
+    m = build_manifest(
+        run_id="r",
+        config={},
+        data_revisions={"hf_dataset:foo": "abc", "hf_model:bar": "def"},
+        metadata={"meta:cli_args": "[]"},
+    )
+    with tempfile.TemporaryDirectory() as d:
+        loaded = json.loads(write_manifest(m, d).read_text())
+    schema = _load_schema("manifest.v2.json")
+    Draft202012Validator(schema).validate(loaded)
+    assert loaded["data_revisions"]["hf_dataset:foo"] == "abc"
+    assert loaded["metadata"]["meta:cli_args"] == "[]"
+
+
+@pytest.mark.unit
+def test_manifest_v2_schema_rejects_string_memory_gb() -> None:
+    """v2 tightens gpu_info.memory_gb from string to number."""
+    m = build_manifest(run_id="r", config={})
+    payload = m.to_dict()
+    payload["gpu_info"] = {"name": "Tesla A100", "count": 1, "memory_gb": "40.0"}
+    schema = _load_schema("manifest.v2.json")
+    with pytest.raises(Exception, match=r"memory_gb|number"):
+        Draft202012Validator(schema).validate(payload)
+
+
+@pytest.mark.unit
+def test_manifest_v1_schema_still_accepts_legacy_payloads() -> None:
+    """manifest.v1.json ships unchanged so V4.2-era runs can still re-validate."""
+    legacy_payload = {
+        "schema_version": "v1",
+        "run_id": "legacy",
+        "code_versions": {"eval_toolkit": "0.13.0"},
+        "env": {"python": "3.11.0"},
+    }
+    schema = _load_schema("manifest.v1.json")
+    Draft202012Validator(schema).validate(legacy_payload)

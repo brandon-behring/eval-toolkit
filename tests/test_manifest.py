@@ -1,8 +1,9 @@
-"""Smoke tests for the v0.7.0 RunManifest dataclass + build/write helpers."""
+"""Smoke tests for the RunManifest dataclass + build/write helpers (v2)."""
 
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -26,6 +27,41 @@ def test_build_manifest_defaults() -> None:
     assert m.run_id == "demo"
     assert m.schema_version == MANIFEST_SCHEMA_VERSION
     assert m.config_hash.startswith("sha256:")
+
+
+@pytest.mark.unit
+def test_build_manifest_auto_populates_captured_at() -> None:
+    """v2 — captured_at is auto-populated as ISO-8601 UTC at build time."""
+    m = build_manifest(run_id="demo", config={"k": 5})
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", m.captured_at), m.captured_at
+
+
+@pytest.mark.unit
+def test_build_manifest_captures_data_revisions_and_metadata() -> None:
+    """v2 — caller-supplied data_revisions and metadata land on RunManifest."""
+    m = build_manifest(
+        run_id="demo",
+        config={},
+        data_revisions={"hf_dataset:foo": "abc123", "hf_model:bar": "deadbeef"},
+        metadata={"meta:cli_args": "[\"--profile\", \"fixtures\"]"},
+    )
+    assert m.data_revisions == {"hf_dataset:foo": "abc123", "hf_model:bar": "deadbeef"}
+    assert m.metadata == {"meta:cli_args": "[\"--profile\", \"fixtures\"]"}
+
+
+@pytest.mark.unit
+def test_build_manifest_data_revisions_metadata_default_empty() -> None:
+    m = build_manifest(run_id="demo", config={})
+    assert m.data_revisions == {}
+    assert m.metadata == {}
+
+
+@pytest.mark.unit
+def test_manifest_schema_version_is_v2() -> None:
+    """v0.14.0 bumps the default schema_version from v1 to v2."""
+    assert MANIFEST_SCHEMA_VERSION == "v2"
+    m = build_manifest(run_id="demo", config={})
+    assert m.schema_version == "v2"
 
 
 @pytest.mark.unit
@@ -122,6 +158,11 @@ def test_write_manifest_roundtrip() -> None:
         loaded = json.loads(path.read_text())
         assert loaded["run_id"] == "demo"
         assert loaded["schema_version"] == MANIFEST_SCHEMA_VERSION
+        # v2 — captured_at survives the JSON round-trip
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", loaded["captured_at"])
+        # v2 — data_revisions / metadata are present (empty when not passed)
+        assert loaded["data_revisions"] == {}
+        assert loaded["metadata"] == {}
 
 
 @pytest.mark.unit
