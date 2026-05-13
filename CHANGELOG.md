@@ -26,11 +26,13 @@ re-implementing the bin-edge reshape. Companion to the existing
 
 ### Added
 
-- `eval_toolkit.plotting.reliability_diagram_data(y_true, y_score, *,
+- `eval_toolkit.calibration.reliability_diagram_data(y_true, y_score, *,
   n_bins=10, strategy="quantile") -> list[dict]`. Schema per row:
   `bin_lower`, `bin_upper`, `mean_pred`, `frac_positive`, `n`. Returns
   `[]` for degenerate slices (single-class / empty). Wraps
-  :func:`eval_toolkit.calibration.reliability_curve`.
+  :func:`eval_toolkit.calibration.reliability_curve`. Lives in
+  ``calibration`` (not ``plotting``) so consumers that don't pull in
+  matplotlib can still import it.
 
 ## [0.20.0] — 2026-05-13 — DeLong correlated-ROC variance
 
