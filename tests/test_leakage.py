@@ -334,6 +334,49 @@ def test_cross_split_leakage_check_label_split_separates_same_and_cross() -> Non
 
 
 @pytest.mark.unit
+def test_leakage_finding_accepts_none_drop_indices() -> None:
+    """v0.18.0 — drop_indices: None signals a pair-tally finding (F6.2)."""
+    from eval_toolkit.leakage import LeakageFinding
+
+    f = LeakageFinding(
+        check_name="PairCountAudit",
+        severity="warning",
+        drop_indices=None,
+        evidence={},
+        message="3 pairs above threshold",
+        n_affected=3,
+    )
+    out = f.to_dict()
+    assert out["drop_indices"] is None
+    assert out["n_affected"] == 3
+
+
+@pytest.mark.unit
+def test_leakage_finding_empty_dict_distinguishes_from_none() -> None:
+    """{} = 'check ran, no rows to drop'; None = 'check is pair-tally'."""
+    from eval_toolkit.leakage import LeakageFinding
+
+    empty = LeakageFinding(
+        check_name="X",
+        severity="info",
+        drop_indices={},
+        evidence={},
+        message="",
+        n_affected=0,
+    )
+    none = LeakageFinding(
+        check_name="X",
+        severity="info",
+        drop_indices=None,
+        evidence={},
+        message="",
+        n_affected=0,
+    )
+    assert empty.to_dict()["drop_indices"] == {}
+    assert none.to_dict()["drop_indices"] is None
+
+
+@pytest.mark.unit
 def test_cross_dedup_pairs_returns_eval_train_sim_tuples() -> None:
     """text_dedup.cross_dedup_pairs exposes the train neighbor each eval row matched."""
     from eval_toolkit.text_dedup import cross_dedup_pairs

@@ -112,8 +112,14 @@ class LeakageFinding:
     severity : {"error", "warning", "info"}
         Gating semantics for ``on_leakage="raise"``: only ``"error"``
         findings raise; warnings and info are recorded but don't fail.
-    drop_indices : dict[str, list[int]]
-        Per-split row indices the check recommends dropping.
+    drop_indices : dict[str, list[int]] or None
+        Per-split row indices the check recommends dropping. ``None``
+        (v0.18.0) signals a pair-count finding that has not localized
+        rows to drop — useful for emitters that only know
+        ``n_affected`` (e.g. V4's SHA256 disjointness audit and other
+        pair-tally audits). Distinguishes "no rows to drop because the
+        check found nothing" (``{}``) from "this check doesn't track
+        rows" (``None``).
     evidence : dict[str, object]
         Check-specific structured evidence (e.g. dropped-pairs lists,
         violating group ids, time-boundary intervals).
@@ -125,17 +131,20 @@ class LeakageFinding:
 
     check_name: str
     severity: Severity
-    drop_indices: dict[str, list[int]]
+    drop_indices: dict[str, list[int]] | None
     evidence: dict[str, object]
     message: str
     n_affected: int
 
     def to_dict(self) -> dict[str, object]:
         """JSON-serializable representation for the manifest."""
+        drop: object = (
+            dict(self.drop_indices) if self.drop_indices is not None else None
+        )
         return {
             "check_name": self.check_name,
             "severity": self.severity,
-            "drop_indices": dict(self.drop_indices),
+            "drop_indices": drop,
             "evidence": dict(self.evidence),
             "message": self.message,
             "n_affected": self.n_affected,
@@ -171,9 +180,15 @@ class LeakageReport:
         return [f for f in self.findings if f.severity == "warning" and f.n_affected > 0]
 
     def merged_drop_indices(self) -> dict[str, list[int]]:
-        """Union of all findings' ``drop_indices``, sorted, deduped per split."""
+        """Union of all findings' ``drop_indices``, sorted, deduped per split.
+
+        Skips findings whose ``drop_indices`` is ``None`` (pair-tally
+        findings that don't localize rows). See v0.18.0 changelog.
+        """
         merged: dict[str, set[int]] = defaultdict(set)
         for f in self.findings:
+            if f.drop_indices is None:
+                continue
             for split_name, idxs in f.drop_indices.items():
                 merged[split_name].update(idxs)
         return {name: sorted(idxs) for name, idxs in merged.items()}

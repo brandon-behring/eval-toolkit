@@ -17,6 +17,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.18.0] — 2026-05-13 — `LeakageFinding.drop_indices` optional
+
+Closes F6.2 from the V4 consumer feedback log. ``LeakageFinding.drop_indices``
+becomes ``dict[str, list[int]] | None``: ``None`` signals a
+pair-tally audit (the check found leakage but did not localize rows to
+drop), while ``{}`` still means "this check found nothing".
+
+V4's pre-C9 emitters wrote ``drop_indices={}`` for pair-count findings
+(SHA256 overlap counts, label-aware near-dup tallies), which is
+ambiguous against "the check ran and found no rows to drop." ``None``
+makes the distinction explicit.
+
+### Changed
+
+- `LeakageFinding.drop_indices: dict[str, list[int]] | None`.
+- `LeakageFinding.to_dict()` emits `null` when `drop_indices` is `None`
+  (RFC 8259 strict JSON; ``write_json_strict`` already handles ``None``
+  -> ``null``).
+- `manifest.v2.json`: `leakage_report.findings[*].drop_indices` is now
+  `{"type": ["object", "null"]}`. ``manifest.v1.json`` kept unchanged
+  (legacy reruns still require an object).
+
 ## [0.17.0] — 2026-05-13 — `label_aware` leakage findings
 
 Closes F6.1 from the V4 consumer feedback log. ``NearDuplicateCheck``

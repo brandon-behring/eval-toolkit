@@ -107,7 +107,7 @@
             "properties": {
               "check_name": {"type": "string"},
               "severity": {"enum": ["error", "warning", "info"]},
-              "drop_indices": {"type": "object"},
+              "drop_indices": {"type": ["object", "null"]},
               "evidence": {"type": "object"},
               "message": {"type": "string"},
               "n_affected": {"type": "integer", "minimum": 0}
