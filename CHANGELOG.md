@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.21.0] — 2026-05-13 — `reliability_diagram_data` structured rows
+
+Adds the structured-bin emitter that V4 (and other downstream consumers)
+needs for serializing reliability data to parquet / JSON without
+re-implementing the bin-edge reshape. Companion to the existing
+:func:`plot_reliability_diagram` figure renderer.
+
+### Added
+
+- `eval_toolkit.plotting.reliability_diagram_data(y_true, y_score, *,
+  n_bins=10, strategy="quantile") -> list[dict]`. Schema per row:
+  `bin_lower`, `bin_upper`, `mean_pred`, `frac_positive`, `n`. Returns
+  `[]` for degenerate slices (single-class / empty). Wraps
+  :func:`eval_toolkit.calibration.reliability_curve`.
+
 ## [0.20.0] — 2026-05-13 — DeLong correlated-ROC variance
 
 Adds DeLong's correlated-ROC ΔAUC test as a Phase 4 prep deliverable

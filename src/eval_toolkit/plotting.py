@@ -24,7 +24,7 @@ import os
 from collections.abc import Callable, Container, Iterable, Mapping
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -50,6 +50,7 @@ __all__ = [
     "plot_metric_bars",
     "plot_pr_curve",
     "plot_reliability_diagram",
+    "reliability_diagram_data",
     "plot_score_histograms",
     "save_figure",
     "set_plot_style",
@@ -441,6 +442,78 @@ def plot_pr_curve(
     _maybe_add_legend(axes)
     fig.tight_layout()
     return fig
+
+
+def reliability_diagram_data(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    n_bins: int = 10,
+    strategy: Literal["uniform", "quantile"] = "quantile",
+) -> list[dict[str, float | int]]:
+    """Structured per-bin reliability rows for serialization or plotting.
+
+    Wraps :func:`eval_toolkit.calibration.reliability_curve` and reshapes
+    its outputs into a list of bin records suitable for direct parquet /
+    JSON serialization or for handing to :func:`plot_reliability_diagram`.
+
+    Schema (each dict):
+    - ``bin_lower``, ``bin_upper`` — bin edges (float).
+    - ``mean_pred`` — mean predicted probability inside the bin.
+    - ``frac_positive`` — fraction of positives inside the bin.
+    - ``n`` — number of rows in the bin (int).
+
+    Parameters
+    ----------
+    y_true, y_score : np.ndarray
+        Binary labels and predicted probabilities.
+    n_bins : int, optional
+        Number of bins. Default 10.
+    strategy : str, optional
+        ``"quantile"`` (equal-mass; default) or ``"uniform"`` (equal-width).
+
+    Returns
+    -------
+    list[dict[str, float | int]]
+        Empty list if the slice is degenerate (single-class or empty);
+        the underlying :func:`reliability_curve` returns a ``skipped``
+        sentinel which this helper flattens to ``[]``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> y = rng.integers(0, 2, size=200)
+    >>> s = rng.uniform(0, 1, size=200)
+    >>> rows = reliability_diagram_data(y, s, n_bins=5)
+    >>> sorted(rows[0].keys())
+    ['bin_lower', 'bin_upper', 'frac_positive', 'mean_pred', 'n']
+    """
+    from eval_toolkit.calibration import reliability_curve
+
+    if len(y_true) == 0 or len(np.unique(y_true)) < 2:
+        return []
+    rc = reliability_curve(y_true, y_score, n_bins=n_bins, strategy=strategy)
+    if "skipped" in rc:
+        return []
+    prob_true = np.asarray(rc["prob_true"])
+    prob_pred = np.asarray(rc["prob_pred"])
+    bin_edges = np.asarray(rc["bin_edges"])
+    n_per_bin = np.asarray(rc["n_per_bin"])
+    rows: list[dict[str, float | int]] = []
+    for i in range(len(prob_true)):
+        lo = float(bin_edges[i])
+        hi = float(bin_edges[i + 1]) if i + 1 < len(bin_edges) else float(bin_edges[-1])
+        rows.append(
+            {
+                "bin_lower": lo,
+                "bin_upper": hi,
+                "mean_pred": float(prob_pred[i]),
+                "frac_positive": float(prob_true[i]),
+                "n": int(n_per_bin[i]),
+            }
+        )
+    return rows
 
 
 def plot_reliability_diagram(

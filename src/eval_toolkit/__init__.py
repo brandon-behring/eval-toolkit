@@ -163,6 +163,7 @@ _EXPORTS: dict[str, str] = {
     "plot_metric_bars": "eval_toolkit.plotting",
     "plot_pr_curve": "eval_toolkit.plotting",
     "plot_reliability_diagram": "eval_toolkit.plotting",
+    "reliability_diagram_data": "eval_toolkit.plotting",
     "plot_score_histograms": "eval_toolkit.plotting",
     "save_figure": "eval_toolkit.plotting",
     "set_plot_style": "eval_toolkit.plotting",
