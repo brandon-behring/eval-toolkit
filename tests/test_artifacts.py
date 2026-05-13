@@ -34,6 +34,50 @@ def test_sanitize_for_json_replaces_non_finite_numbers() -> None:
     assert sanitized["arr"][1]["status"] == "skipped"  # type: ignore[index]
 
 
+# --- v0.13: nan_strategy on sanitize_for_json ---
+
+
+@pytest.mark.unit
+def test_sanitize_for_json_nan_strategy_null_replaces_with_json_null() -> None:
+    """nan_strategy='null' returns None for non-finite values (vs default skipped dict)."""
+    payload = {"metric_a": float("nan"), "metric_b": float("inf"), "metric_c": 0.5}
+    out = sanitize_for_json(payload, nan_strategy="null")
+    assert isinstance(out, dict)
+    assert out["metric_a"] is None
+    assert out["metric_b"] is None
+    assert out["metric_c"] == 0.5
+
+
+@pytest.mark.unit
+def test_sanitize_for_json_nan_strategy_raise_surfaces_silent_bugs() -> None:
+    """nan_strategy='raise' raises ValueError on first non-finite value."""
+    with pytest.raises(ValueError, match="non-finite"):
+        sanitize_for_json(float("nan"), nan_strategy="raise")
+    with pytest.raises(ValueError, match="non-finite"):
+        sanitize_for_json({"nested": [1.0, float("inf"), 3.0]}, nan_strategy="raise")
+
+
+@pytest.mark.unit
+def test_sanitize_for_json_nan_strategy_validates_unknown() -> None:
+    with pytest.raises(ValueError, match="nan_strategy"):
+        sanitize_for_json(float("nan"), nan_strategy="invalid")  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_sanitize_for_json_nan_strategy_propagates_through_recursion() -> None:
+    """nan_strategy is threaded through nested mappings, sequences, np arrays."""
+    nested = {
+        "list": [1.0, float("nan"), 3.0],
+        "dict": {"sub": float("inf")},
+        "array": np.array([0.0, np.nan, 2.0]),
+    }
+    out = sanitize_for_json(nested, nan_strategy="null")
+    assert isinstance(out, dict)
+    assert out["list"][1] is None  # type: ignore[index]
+    assert out["dict"]["sub"] is None  # type: ignore[index]
+    assert out["array"][1] is None  # type: ignore[index]
+
+
 @pytest.mark.unit
 def test_write_json_strict_never_emits_nan_or_infinity(tmp_path) -> None:
     path = write_json_strict(

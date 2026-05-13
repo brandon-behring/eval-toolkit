@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, Literal, overload
 
 import numpy as np
 
@@ -24,6 +24,73 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+
+from eval_toolkit.artifacts import skipped_metric
+
+EmptyStrategy = Literal["raise", "return_none", "skipped_metric"]
+
+
+class _SentinelOk:
+    """Marker returned by :func:`_empty_strategy_guard` for non-degenerate input.
+
+    Distinct type so mypy can narrow the union via ``isinstance``; using
+    ``None`` would conflict with ``empty_strategy="return_none"`` returning
+    ``None`` as a real value.
+    """
+
+
+_SENTINEL_OK: Final[_SentinelOk] = _SentinelOk()
+
+
+def _empty_strategy_guard(
+    y_true: np.ndarray,
+    strategy: EmptyStrategy,
+    metric_name: str,
+    *,
+    check_single_class: bool = True,
+) -> float | None | dict[str, object] | _SentinelOk:
+    """Short-circuit return value for degenerate inputs under empty_strategy.
+
+    Returns ``_SENTINEL_OK`` if the input is non-degenerate (proceed to
+    metric computation). Otherwise returns ``None`` or a structured
+    :func:`~eval_toolkit.artifacts.skipped_metric` dict per the strategy.
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        Labels to inspect.
+    strategy : EmptyStrategy
+        How to handle empty / single-class input. ``"raise"`` is rejected here
+        — callers should fall through to the validator and sklearn call.
+    metric_name : str
+        Used in the structured reason string for ``"skipped_metric"``.
+    check_single_class : bool, optional
+        If ``True`` (default), single-class ``y_true`` is also treated as
+        degenerate. Required for AUC metrics; ``False`` for ``brier_score``
+        which is valid on single-class.
+    """
+    if strategy not in {"return_none", "skipped_metric"}:
+        raise ValueError(
+            f"empty_strategy must be one of 'raise', 'return_none', "
+            f"'skipped_metric'; got {strategy!r}"
+        )
+    y_arr = np.asarray(y_true)
+    n = int(y_arr.size)
+    if n == 0:
+        if strategy == "return_none":
+            return None
+        return skipped_metric(f"{metric_name}: empty input (n=0)", n=0)
+    if check_single_class:
+        unique = np.unique(y_arr)
+        if unique.size < 2:
+            if strategy == "return_none":
+                return None
+            return skipped_metric(
+                f"{metric_name}: single-class y_true (only {unique.tolist()})",
+                n=n,
+                unique=unique.tolist(),
+            )
+    return _SENTINEL_OK
 
 __all__ = [
     "DEFAULT_ASSUMED_PRIORS",
@@ -93,7 +160,24 @@ class ThresholdResult:
     criterion: str
 
 
-def pr_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
+@overload
+def pr_auc(
+    y_true: np.ndarray, y_score: np.ndarray, *, empty_strategy: Literal["raise"] = ...
+) -> float: ...
+@overload
+def pr_auc(
+    y_true: np.ndarray, y_score: np.ndarray, *, empty_strategy: Literal["return_none"]
+) -> float | None: ...
+@overload
+def pr_auc(
+    y_true: np.ndarray, y_score: np.ndarray, *, empty_strategy: Literal["skipped_metric"]
+) -> float | dict[str, object]: ...
+def pr_auc(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    empty_strategy: EmptyStrategy = "raise",
+) -> float | None | dict[str, object]:
     """Average precision (PR-AUC).
 
     Primary metric for rare-positive binary classification because it is
@@ -106,17 +190,28 @@ def pr_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
         Binary labels in {0, 1}.
     y_score : np.ndarray, shape (n,)
         Real-valued scores; higher means more positive.
+    empty_strategy : {"raise", "return_none", "skipped_metric"}, optional
+        How to handle degenerate input (empty array or single-class ``y_true``).
+        Default ``"raise"`` preserves pre-v0.13 behavior — the underlying
+        sklearn call raises. ``"return_none"`` short-circuits with ``None``
+        (useful for callers that emit ``None`` columns for degenerate slices).
+        ``"skipped_metric"`` returns a structured
+        :func:`~eval_toolkit.artifacts.skipped_metric` dict so callers can
+        thread the reason through JSON artifacts. Closes F1.2 from the V4
+        consumer feedback log.
 
     Returns
     -------
-    float
+    float | None | dict[str, object]
         PR-AUC ∈ [prevalence, 1]. Wraps ``sklearn.metrics.average_precision_score``.
+        With non-default ``empty_strategy``, the return type widens — see
+        overload variants.
 
     Raises
     ------
     ValueError
-        If shapes mismatch, dimensions are wrong, the input is empty, or
-        labels are not binary.
+        If shapes mismatch, dimensions are wrong, labels are not binary, or
+        the input is empty / single-class AND ``empty_strategy="raise"``.
 
     Examples
     --------
@@ -149,11 +244,32 @@ def pr_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
            informative than the ROC plot when evaluating binary classifiers
            on imbalanced datasets." PLOS ONE 10(3), 2015.
     """
+    if empty_strategy != "raise":
+        guarded = _empty_strategy_guard(y_true, empty_strategy, "pr_auc")
+        if not isinstance(guarded, _SentinelOk):
+            return guarded
     _validate_inputs(y_true, y_score)
     return float(average_precision_score(y_true, y_score))
 
 
-def roc_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
+@overload
+def roc_auc(
+    y_true: np.ndarray, y_score: np.ndarray, *, empty_strategy: Literal["raise"] = ...
+) -> float: ...
+@overload
+def roc_auc(
+    y_true: np.ndarray, y_score: np.ndarray, *, empty_strategy: Literal["return_none"]
+) -> float | None: ...
+@overload
+def roc_auc(
+    y_true: np.ndarray, y_score: np.ndarray, *, empty_strategy: Literal["skipped_metric"]
+) -> float | dict[str, object]: ...
+def roc_auc(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    empty_strategy: EmptyStrategy = "raise",
+) -> float | None | dict[str, object]:
     """ROC-AUC.
 
     Parameters
@@ -162,16 +278,21 @@ def roc_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
         Binary labels in {0, 1}.
     y_score : np.ndarray, shape (n,)
         Real-valued scores; higher means more positive.
+    empty_strategy : {"raise", "return_none", "skipped_metric"}, optional
+        Degenerate-input handling — see :func:`pr_auc` for full semantics.
+        Default ``"raise"`` preserves pre-v0.13 behavior.
 
     Returns
     -------
-    float
-        ROC-AUC ∈ [0, 1]. 0.5 = random; 1.0 = perfect ranking.
+    float | None | dict[str, object]
+        ROC-AUC ∈ [0, 1]. 0.5 = random; 1.0 = perfect ranking. With non-default
+        ``empty_strategy``, the return type widens — see overload variants.
 
     Raises
     ------
     ValueError
-        If shapes mismatch, dimensions are wrong, or labels are not binary.
+        If shapes mismatch, dimensions are wrong, labels are not binary, or
+        input is empty / single-class AND ``empty_strategy="raise"``.
 
     Examples
     --------
@@ -198,6 +319,10 @@ def roc_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
            a receiver operating characteristic (ROC) curve." Radiology 143(1),
            1982.
     """
+    if empty_strategy != "raise":
+        guarded = _empty_strategy_guard(y_true, empty_strategy, "roc_auc")
+        if not isinstance(guarded, _SentinelOk):
+            return guarded
     _validate_inputs(y_true, y_score)
     return float(roc_auc_score(y_true, y_score))
 
@@ -912,7 +1037,24 @@ def expected_calibration_error_debiased(
     return float(max(0.0, plug_in - bias))
 
 
-def brier_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
+@overload
+def brier_score(
+    y_true: np.ndarray, y_score: np.ndarray, *, empty_strategy: Literal["raise"] = ...
+) -> float: ...
+@overload
+def brier_score(
+    y_true: np.ndarray, y_score: np.ndarray, *, empty_strategy: Literal["return_none"]
+) -> float | None: ...
+@overload
+def brier_score(
+    y_true: np.ndarray, y_score: np.ndarray, *, empty_strategy: Literal["skipped_metric"]
+) -> float | dict[str, object]: ...
+def brier_score(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    empty_strategy: EmptyStrategy = "raise",
+) -> float | None | dict[str, object]:
     r"""Brier score (mean squared error between predicted probabilities and labels).
 
     Strictly proper scoring rule: minimized in expectation iff the forecast
@@ -926,18 +1068,25 @@ def brier_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
         Binary labels in {0, 1}.
     y_score : np.ndarray, shape (n,)
         Calibrated probabilities in ``[0, 1]``.
+    empty_strategy : {"raise", "return_none", "skipped_metric"}, optional
+        Empty-input handling — see :func:`pr_auc`. Note: unlike PR/ROC-AUC,
+        ``brier_score`` is well-defined on single-class slices, so the guard
+        only short-circuits on ``n=0``. Default ``"raise"`` preserves pre-v0.13
+        behavior.
 
     Returns
     -------
-    float
+    float | None | dict[str, object]
         Brier score in ``[0, 1]``. ``0`` is perfect; ``0.25`` is the
-        constant-prevalence forecast; ``1`` is maximally wrong.
+        constant-prevalence forecast; ``1`` is maximally wrong. With
+        non-default ``empty_strategy``, the return type widens — see overload
+        variants.
 
     Raises
     ------
     ValueError
-        On shape mismatch, NaN/Inf scores, non-binary labels, or scores
-        outside ``[0, 1]``.
+        On shape mismatch, NaN/Inf scores, non-binary labels, scores outside
+        ``[0, 1]``, or empty input AND ``empty_strategy="raise"``.
 
     Examples
     --------
@@ -963,6 +1112,12 @@ def brier_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
     .. [1] Brier, G. W. "Verification of forecasts expressed in terms of
            probability." Monthly Weather Review 78(1), 1950.
     """
+    if empty_strategy != "raise":
+        guarded = _empty_strategy_guard(
+            y_true, empty_strategy, "brier_score", check_single_class=False
+        )
+        if not isinstance(guarded, _SentinelOk):
+            return guarded
     _validate_inputs(y_true, y_score)
     _validate_calibrated_score(y_score)
     y = np.asarray(y_true, dtype=float)

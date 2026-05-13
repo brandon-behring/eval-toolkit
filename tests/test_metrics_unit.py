@@ -11,6 +11,7 @@ import pytest
 from sklearn.metrics import average_precision_score
 
 from eval_toolkit.metrics import (
+    brier_score,
     expected_calibration_error,
     expected_calibration_error_equal_mass,
     headline_metrics,
@@ -315,3 +316,91 @@ def test_score_distribution_summary_validates_inputs() -> None:
         score_distribution_summary(np.array([0.1, np.nan, 0.3]))
     with pytest.raises(ValueError, match="NaN"):
         score_distribution_summary(np.array([0.1, np.inf]))
+
+
+# --- v0.13: empty_strategy on pr_auc / roc_auc / brier_score ---
+
+
+@pytest.mark.unit
+def test_pr_auc_empty_strategy_default_preserves_legacy_behavior() -> None:
+    """Default empty_strategy='raise' falls through to validator + sklearn.
+
+    Empty input: _validate_inputs raises 'y_true is empty'.
+    Single-class: sklearn's roc_auc_score warns + returns nan (it does not
+    raise). The default empty_strategy must not intercept that — callers
+    relying on the warning/nan signature keep working.
+    """
+    with pytest.raises(ValueError, match="empty"):
+        pr_auc(np.array([]), np.array([]))
+    with pytest.raises(ValueError, match="empty"):
+        roc_auc(np.array([]), np.array([]))
+    # Single-class roc_auc under default: sklearn warns + returns nan
+    import warnings
+    y_single = np.zeros(10, dtype=int)
+    s = np.linspace(0.1, 0.9, 10)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        result = roc_auc(y_single, s)
+    # NaN: default empty_strategy let sklearn handle it
+    assert np.isnan(result)
+
+
+@pytest.mark.unit
+def test_pr_auc_empty_strategy_return_none() -> None:
+    """empty_strategy='return_none' short-circuits with None on degenerate input."""
+    assert pr_auc(np.array([]), np.array([]), empty_strategy="return_none") is None
+    y_single = np.zeros(10, dtype=int)
+    s = np.linspace(0.1, 0.9, 10)
+    assert pr_auc(y_single, s, empty_strategy="return_none") is None
+    assert roc_auc(y_single, s, empty_strategy="return_none") is None
+
+
+@pytest.mark.unit
+def test_pr_auc_empty_strategy_skipped_metric() -> None:
+    """empty_strategy='skipped_metric' returns structured skipped_metric dict."""
+    out_empty = pr_auc(np.array([]), np.array([]), empty_strategy="skipped_metric")
+    assert isinstance(out_empty, dict)
+    assert out_empty["status"] == "skipped"
+    assert "empty" in str(out_empty["reason"]).lower()
+    y_single = np.ones(10, dtype=int)
+    s = np.linspace(0.1, 0.9, 10)
+    out_single = pr_auc(y_single, s, empty_strategy="skipped_metric")
+    assert isinstance(out_single, dict)
+    assert out_single["status"] == "skipped"
+    assert "single-class" in str(out_single["reason"])
+
+
+@pytest.mark.unit
+def test_empty_strategy_validates() -> None:
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8])
+    with pytest.raises(ValueError, match="empty_strategy"):
+        pr_auc(np.array([]), np.array([]), empty_strategy="invalid")  # type: ignore[arg-type]
+    # Default doesn't trigger the guard; valid input doesn't trigger the guard
+    assert pr_auc(y, s) == 1.0
+
+
+@pytest.mark.unit
+def test_brier_score_empty_strategy_only_catches_empty() -> None:
+    """brier_score is valid on single-class; empty_strategy only catches n=0."""
+    # Empty → short-circuits per strategy
+    assert brier_score(np.array([]), np.array([]), empty_strategy="return_none") is None
+    # Single-class: brier_score is well-defined (e.g. all-zero predicting 0.0 = perfect)
+    y_single = np.zeros(10, dtype=int)
+    s = np.zeros(10)
+    result = brier_score(y_single, s, empty_strategy="return_none")
+    assert result == 0.0  # NOT None — brier IS valid on single-class
+
+
+@pytest.mark.unit
+def test_empty_strategy_passthrough_on_normal_input(
+    synthetic_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Non-degenerate input is unaffected by empty_strategy choice."""
+    y, s = synthetic_data
+    baseline = pr_auc(y, s)
+    assert pr_auc(y, s, empty_strategy="return_none") == baseline
+    assert pr_auc(y, s, empty_strategy="skipped_metric") == baseline
+    baseline_roc = roc_auc(y, s)
+    assert roc_auc(y, s, empty_strategy="return_none") == baseline_roc
+    assert roc_auc(y, s, empty_strategy="skipped_metric") == baseline_roc

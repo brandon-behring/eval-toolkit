@@ -17,6 +17,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.13.0] — 2026-05-13 — empty_strategy / nan_strategy kwargs
+
+Adds opt-in degenerate-input handling to the Tier-1 metric primitives and
+`sanitize_for_json`. Closes F1.2 and F4.1 from the V4 consumer feedback log:
+callers no longer need to wrap eval-toolkit primitives in `safe_*` shims to
+get `None` on empty / single-class slices, and can opt into JSON-`null` or
+loud-`raise` non-finite handling without re-implementing `sanitize_for_json`.
+
+**Backward-compatible**: all defaults (`empty_strategy="raise"`,
+`nan_strategy="skipped"`) preserve pre-v0.13 behavior. Full eval-toolkit
+test suite (1006+ tests) green without modification.
+
+### Added
+
+- `eval_toolkit.metrics.pr_auc` / `roc_auc` / `brier_score` now accept an
+  `empty_strategy: Literal["raise", "return_none", "skipped_metric"] = "raise"`
+  kwarg. `"return_none"` short-circuits with `None` on empty or single-class
+  `y_true` (for AUC metrics; only `n=0` for `brier_score` since brier is
+  valid on single-class). `"skipped_metric"` returns a structured
+  `skipped_metric` dict so the reason threads through JSON artifacts. Each
+  function has three `@overload` variants so the return-type narrows
+  correctly under each strategy.
+- `eval_toolkit.artifacts.sanitize_for_json` now accepts a
+  `nan_strategy: Literal["skipped", "null", "raise"] = "skipped"` kwarg.
+  `"null"` replaces non-finite values with JSON `null` (useful for plot
+  consumers that expect numeric-or-null). `"raise"` raises on first
+  non-finite value, surfacing scoring bugs that the default's silent
+  structured replacement would mask. `nan_strategy` is threaded through
+  recursive descent (mappings, sequences, numpy arrays, dataclasses).
+- New private helper `eval_toolkit.metrics._empty_strategy_guard` and
+  typed sentinel `_SentinelOk` for the three metric functions to share
+  the degenerate-input check logic.
+
+### Tests
+
+- 5 new metric-side unit tests covering default-raise / return_none /
+  skipped_metric branches, validator for invalid strategy values, brier's
+  asymmetric single-class handling, and pass-through on normal input.
+- 4 new artifacts-side unit tests covering nan_strategy=null,
+  nan_strategy=raise, validator for invalid strategy, and recursion
+  through nested structures.
+
 ## [0.12.0] — 2026-05-13 — PlattFit dataclass
 
 `fit_platt_calibrator()` now returns a `PlattFit` frozen dataclass that

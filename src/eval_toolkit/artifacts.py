@@ -138,31 +138,73 @@ class PredictionArtifactRef:
         return out
 
 
-def sanitize_for_json(payload: object) -> object:
+NanStrategy = Literal["skipped", "null", "raise"]
+
+
+def sanitize_for_json(
+    payload: object,
+    *,
+    nan_strategy: NanStrategy = "skipped",
+) -> object:
     """Return a strict-JSON-safe copy of ``payload``.
 
-    Non-finite floats are converted to structured skipped metric objects. This
-    keeps artifact JSON RFC 8259-compliant while preserving why a numeric value
-    could not be represented.
+    Parameters
+    ----------
+    payload : object
+        Arbitrary nested structure of primitives, mappings, sequences,
+        dataclasses, numpy scalars / arrays, or objects with ``to_dict``.
+    nan_strategy : {"skipped", "null", "raise"}, optional
+        How to handle non-finite floats (NaN / ±Inf). Default ``"skipped"``
+        replaces them with a structured
+        :func:`skipped_metric` dict (keeps the reason auditable; preserves
+        pre-v0.13 behavior). ``"null"`` replaces with JSON ``null`` (use when
+        downstream consumers expect numeric-or-null without the structured
+        sentinel). ``"raise"`` raises ``ValueError`` on first non-finite
+        value, surfacing scoring bugs that would otherwise pass silently.
+        Closes F4.1 from the V4 consumer feedback log.
+
+    Returns
+    -------
+    object
+        A nested structure that ``json.dumps(..., allow_nan=False)`` will
+        accept. RFC 8259 compliant.
+
+    Raises
+    ------
+    ValueError
+        If ``nan_strategy="raise"`` and ``payload`` contains a non-finite
+        float anywhere in the structure.
     """
     if payload is None or isinstance(payload, (str, bool, int)):
         return payload
     if isinstance(payload, float):
         if math.isfinite(payload):
             return payload
-        return skipped_metric(f"non-finite numeric value: {payload!r}")
+        if nan_strategy == "skipped":
+            return skipped_metric(f"non-finite numeric value: {payload!r}")
+        if nan_strategy == "null":
+            return None
+        if nan_strategy == "raise":
+            raise ValueError(f"non-finite numeric value: {payload!r}")
+        raise ValueError(
+            f"nan_strategy must be one of 'skipped', 'null', 'raise'; "
+            f"got {nan_strategy!r}"
+        )
     if isinstance(payload, np.generic):
-        return sanitize_for_json(payload.item())
+        return sanitize_for_json(payload.item(), nan_strategy=nan_strategy)
     if isinstance(payload, np.ndarray):
-        return sanitize_for_json(payload.tolist())
+        return sanitize_for_json(payload.tolist(), nan_strategy=nan_strategy)
     if hasattr(payload, "to_dict") and callable(payload.to_dict):
-        return sanitize_for_json(payload.to_dict())
+        return sanitize_for_json(payload.to_dict(), nan_strategy=nan_strategy)
     if dataclasses.is_dataclass(payload) and not isinstance(payload, type):
-        return sanitize_for_json(asdict(payload))
+        return sanitize_for_json(asdict(payload), nan_strategy=nan_strategy)
     if isinstance(payload, Mapping):
-        return {str(key): sanitize_for_json(value) for key, value in payload.items()}
+        return {
+            str(key): sanitize_for_json(value, nan_strategy=nan_strategy)
+            for key, value in payload.items()
+        }
     if isinstance(payload, Sequence) and not isinstance(payload, (str, bytes, bytearray)):
-        return [sanitize_for_json(value) for value in payload]
+        return [sanitize_for_json(value, nan_strategy=nan_strategy) for value in payload]
     return str(payload)
 
 
