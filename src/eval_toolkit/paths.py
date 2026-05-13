@@ -65,7 +65,7 @@ def path_for_config(
     root = Path(repo_root) if repo_root is not None else Path.cwd()
     resolved = resolve_repo_path(path, root)
     try:
-        return str(resolved.relative_to(root.resolve()))
+        return resolved.relative_to(root.resolve()).as_posix()
     except ValueError:
         return str(resolved)
 
