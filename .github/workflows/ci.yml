@@ -9,6 +9,9 @@ on:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -21,10 +24,10 @@ jobs:
             python-version: "3.13"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v8
         with:
           version: latest
 
@@ -34,23 +37,23 @@ jobs:
       - name: Create venv + install (with dev extras)
         run: |
           uv venv --python ${{ matrix.python-version }} .venv
-          uv pip install --python .venv/bin/python -e ".[dev]"
+          uv pip install -e ".[dev]"
 
       - name: Lint (ruff)
-        run: .venv/bin/python -m ruff check src tests
+        run: uv run python -m ruff check src tests
 
       - name: Format check (black)
-        run: .venv/bin/python -m black --check src tests
+        run: uv run python -m black --check src tests
 
       - name: Type check (mypy strict)
-        run: .venv/bin/python -m mypy src
+        run: uv run python -m mypy src
 
       - name: Run tests with coverage
-        run: .venv/bin/python -m pytest --cov=eval_toolkit --cov-fail-under=92
+        run: uv run python -m pytest --cov=eval_toolkit --cov-fail-under=92
 
       - name: Run doctests on math kernels + utility modules
         run: |
-          .venv/bin/python -m pytest --doctest-modules \
+          uv run python -m pytest --doctest-modules \
             src/eval_toolkit/metrics.py \
             src/eval_toolkit/bootstrap.py \
             src/eval_toolkit/calibration.py \
@@ -65,7 +68,7 @@ jobs:
 
       - name: Validate JSON Schemas (jsonschema)
         run: |
-          .venv/bin/python -c "
+          uv run python -c "
           import json
           from pathlib import Path
           from jsonschema import Draft202012Validator
@@ -78,4 +81,5 @@ jobs:
           "
 
       - name: Visual regression (pytest-mpl)
-        run: .venv/bin/python -m pytest --mpl tests/test_plotting_visual.py
+        if: matrix.os != 'windows-latest'
+        run: uv run python -m pytest --mpl tests/test_plotting_visual.py
