@@ -54,7 +54,8 @@ from eval_toolkit.bootstrap import (
     mde_from_ci,
     paired_bootstrap_diff,
 )
-from eval_toolkit.metrics import headline_metrics, pr_auc
+from eval_toolkit.calibration import PlattFit, maximum_calibration_error
+from eval_toolkit.metrics import brier_score, headline_metrics, pr_auc, roc_auc
 from eval_toolkit.operating_points import (
     FittedOperatingPoint,
     OperatingPointSpec,
@@ -62,6 +63,7 @@ from eval_toolkit.operating_points import (
     fit_operating_points,
 )
 from eval_toolkit.protocols import Scorer, SliceAwareScorer
+from eval_toolkit.thresholds import TargetFPRSelector
 
 if TYPE_CHECKING:
     from eval_toolkit.leakage import LeakageCheck
@@ -286,6 +288,100 @@ def _skipped_scorer_result(slice_: EvalSlice, reason: str) -> dict[str, object]:
     }
 
 
+def _bootstrap_auc_ci(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    metric_fn: object,
+    *,
+    n_resamples: int,
+    seed: int,
+) -> dict[str, object]:
+    """Bootstrap (low, high) CI on an AUC metric; return BootstrapCI.to_dict() or sentinel.
+
+    Mirrors :func:`evaluate_scorer_on_slice`'s existing PR-AUC bootstrap
+    logic so :func:`_evaluate_scores` can compute ROC-AUC CI on the same
+    code path (closes V4's bootstrap-roc-auc need for C11).
+    """
+    if len({int(v) for v in y_true}) < 2:
+        return skipped_metric("single-class slice; AUC CI is not meaningful")
+    if len(y_true) < 30:
+        return skipped_metric(f"n={len(y_true)} < 30")
+    try:
+        ci = bootstrap_ci(
+            y_true,
+            y_score,
+            metric_fn,  # type: ignore[arg-type]
+            n_resamples=n_resamples,
+            method="BCa",
+            seed=seed,
+        )
+        return ci.to_dict()
+    except (ValueError, RuntimeError) as exc:
+        return error_metric(str(exc))
+
+
+def _evaluate_scores(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    strata: np.ndarray | None,
+    n_resamples: int,
+    seed: int,
+    fpr_ladder: list[float] | None,
+    compute_mce: bool,
+    compute_brier: bool,
+    bootstrap_roc_auc: bool,
+) -> dict[str, object]:
+    """Compute the harness metric block for a (y_true, y_score) pair.
+
+    v0.22.0 private helper used by :func:`evaluate_scorer_on_slice` to
+    produce a single metric block. Called once with the raw scores and
+    optionally again with calibrated scores; the calibrated-side dict is
+    merged under ``*_calibrated`` keys by the public function.
+
+    Always includes the v0.7.0 baseline (headline_metrics + pr_auc_ci +
+    scores + is_single_class). Conditionally adds ``roc_auc_ci``,
+    ``tpr_at_fpr``, ``mce``, ``brier_score`` keys per kwargs.
+    """
+    metrics = headline_metrics(y_true, y_score, strata=strata)
+    is_single_class = len({int(v) for v in y_true}) == 1
+    metrics["is_single_class"] = is_single_class
+    metrics["pr_auc_ci"] = _bootstrap_auc_ci(
+        y_true, y_score, pr_auc, n_resamples=n_resamples, seed=seed
+    )
+    if bootstrap_roc_auc:
+        metrics["roc_auc_ci"] = _bootstrap_auc_ci(
+            y_true, y_score, roc_auc, n_resamples=n_resamples, seed=seed
+        )
+    if fpr_ladder is not None:
+        tpr_at_fpr: dict[str, object] = {}
+        if is_single_class:
+            for target in fpr_ladder:
+                tpr_at_fpr[f"{target}"] = None
+        else:
+            for target in fpr_ladder:
+                try:
+                    result = TargetFPRSelector(fpr=target).select(y_true, y_score)
+                    tpr_at_fpr[f"{target}"] = float(result.recall)
+                except RuntimeError:
+                    tpr_at_fpr[f"{target}"] = None
+        metrics["tpr_at_fpr"] = tpr_at_fpr
+    if compute_brier:
+        try:
+            metrics["brier_score"] = brier_score(
+                y_true, y_score, empty_strategy="return_none"
+            )
+        except (ValueError, RuntimeError) as exc:
+            metrics["brier_score"] = error_metric(str(exc))
+    if compute_mce:
+        try:
+            metrics["mce"] = maximum_calibration_error(y_true, y_score)
+        except (ValueError, RuntimeError) as exc:
+            metrics["mce"] = error_metric(str(exc))
+    metrics["scores"] = y_score.tolist()
+    return dict(metrics)
+
+
 def evaluate_scorer_on_slice(
     scorer: Scorer,
     slice_: EvalSlice,
@@ -293,6 +389,13 @@ def evaluate_scorer_on_slice(
     n_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
     seed: int = 42,
     on_scorer_error: Literal["raise", "record"] = "raise",
+    precomputed_scores: np.ndarray | None = None,
+    attack_style: str | None = None,
+    fpr_ladder: list[float] | None = None,
+    compute_mce: bool = False,
+    compute_brier: bool = False,
+    calibrator: PlattFit | None = None,
+    bootstrap_roc_auc: bool = False,
 ) -> dict[str, object]:
     """Score one scorer on one slice; return headline + bootstrap CI on PR-AUC.
 
@@ -312,6 +415,38 @@ def evaluate_scorer_on_slice(
         v0.7.0 — when ``"record"``, catch any ``Scorer.predict_proba``
         exception and return a ``{"error", "exc_type", "traceback"}`` dict
         instead of failing. Default ``"raise"`` (loud during dev/CI).
+    precomputed_scores : np.ndarray or None, optional
+        v0.22.0 — if provided, skip ``scorer.predict_proba`` and use this
+        array as ``y_score``. Shape must match ``len(slice_.df)``. Used by
+        callers that cache scores across per-slice variants (e.g. V4's
+        per-attack-style decomposition).
+    attack_style : str or None, optional
+        v0.22.0 — pass-through label that lands in the result dict's
+        ``attack_style`` key. No metric effect.
+    fpr_ladder : list[float] or None, optional
+        v0.22.0 — when set, also compute TPR at each FPR via
+        :class:`TargetFPRSelector`; emitted under ``tpr_at_fpr`` as
+        ``{str(fpr): tpr_value_or_None}``.
+    compute_mce : bool, optional
+        v0.22.0 — when True, also compute
+        :func:`maximum_calibration_error`; emitted under ``mce``.
+    compute_brier : bool, optional
+        v0.22.0 — when True, also compute :func:`brier_score`; emitted
+        under ``brier_score``.
+    calibrator : PlattFit or None, optional
+        v0.22.0 — when provided, apply to ``y_score`` to produce
+        ``y_score_calibrated``, then recompute every requested metric on
+        the calibrated scores; merged into the result under
+        ``*_calibrated`` keys (``pr_auc_calibrated``,
+        ``roc_auc_calibrated``, ``brier_score_calibrated``,
+        ``ece_calibrated``, ``mce_calibrated``, ``tpr_at_fpr_calibrated``,
+        ``scores_calibrated``, plus the ``pr_auc_ci`` /
+        ``roc_auc_ci`` companions).
+    bootstrap_roc_auc : bool, optional
+        v0.22.0 — when True (and ``n_resamples > 0`` and the slice is
+        mixed-class), also bootstrap ROC-AUC CI; emitted under
+        ``roc_auc_ci``. Default ``False`` preserves the v0.7-v0.21
+        contract (PR-AUC CI only).
 
     Returns
     -------
@@ -322,39 +457,66 @@ def evaluate_scorer_on_slice(
         — same shape downstream consumers expect, plus the error fields.
     """
     y_true = slice_.y_true
-    try:
-        y_score = scorer.predict_proba(slice_.features)
-    except Exception as exc:
-        if on_scorer_error == "raise":
-            raise
-        return {
-            "error": str(exc),
-            "error_state": error_metric(str(exc), exc_type=type(exc).__name__),
-            "exc_type": type(exc).__name__,
-            "traceback": traceback.format_exc(),
-            "n": int(len(slice_.df)),
-            "n_positive": int(y_true.sum()),
-            "scores": [],
-        }
-    metrics = headline_metrics(y_true, y_score, strata=slice_.strata)
-    is_single_class = len({int(v) for v in y_true}) == 1
-    metrics["is_single_class"] = is_single_class
-
-    if is_single_class:
-        metrics["pr_auc_ci"] = skipped_metric("single-class slice; PR-AUC is not meaningful")
-    elif len(y_true) >= 30:
-        try:
-            ci = bootstrap_ci(
-                y_true, y_score, pr_auc, n_resamples=n_resamples, method="BCa", seed=seed
+    if precomputed_scores is not None:
+        if precomputed_scores.shape != (len(slice_.df),):
+            raise ValueError(
+                f"precomputed_scores shape {precomputed_scores.shape} does not "
+                f"match slice length {len(slice_.df)}"
             )
-            metrics["pr_auc_ci"] = ci.to_dict()
-        except (ValueError, RuntimeError) as exc:
-            metrics["pr_auc_ci"] = error_metric(str(exc))
+        y_score = np.asarray(precomputed_scores)
     else:
-        metrics["pr_auc_ci"] = skipped_metric(f"n={len(y_true)} < 30")
+        try:
+            y_score = scorer.predict_proba(slice_.features)
+        except Exception as exc:
+            if on_scorer_error == "raise":
+                raise
+            err = {
+                "error": str(exc),
+                "error_state": error_metric(str(exc), exc_type=type(exc).__name__),
+                "exc_type": type(exc).__name__,
+                "traceback": traceback.format_exc(),
+                "n": int(len(slice_.df)),
+                "n_positive": int(y_true.sum()),
+                "scores": [],
+            }
+            if attack_style is not None:
+                err["attack_style"] = attack_style
+            return err
 
-    metrics["scores"] = y_score.tolist()
-    return dict(metrics)
+    metrics = _evaluate_scores(
+        y_true,
+        y_score,
+        strata=slice_.strata,
+        n_resamples=n_resamples,
+        seed=seed,
+        fpr_ladder=fpr_ladder,
+        compute_mce=compute_mce,
+        compute_brier=compute_brier,
+        bootstrap_roc_auc=bootstrap_roc_auc,
+    )
+
+    if calibrator is not None:
+        y_score_calibrated = np.asarray(calibrator(y_score))
+        calibrated = _evaluate_scores(
+            y_true,
+            y_score_calibrated,
+            strata=slice_.strata,
+            n_resamples=n_resamples,
+            seed=seed,
+            fpr_ladder=fpr_ladder,
+            compute_mce=compute_mce,
+            compute_brier=compute_brier,
+            bootstrap_roc_auc=bootstrap_roc_auc,
+        )
+        # Merge calibrated block under *_calibrated keys; preserve raw keys.
+        for k, v in calibrated.items():
+            if k in ("n", "n_positive", "is_single_class", "metric_note"):
+                continue  # invariant across raw / calibrated; skip duplicate
+            metrics[f"{k}_calibrated"] = v
+
+    if attack_style is not None:
+        metrics["attack_style"] = attack_style
+    return metrics
 
 
 def evaluate(

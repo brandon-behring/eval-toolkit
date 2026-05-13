@@ -17,6 +17,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.22.0] — 2026-05-13 — expanded `evaluate_scorer_on_slice` (C11 / F8.1)
+
+Closes F8.1 from the V4 consumer feedback log. The harness aggregator gains
+six additive kwargs so a single delegate call can replace V4's bespoke
+per-(scorer, slice, style) evaluation wrapper. Same metric primitives
+underneath (`headline_metrics`, `pr_auc`, `roc_auc`, `brier_score`,
+`maximum_calibration_error`, `TargetFPRSelector`); the value-add is
+composing them once with a clean kwarg surface.
+
+**Backward-compatible**: all v0.22 kwargs default to no-op shapes. Existing
+callers (pre-v0.22 surface) get an unchanged result dict.
+
+### Added
+
+- `evaluate_scorer_on_slice(..., precomputed_scores: np.ndarray | None = None)` —
+  skip `scorer.predict_proba` when set. Validates shape matches the slice.
+- `evaluate_scorer_on_slice(..., attack_style: str | None = None)` — pass-through
+  label; lands in the result dict under `"attack_style"`. No metric effect.
+  Threads through the error-recording path too.
+- `evaluate_scorer_on_slice(..., fpr_ladder: list[float] | None = None)` —
+  emit `tpr_at_fpr: {str(fpr): tpr | None}` via :class:`TargetFPRSelector`.
+- `evaluate_scorer_on_slice(..., compute_mce: bool = False)` — emit `mce`
+  via :func:`maximum_calibration_error`.
+- `evaluate_scorer_on_slice(..., compute_brier: bool = False)` — emit
+  `brier_score` via :func:`brier_score` (`empty_strategy="return_none"`).
+- `evaluate_scorer_on_slice(..., calibrator: PlattFit | None = None)` —
+  apply to `y_score`, recompute every requested metric on the calibrated
+  scores, merge under `*_calibrated` keys.
+- `evaluate_scorer_on_slice(..., bootstrap_roc_auc: bool = False)` — when
+  True (and `n_resamples > 0` and mixed-class), also bootstrap ROC-AUC CI;
+  emitted under `roc_auc_ci`.
+- Private helper `harness._evaluate_scores(y_true, y_score, ...)` carries
+  the metric-block construction so the calibrator path can reuse it.
+
+### Tests
+
+- New `tests/test_harness_v22.py`: 9 unit tests covering each kwarg
+  (precomputed fast-path, shape mismatch, attack_style pass-through +
+  error-path threading, fpr_ladder dict shape, compute_mce / compute_brier
+  on-off, bootstrap_roc_auc CI emission, calibrator emits `*_calibrated`
+  block, full back-compat of pre-v0.22 surface).
+
+## [0.21.1] — 2026-05-13 — relocate `reliability_diagram_data` to `calibration`
+
+Patch release. The v0.21.0 introduction placed `reliability_diagram_data`
+in `plotting.py`, which imports matplotlib at module load. Consumers
+without matplotlib (notably the prompt-injection-v4 base venv) could not
+import the helper. The function is pure data preparation (no plotting),
+so the right home is `calibration.py` next to `reliability_curve`.
+
+### Changed
+
+- `eval_toolkit.calibration.reliability_diagram_data` (was in `plotting`).
+- `__init__` lazy-export updated to point at `calibration`.
+
+No API change for matplotlib-equipped callers: same name, same shape,
+same docstring.
+
 ## [0.21.0] — 2026-05-13 — `reliability_diagram_data` structured rows
 
 Adds the structured-bin emitter that V4 (and other downstream consumers)
