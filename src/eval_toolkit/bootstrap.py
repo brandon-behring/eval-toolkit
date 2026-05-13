@@ -26,6 +26,7 @@ from typing import Final, Literal
 import numpy as np
 from scipy.stats import bootstrap as _scipy_bootstrap
 from scipy.stats import norm as _scipy_norm
+from scipy.stats import rankdata as _scipy_rankdata
 
 __all__ = [
     "DEFAULT_CONFIDENCE",
@@ -33,6 +34,7 @@ __all__ = [
     "DEFAULT_N_RESAMPLES",
     "DEFAULT_SEED",
     "BootstrapCI",
+    "DeLongResult",
     "MDEEstimate",
     "MetricFn",
     "PairedBootstrapCI",
@@ -41,6 +43,7 @@ __all__ = [
     "bootstrap_ci",
     "cross_validate_metric",
     "cv_clt_ci",
+    "delong_roc_variance",
     "mde_from_ci",
     "paired_bootstrap_diff",
     "paired_bootstrap_ece_diff",
@@ -1147,3 +1150,183 @@ def cross_validate_metric(
             f"{first_msg}"
         )
     return fold_metrics
+
+
+# ---------------------------------------------------------------------------
+# DeLong correlated-ROC ΔAUC z-test (v0.20.0)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class DeLongResult:
+    """Result of a DeLong paired ROC-AUC comparison.
+
+    Returned by :func:`delong_roc_variance`. Carries point AUCs for both
+    conditions, the variance of their difference, a two-sided ``z`` and
+    ``p_value`` against the null ``AUC_a == AUC_b``, and a 95% CI on the
+    delta.
+
+    Parameters
+    ----------
+    auc_a, auc_b : float
+        Per-condition ROC-AUC point estimates.
+    delta_auc : float
+        ``auc_a - auc_b``.
+    var : float
+        DeLong variance estimate of ``delta_auc``.
+    z : float
+        ``delta_auc / sqrt(var)`` (NaN if var is zero).
+    p_value : float
+        Two-sided p-value against ``H0: delta_auc == 0``.
+    ci_low, ci_high : float
+        95% normal-approx CI on ``delta_auc``
+        (``delta_auc ± 1.96 * sqrt(var)``).
+    """
+
+    auc_a: float
+    auc_b: float
+    delta_auc: float
+    var: float
+    z: float
+    p_value: float
+    ci_low: float
+    ci_high: float
+
+    def to_dict(self) -> dict[str, float]:
+        """JSON-serializable dict; NaN/Inf become :func:`float`."""
+        return {
+            "auc_a": self.auc_a,
+            "auc_b": self.auc_b,
+            "delta_auc": self.delta_auc,
+            "var": self.var,
+            "z": self.z,
+            "p_value": self.p_value,
+            "ci_low": self.ci_low,
+            "ci_high": self.ci_high,
+        }
+
+
+def _delong_structural(
+    pos_scores: np.ndarray, neg_scores: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """Compute Sun & Xu 2014 structural components for one condition.
+
+    Returns ``(V10, V01, auc)`` where ``V10`` is length ``m = len(pos)``,
+    ``V01`` is length ``n = len(neg)``, and ``auc = mean(V10) =
+    1 - mean(V01)``. Uses midranks (``scipy.stats.rankdata`` average
+    method) to handle ties.
+    """
+    m = len(pos_scores)
+    n = len(neg_scores)
+    if m == 0 or n == 0:
+        raise ValueError(
+            "delong_roc_variance requires at least one positive and one negative"
+        )
+    combined = np.concatenate([pos_scores, neg_scores])
+    combined_ranks = _scipy_rankdata(combined, method="average")
+    tx10 = combined_ranks[:m]
+    tx01 = combined_ranks[m:]
+    tx11 = _scipy_rankdata(pos_scores, method="average")
+    tx00 = _scipy_rankdata(neg_scores, method="average")
+    v10 = (tx10 - tx11) / n
+    v01 = 1.0 - (tx01 - tx00) / m
+    auc = float(np.mean(v10))
+    return v10, v01, auc
+
+
+def delong_roc_variance(
+    y_true: np.ndarray,
+    y_score_a: np.ndarray,
+    y_score_b: np.ndarray,
+) -> DeLongResult:
+    """DeLong's variance of the paired ROC-AUC difference.
+
+    Implements the Sun & Xu 2014 fast variant of DeLong's correlated-AUC
+    test. Returns a :class:`DeLongResult` with point AUCs, ``delta_auc``,
+    DeLong variance, z, two-sided p-value, and a 95% normal-approx CI on
+    the delta.
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        Binary labels in ``{0, 1}``. Must contain at least one of each.
+    y_score_a, y_score_b : np.ndarray
+        Scores for the two conditions on the SAME rows (paired).
+
+    Returns
+    -------
+    DeLongResult
+
+    Raises
+    ------
+    ValueError
+        If shapes mismatch, labels are not binary, or fewer than one
+        positive or negative is present.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(42)
+    >>> y = np.array([0]*50 + [1]*50)
+    >>> sa = np.concatenate([rng.normal(0, 1, 50), rng.normal(1.0, 1, 50)])
+    >>> sb = np.concatenate([rng.normal(0, 1, 50), rng.normal(1.2, 1, 50)])
+    >>> result = delong_roc_variance(y, sa, sb)
+    >>> bool(result.delta_auc <= 0)  # B is stronger
+    True
+    """
+    y_true_arr = np.asarray(y_true)
+    y_a = np.asarray(y_score_a, dtype=float)
+    y_b = np.asarray(y_score_b, dtype=float)
+    if y_true_arr.shape != y_a.shape or y_a.shape != y_b.shape:
+        raise ValueError(
+            "delong_roc_variance: y_true, y_score_a, y_score_b must share shape "
+            f"(got {y_true_arr.shape}, {y_a.shape}, {y_b.shape})"
+        )
+    unique = set(int(v) for v in np.unique(y_true_arr).tolist())
+    if not unique.issubset({0, 1}):
+        raise ValueError(
+            f"delong_roc_variance: y_true must be binary {{0, 1}}, got {unique}"
+        )
+    pos_mask = y_true_arr == 1
+    neg_mask = y_true_arr == 0
+    m = int(pos_mask.sum())
+    n = int(neg_mask.sum())
+    if m == 0 or n == 0:
+        raise ValueError(
+            "delong_roc_variance: need at least one positive and one negative "
+            f"row (got m={m}, n={n})"
+        )
+    v10_a, v01_a, auc_a = _delong_structural(y_a[pos_mask], y_a[neg_mask])
+    v10_b, v01_b, auc_b = _delong_structural(y_b[pos_mask], y_b[neg_mask])
+    delta = auc_a - auc_b
+
+    # 2x2 covariance matrices for V10 and V01 (between A and B).
+    s10 = np.cov(np.vstack([v10_a, v10_b]), ddof=1)
+    s01 = np.cov(np.vstack([v01_a, v01_b]), ddof=1)
+    # Var(AUC_A - AUC_B) = (s10[0,0] - 2*s10[0,1] + s10[1,1])/m
+    #                   + (s01[0,0] - 2*s01[0,1] + s01[1,1])/n
+    var_delta = (s10[0, 0] - 2.0 * s10[0, 1] + s10[1, 1]) / m + (
+        s01[0, 0] - 2.0 * s01[0, 1] + s01[1, 1]
+    ) / n
+    var_delta = float(max(var_delta, 0.0))  # clamp tiny negative FP noise
+
+    if var_delta == 0.0:
+        z = float("nan")
+        p_value = float("nan")
+        half_ci = 0.0
+    else:
+        se = float(np.sqrt(var_delta))
+        z = delta / se
+        p_value = 2.0 * float(1.0 - _scipy_norm.cdf(abs(z)))
+        half_ci = 1.959963984540054 * se  # 1.96 to higher precision
+
+    return DeLongResult(
+        auc_a=float(auc_a),
+        auc_b=float(auc_b),
+        delta_auc=float(delta),
+        var=var_delta,
+        z=float(z),
+        p_value=float(p_value),
+        ci_low=float(delta - half_ci),
+        ci_high=float(delta + half_ci),
+    )

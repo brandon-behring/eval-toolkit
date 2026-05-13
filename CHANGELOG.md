@@ -17,6 +17,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.20.0] — 2026-05-13 — DeLong correlated-ROC variance
+
+Adds DeLong's correlated-ROC ΔAUC test as a Phase 4 prep deliverable
+(plan §C12). Companion to ``paired_bootstrap_diff`` for cases where a
+fast closed-form variance is preferred over bootstrap resampling.
+
+### Added
+
+- `eval_toolkit.bootstrap.DeLongResult` — frozen dataclass with
+  `auc_a`, `auc_b`, `delta_auc`, `var`, `z`, `p_value`, `ci_low`,
+  `ci_high`. ``to_dict()`` for manifest serialization.
+- `eval_toolkit.bootstrap.delong_roc_variance(y_true, y_score_a,
+  y_score_b) -> DeLongResult` — Sun & Xu 2014 fast implementation
+  (midrank-based; ties handled). Returns 95% normal-approx CI on the
+  delta plus two-sided z and p-value.
+
+### Tests
+
+- 5 new unit tests: result shape, AUC matches `sklearn.roc_auc_score`
+  within 1e-8, empty-class rejection, shape-mismatch rejection,
+  large-effect p-value < 0.001.
+
 ## [0.19.0] — 2026-05-13 — `PoolBuilder` Protocol + `iter_folds_with_pool`
 
 Closes F7.1 from the V4 consumer feedback log: the `Splitter` Protocol

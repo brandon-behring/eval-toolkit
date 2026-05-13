@@ -405,3 +405,78 @@ def test_bootstrap_ci_rejects_n_resamples_zero() -> None:
     s = np.linspace(0.0, 1.0, 10)
     with pytest.raises(ValueError):
         bootstrap_ci(y, s, pr_auc, n_resamples=0, method="percentile", seed=0)
+
+
+# --- v0.20.0: DeLong correlated-ROC variance (C12) ---
+
+
+@pytest.mark.unit
+def test_delong_roc_variance_returns_result_dataclass() -> None:
+    """delong_roc_variance returns a DeLongResult with the expected fields."""
+    from eval_toolkit.bootstrap import DeLongResult, delong_roc_variance
+
+    rng = np.random.default_rng(42)
+    y = np.array([0] * 50 + [1] * 50)
+    sa = np.concatenate([rng.normal(0.0, 1.0, 50), rng.normal(1.0, 1.0, 50)])
+    sb = np.concatenate([rng.normal(0.0, 1.0, 50), rng.normal(0.5, 1.0, 50)])
+    result = delong_roc_variance(y, sa, sb)
+    assert isinstance(result, DeLongResult)
+    assert 0.5 < result.auc_a < 1.0
+    assert 0.5 < result.auc_b < 1.0
+    assert result.var > 0.0
+    assert result.ci_low <= result.delta_auc <= result.ci_high
+
+
+@pytest.mark.unit
+def test_delong_roc_variance_auc_matches_sklearn() -> None:
+    """AUC point estimates agree with sklearn.metrics.roc_auc_score within 1e-8."""
+    from sklearn.metrics import roc_auc_score
+
+    from eval_toolkit.bootstrap import delong_roc_variance
+
+    rng = np.random.default_rng(7)
+    y = np.array([0] * 30 + [1] * 30)
+    sa = np.concatenate([rng.normal(0.0, 1.0, 30), rng.normal(1.0, 1.0, 30)])
+    sb = np.concatenate([rng.normal(0.0, 1.0, 30), rng.normal(1.5, 1.0, 30)])
+    result = delong_roc_variance(y, sa, sb)
+    assert abs(result.auc_a - roc_auc_score(y, sa)) < 1e-8
+    assert abs(result.auc_b - roc_auc_score(y, sb)) < 1e-8
+    assert abs(result.delta_auc - (result.auc_a - result.auc_b)) < 1e-12
+
+
+@pytest.mark.unit
+def test_delong_roc_variance_rejects_empty_class() -> None:
+    """Must have at least one positive AND one negative."""
+    from eval_toolkit.bootstrap import delong_roc_variance
+
+    y_all_zero = np.array([0, 0, 0, 0])
+    s = np.array([0.1, 0.2, 0.3, 0.4])
+    with pytest.raises(ValueError, match="at least one"):
+        delong_roc_variance(y_all_zero, s, s)
+
+
+@pytest.mark.unit
+def test_delong_roc_variance_rejects_shape_mismatch() -> None:
+    """All three arrays must share shape."""
+    from eval_toolkit.bootstrap import delong_roc_variance
+
+    y = np.array([0, 1, 0, 1])
+    sa = np.array([0.1, 0.2, 0.3, 0.4])
+    sb = np.array([0.1, 0.2, 0.3])
+    with pytest.raises(ValueError, match="share shape"):
+        delong_roc_variance(y, sa, sb)
+
+
+@pytest.mark.unit
+def test_delong_roc_variance_p_value_low_when_b_is_strong() -> None:
+    """Large effect size produces small p-value."""
+    from eval_toolkit.bootstrap import delong_roc_variance
+
+    rng = np.random.default_rng(11)
+    y = np.array([0] * 200 + [1] * 200)
+    sa = np.concatenate([rng.normal(0.0, 1.0, 200), rng.normal(0.1, 1.0, 200)])
+    sb = np.concatenate([rng.normal(0.0, 1.0, 200), rng.normal(2.5, 1.0, 200)])
+    result = delong_roc_variance(y, sa, sb)
+    # B is much stronger -> delta_auc strongly negative, p-value tiny.
+    assert result.delta_auc < -0.1
+    assert result.p_value < 0.001
