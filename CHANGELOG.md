@@ -11,10 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `docs/repo-strategy.md` — repo organization strategy document.
   Captures the v0.10.0 dependency-graph audit, the 6-bucket
-  in-place reorganization targeted for v0.11.0, the 4-question
-  machine-checkable checklist for "should we extract sub-package
-  X?", and the audit cadence (every 3 minor releases; next at
-  v0.13.0). Linked from `README.md` Documentation section.
+  in-place reorganization (slipped past v0.11.0 to a later minor;
+  re-target TBD), the 4-question machine-checkable checklist for
+  "should we extract sub-package X?", and the audit cadence
+  (every 3 minor releases; next at v0.13.0). Linked from
+  `README.md` Documentation section.
+
+## [0.11.0] — 2026-05-13 — Maximum Calibration Error
+
+Adds `maximum_calibration_error()` as a top-level public symbol —
+companion scalar to ECE that surfaces the *worst-bin* calibration
+gap, so a model with low ECE but one very-poorly-calibrated bin is
+not given a clean bill of health. Closes F1.3 from the V4 consumer
+feedback log (`prompt-injection-v4/docs/eval_toolkit_feedback.md`).
+
+### Added
+
+- `eval_toolkit.calibration.maximum_calibration_error(y_true,
+  y_score, *, n_bins=10, strategy="quantile") -> float | None` —
+  MCE per Naeini & Cooper 2014. Returns `None` for single-class
+  slices (calibration is degenerate when one class is absent).
+  Parameter signature mirrors `reliability_curve` for consistency.
+  Re-exported via `eval_toolkit.calibration.__all__` and the
+  module docstring's Public surface section.
+
+### Tests
+
+- Five new unit tests in `tests/test_calibration_unit.py`: unit-
+  interval bound, single-class returns `None`, input validation
+  (shape mismatch, empty input, `n_bins<=1`, invalid strategy),
+  reference-impl agreement with `reliability_curve`'s max-gap
+  reconstruction, `MCE >= ECE` inequality (max of gaps dominates
+  any weighted mean of gaps).
 
 ## [0.10.0] — 2026-05-12 — Maturity Release
 

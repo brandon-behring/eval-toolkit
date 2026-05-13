@@ -16,6 +16,7 @@ from eval_toolkit.calibration import (
     fit_platt_calibrator,
     fit_temperature,
     fit_temperature_oracle,
+    maximum_calibration_error,
     reliability_curve,
 )
 
@@ -58,6 +59,74 @@ def test_reliability_curve_skips_single_class() -> None:
     out = reliability_curve(y_all_neg, s)
     assert "skipped" in out
     assert out["n_positive"] == 0
+
+
+@pytest.mark.unit
+def test_maximum_calibration_error_in_unit_interval(
+    well_separated: tuple[np.ndarray, np.ndarray],
+) -> None:
+    y, s = well_separated
+    mce = maximum_calibration_error(y, s, n_bins=10, strategy="quantile")
+    assert mce is not None
+    assert 0.0 <= mce <= 1.0
+
+
+@pytest.mark.unit
+def test_maximum_calibration_error_single_class_returns_none() -> None:
+    s = np.linspace(0.1, 0.9, 20)
+    assert maximum_calibration_error(np.zeros(20, dtype=int), s) is None
+    assert maximum_calibration_error(np.ones(20, dtype=int), s) is None
+
+
+@pytest.mark.unit
+def test_maximum_calibration_error_validates() -> None:
+    y = np.array([0, 1, 0, 1])
+    s = np.array([0.1, 0.9, 0.2, 0.8])
+    with pytest.raises(ValueError, match="shape mismatch"):
+        maximum_calibration_error(y, s[:3])
+    with pytest.raises(ValueError, match="empty"):
+        maximum_calibration_error(np.array([]), np.array([]))
+    with pytest.raises(ValueError, match="n_bins"):
+        maximum_calibration_error(y, s, n_bins=1)
+    with pytest.raises(ValueError, match="strategy"):
+        maximum_calibration_error(y, s, strategy="invalid")  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_maximum_calibration_error_agrees_with_reliability_curve_max_gap(
+    well_separated: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Reference-impl agreement: MCE = max |prob_true - prob_pred| over populated bins.
+
+    The standalone metric must equal the max-gap reconstructed from
+    :func:`reliability_curve`'s ``prob_true`` / ``prob_pred`` arrays.
+    """
+    y, s = well_separated
+    for strategy in ("uniform", "quantile"):
+        mce = maximum_calibration_error(y, s, n_bins=10, strategy=strategy)
+        rc = reliability_curve(y, s, n_bins=10, strategy=strategy)
+        expected = float(
+            np.abs(np.asarray(rc["prob_true"]) - np.asarray(rc["prob_pred"])).max()
+        )
+        assert mce == pytest.approx(expected), f"strategy={strategy}"
+
+
+@pytest.mark.unit
+def test_maximum_calibration_error_ge_expected_calibration_error(
+    well_separated: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """MCE ≥ ECE: max of |gaps| dominates any weighted mean of |gaps|.
+
+    Holds for both binning strategies; max ≥ weighted_mean is identity.
+    """
+    y, s = well_separated
+    for strategy in ("uniform", "quantile"):
+        mce = maximum_calibration_error(y, s, n_bins=10, strategy=strategy)
+        rc = reliability_curve(y, s, n_bins=10, strategy=strategy)
+        ece_key = "ece_equal_width" if strategy == "uniform" else "ece_equal_mass"
+        ece = float(rc[ece_key])
+        assert mce is not None
+        assert mce + 1e-12 >= ece, f"strategy={strategy}: MCE {mce} < ECE {ece}"
 
 
 @pytest.mark.unit

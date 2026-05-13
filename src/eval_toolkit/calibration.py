@@ -4,6 +4,9 @@ Public surface:
 
 - :func:`reliability_curve` — bin-level calibration data
   (DeGroot & Fienberg 1983 [#degroot]_; Niculescu-Mizil & Caruana 2005 [#nm05]_)
+- :func:`maximum_calibration_error` — worst-bin calibration gap
+  (Naeini & Cooper 2014 [#mce]_); companion scalar to the ECE summaries
+  surfaced inside :func:`reliability_curve`.
 - :func:`bayes_optimal_threshold` — closed-form cost-sensitive decision boundary
   (Elkan 2001 [#elkan]_); :class:`CostMatrix` packages prior + costs + abstain cost.
 - :func:`fit_isotonic_calibrator` — Niculescu-Mizil & Caruana 2005 [#nm05]_
@@ -19,6 +22,8 @@ References
 .. [#elkan] Elkan, C. "The Foundations of Cost-Sensitive Learning." IJCAI 2001.
 .. [#guo] Guo, C., Pleiss, G., Sun, Y. & Weinberger, K. "On Calibration of Modern Neural Networks."
    ICML 2017. arXiv:1706.04599.
+.. [#mce] Naeini, M. P. & Cooper, G. F. "Binary Classifier Calibration: A Bayesian Non-Parametric
+   Approach." SDM 2014.
 .. [#nm05] Niculescu-Mizil, A. & Caruana, R. "Predicting Good Probabilities With Supervised
    Learning." ICML 2005.
 .. [#platt] Platt, J. "Probabilistic Outputs for Support Vector Machines and Comparisons to
@@ -50,6 +55,7 @@ __all__ = [
     "fit_platt_calibrator",
     "fit_temperature",
     "fit_temperature_oracle",
+    "maximum_calibration_error",
     "reliability_curve",
 ]
 
@@ -184,6 +190,82 @@ def _ece_via_calibration_curve(
         n_per_bin_nonempty = np.full(len(prob_true), len(y_score) / max(len(prob_true), 1))
     weights = n_per_bin_nonempty / max(int(n_per_bin_nonempty.sum()), 1)
     return float((weights * np.abs(prob_true - prob_pred)).sum())
+
+
+def maximum_calibration_error(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    n_bins: int = DEFAULT_N_BINS,
+    strategy: Literal["uniform", "quantile"] = DEFAULT_STRATEGY,
+) -> float | None:
+    r"""Maximum Calibration Error — worst-bin |observed_rate − mean_predicted|.
+
+    Companion scalar to ECE: where ECE is the *weighted-average* calibration gap,
+    MCE is the *worst-bin* gap. Surfaces the worst-calibrated bin so a model with
+    low ECE but one very-poorly-calibrated bin is not given a clean bill of
+    health (Naeini & Cooper 2014 [#mce]_).
+
+    Single-class slices return ``None`` (calibration is degenerate when one
+    class is absent — per-bin observed rates are constant 0 or 1).
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Predicted probabilities in [0, 1].
+    n_bins : int, optional
+        Number of bins (default 10).
+    strategy : {"uniform", "quantile"}, optional
+        Equal-width vs equal-mass binning. Default "quantile" (matches
+        :func:`reliability_curve` and yields more robust per-bin estimates on
+        imbalanced score distributions).
+
+    Returns
+    -------
+    float | None
+        Worst-bin calibration gap in [0, 1], or ``None`` for single-class
+        slices.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, empty input, ``n_bins <= 1``, or unknown strategy.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(42)
+    >>> y = rng.integers(0, 2, size=200)
+    >>> s = (y + rng.normal(0, 0.5, size=200)).clip(0, 1)
+    >>> mce = maximum_calibration_error(y, s, n_bins=5, strategy="quantile")
+    >>> 0.0 <= mce <= 1.0
+    True
+    """
+    y_true_arr = np.asarray(y_true).astype(int)
+    y_score_arr = np.asarray(y_score).astype(float)
+    if y_true_arr.shape != y_score_arr.shape:
+        raise ValueError(
+            f"shape mismatch: y_true {y_true_arr.shape}, y_score {y_score_arr.shape}"
+        )
+    if y_true_arr.size == 0:
+        raise ValueError("y_true is empty")
+    if n_bins <= 1:
+        raise ValueError(f"n_bins must be > 1, got {n_bins}")
+    if strategy not in {"uniform", "quantile"}:
+        raise ValueError(f"strategy must be 'uniform' or 'quantile', got {strategy!r}")
+
+    n_positive = int(y_true_arr.sum())
+    if n_positive == 0 or n_positive == y_true_arr.size:
+        return None
+
+    prob_true, prob_pred = calibration_curve(
+        y_true_arr, y_score_arr, n_bins=n_bins, strategy=strategy
+    )
+    if len(prob_true) == 0:
+        return None
+    return float(np.abs(prob_true - prob_pred).max())
 
 
 def bayes_optimal_threshold(π: float, c_fp: float, c_fn: float) -> float:
