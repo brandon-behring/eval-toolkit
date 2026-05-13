@@ -35,7 +35,7 @@ from typing import Any
 
 from eval_toolkit._version import __version__ as eval_toolkit_version
 from eval_toolkit.artifacts import PredictionArtifactRef, sanitize_for_json, write_json_strict
-from eval_toolkit.provenance import capture_git_sha, file_sha256
+from eval_toolkit.provenance import FileHash, capture_git_sha, compute_file_hash
 
 __all__ = [
     "MANIFEST_SCHEMA_VERSION",
@@ -459,10 +459,15 @@ def build_manifest(
     data_hashes: dict[str, str] = {}
     if data_files:
         for logical_name, path in data_files.items():
-            digest = file_sha256(path, strict=False)
             # Manifest format prefixes hashes with their algorithm for
             # self-describing JSON (matches Croissant's distribution.sha256).
-            data_hashes[logical_name] = f"sha256:{digest}" if digest is not None else ""
+            # v0.15.0: sentinel-typed compute_file_hash replaces the
+            # str | None file_sha256; pattern-match clarifies the miss path.
+            digest = compute_file_hash(path)
+            if isinstance(digest, FileHash):
+                data_hashes[logical_name] = f"sha256:{digest.sha256}"
+            else:
+                data_hashes[logical_name] = ""
 
     code_versions: dict[str, str] = {"eval_toolkit": eval_toolkit_version}
     if extra_code_versions:

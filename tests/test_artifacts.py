@@ -378,3 +378,67 @@ def test_validate_prediction_artifact_ref_rejects_missing_columns() -> None:
     }
     with pytest.raises(ValidationError):
         validate_prediction_artifact_ref(payload)
+
+
+# --- v0.15.0: PredictionArtifactRef.role accepts str | list[str] (F5.2) ---
+
+
+@pytest.mark.unit
+def test_prediction_artifact_ref_accepts_role_list() -> None:
+    """v0.15.0 — role can be a list of slice / fold names."""
+    ref = PredictionArtifactRef(
+        uri="predictions.parquet",
+        media_type="application/vnd.apache.parquet",
+        role=["fold_test", "ood_tensortrust", "ood_indirect"],
+        columns=PredictionColumns(label="y_true", score="y_score"),
+    )
+    out = ref.to_dict()
+    assert out["role"] == ["fold_test", "ood_tensortrust", "ood_indirect"]
+
+
+@pytest.mark.unit
+def test_prediction_artifact_ref_accepts_role_string_back_compat() -> None:
+    """Pre-v0.15 string-role callers still work; output stays string-shaped."""
+    ref = PredictionArtifactRef(
+        uri="predictions.parquet",
+        media_type="application/vnd.apache.parquet",
+        role="predictions",
+        columns=PredictionColumns(label="y_true", score="y_score"),
+    )
+    out = ref.to_dict()
+    assert out["role"] == "predictions"
+
+
+@pytest.mark.unit
+def test_prediction_artifact_ref_rejects_empty_role_list() -> None:
+    with pytest.raises(ValueError, match="role list must be non-empty"):
+        PredictionArtifactRef(
+            uri="predictions.parquet",
+            media_type="application/vnd.apache.parquet",
+            role=[],
+            columns=PredictionColumns(label="y_true", score="y_score"),
+        )
+
+
+@pytest.mark.unit
+def test_prediction_artifact_ref_rejects_role_list_with_empty_entries() -> None:
+    with pytest.raises(ValueError, match="role list must be non-empty"):
+        PredictionArtifactRef(
+            uri="predictions.parquet",
+            media_type="application/vnd.apache.parquet",
+            role=["valid", ""],
+            columns=PredictionColumns(label="y_true", score="y_score"),
+        )
+
+
+@pytest.mark.unit
+def test_validate_prediction_artifact_ref_accepts_role_list() -> None:
+    """v0.15.0 — inline schema accepts role as array of strings."""
+    pytest.importorskip("jsonschema")
+    payload = {
+        "uri": "predictions.parquet",
+        "media_type": "application/vnd.apache.parquet",
+        "role": ["fold_test", "ood_tensortrust"],
+        "columns": {"label": "y_true", "score": "y_score"},
+    }
+    validate_prediction_artifact_ref(payload)

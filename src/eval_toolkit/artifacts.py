@@ -95,14 +95,20 @@ class PredictionColumns:
 
 @dataclass(frozen=True, slots=True)
 class PredictionArtifactRef:
-    """Manifest reference to a retained prediction artifact."""
+    """Manifest reference to a retained prediction artifact.
+
+    ``role`` accepts ``str`` or ``list[str]`` since v0.15.0 (F5.2): a
+    single artifact that covers multiple slices / fold-roles can name them
+    explicitly instead of carrying a synthetic single-string role plus a
+    ``metadata["slices"]`` list. The schema accepts both shapes.
+    """
 
     uri: str
     media_type: str
     columns: PredictionColumns | Mapping[str, object]
     sha256: str = ""
     n_rows: int | None = None
-    role: str = "predictions"
+    role: str | list[str] = "predictions"
     metadata: dict[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -113,6 +119,22 @@ class PredictionArtifactRef:
             raise ValueError("PredictionArtifactRef.media_type must be non-empty")
         if self.n_rows is not None and (isinstance(self.n_rows, bool) or self.n_rows < 0):
             raise ValueError("PredictionArtifactRef.n_rows must be non-negative when present")
+        if isinstance(self.role, list):
+            if not self.role or not all(
+                isinstance(r, str) and r.strip() for r in self.role
+            ):
+                raise ValueError(
+                    "PredictionArtifactRef.role list must be non-empty and contain "
+                    "only non-empty strings"
+                )
+        elif isinstance(self.role, str):
+            if not self.role.strip():
+                raise ValueError("PredictionArtifactRef.role must be non-empty")
+        else:
+            raise TypeError(
+                f"PredictionArtifactRef.role must be str or list[str], "
+                f"got {type(self.role).__name__}"
+            )
         columns = self.columns
         if isinstance(columns, Mapping):
             if not isinstance(columns.get("label"), str) or not columns.get("label"):
@@ -126,10 +148,12 @@ class PredictionArtifactRef:
             columns: object = self.columns.to_dict()
         else:
             columns = dict(self.columns)
+        # Preserve role as a list when caller passed a list; otherwise a string.
+        role: object = list(self.role) if isinstance(self.role, list) else self.role
         out: dict[str, object] = {
             "uri": self.uri,
             "media_type": self.media_type,
-            "role": self.role,
+            "role": role,
             "columns": sanitize_for_json(columns),
         }
         if self.sha256:
@@ -299,7 +323,17 @@ _PREDICTION_ARTIFACT_REF_SCHEMA: dict[str, object] = {
         "media_type": {"type": "string", "minLength": 1},
         "sha256": {"type": "string"},
         "n_rows": {"type": "integer", "minimum": 0},
-        "role": {"type": "string", "minLength": 1},
+        # v0.15.0 (F5.2): role accepts a string or an array of strings.
+        "role": {
+            "oneOf": [
+                {"type": "string", "minLength": 1},
+                {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"type": "string", "minLength": 1},
+                },
+            ],
+        },
         "metadata": {"type": "object"},
         "columns": {
             "type": "object",

@@ -10,15 +10,94 @@ from __future__ import annotations
 import hashlib
 import subprocess
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 __all__ = [
+    "FileHash",
+    "FileHashMissing",
     "capture_git_sha",
+    "compute_file_hash",
     "figure_metadata",
     "file_sha256",
     "make_run_dir",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class FileHash:
+    """Sentinel-style hit for a successful file hash.
+
+    Returned (alongside :class:`FileHashMissing`) from
+    :func:`compute_file_hash` so callers can pattern-match on the outcome
+    rather than testing for a magic ``None`` (F5.1).
+    """
+
+    sha256: str
+
+    def __post_init__(self) -> None:
+        """Validate the hex-digest shape."""
+        if not isinstance(self.sha256, str) or len(self.sha256) != 64:
+            raise ValueError(
+                f"FileHash.sha256 must be a 64-character hex digest, got {self.sha256!r}"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class FileHashMissing:
+    """Sentinel-style miss for a file hash that could not be computed.
+
+    Carries the reason ``"missing"`` (path does not exist) or
+    ``"not_a_file"`` (path exists but is not a regular file). Pair with
+    :class:`FileHash` for exhaustive pattern matching.
+    """
+
+    reason: str
+    path: str
+
+
+def compute_file_hash(path: Path | str) -> FileHash | FileHashMissing:
+    """SHA-256 hex digest of an existing file (sentinel-typed).
+
+    Replaces the v1 :func:`file_sha256` ``str | None`` shape with an
+    explicit union (F5.1). Callers can match on the union members
+    instead of testing the return for ``None``:
+
+    .. code-block:: python
+
+        match compute_file_hash(path):
+            case FileHash(sha256=h):
+                record["digest"] = f"sha256:{h}"
+            case FileHashMissing(reason="missing"):
+                ...
+
+    :func:`file_sha256` remains available as a backward-compatible thin
+    wrapper that flattens to ``str | None``.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+    ...     _ = f.write("hello\\n")
+    ...     p = Path(f.name)
+    >>> result = compute_file_hash(p)
+    >>> isinstance(result, FileHash) and len(result.sha256) == 64
+    True
+    >>> compute_file_hash("/no/such/file")
+    FileHashMissing(reason='missing', path='/no/such/file')
+    """
+    p = Path(path)
+    if not p.exists():
+        return FileHashMissing(reason="missing", path=str(path))
+    if not p.is_file():
+        return FileHashMissing(reason="not_a_file", path=str(path))
+    h = hashlib.sha256()
+    with p.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return FileHash(sha256=h.hexdigest())
 
 
 def file_sha256(path: Path | str, *, strict: bool = False) -> str | None:
@@ -28,6 +107,12 @@ def file_sha256(path: Path | str, *, strict: bool = False) -> str | None:
     exist or is not a regular file. Pass ``strict=True`` to raise
     :class:`FileNotFoundError` instead — useful when the caller's invariants
     require the digest to exist.
+
+    .. note::
+       New code should prefer :func:`compute_file_hash`, which returns a
+       :class:`FileHash` / :class:`FileHashMissing` union and avoids the
+       ``None`` ambiguity (F5.1). This helper is retained for backward
+       compatibility.
 
     Parameters
     ----------
@@ -65,16 +150,14 @@ def file_sha256(path: Path | str, *, strict: bool = False) -> str | None:
     ...     print("raised")
     raised
     """
-    p = Path(path)
-    if not p.exists() or not p.is_file():
-        if strict:
-            raise FileNotFoundError(f"file_sha256: path missing or not a regular file: {p}")
-        return None
-    h = hashlib.sha256()
-    with p.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
+    result = compute_file_hash(path)
+    if isinstance(result, FileHash):
+        return result.sha256
+    if strict:
+        raise FileNotFoundError(
+            f"file_sha256: path missing or not a regular file: {result.path}"
+        )
+    return None
 
 
 def make_run_dir(base: Path | str, prefix: str = "run") -> Path:

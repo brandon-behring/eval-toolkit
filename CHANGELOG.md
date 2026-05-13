@@ -17,6 +17,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.15.0] — 2026-05-13 — FileHash sentinel + PredictionArtifactRef.role union
+
+Closes F5.1 (file_sha256 None ambiguity) and F5.2 (PredictionArtifactRef.role
+single-string) from the V4 consumer feedback log.
+
+**Backward-compatible**: existing string-role and `file_sha256` callers
+keep working unchanged.
+
+### Added
+
+- `eval_toolkit.provenance.FileHash(sha256: str)` and
+  `eval_toolkit.provenance.FileHashMissing(reason: str, path: str)` —
+  frozen dataclasses for sentinel-style file-hash results.
+- `eval_toolkit.provenance.compute_file_hash(path) -> FileHash |
+  FileHashMissing` — the sentinel-returning helper. Pattern-match on
+  the union members instead of testing for `None`. Missing files emit
+  `FileHashMissing(reason="missing")`; non-file paths (directories)
+  emit `FileHashMissing(reason="not_a_file")`.
+- `PredictionArtifactRef.role` now accepts `str | list[str]`. Single-
+  artifact references that span multiple slices / fold-roles can list
+  them explicitly instead of synthesizing a single-string role and a
+  parallel `metadata["slices"]` array.
+- `manifest.v2.json` schema patches `prediction_artifacts[*].role` to
+  the same union via `oneOf`. Inline schema in
+  `validate_prediction_artifact_ref` mirrors the patch.
+
+### Changed
+
+- `file_sha256(path, strict=False) -> str | None` is now a thin wrapper
+  over `compute_file_hash`. Behavior is preserved (returns string digest
+  on hit, `None` on miss when not strict, `FileNotFoundError` on miss
+  when strict). Docstring marks it as legacy-but-supported and points
+  to `compute_file_hash` for new code.
+- `eval_toolkit.manifest.build_manifest` internal `data_hashes` builder
+  pattern-matches on `compute_file_hash` instead of testing
+  `file_sha256() is not None`. Output JSON is byte-equivalent.
+
+### Tests
+
+- 5 new unit tests for `compute_file_hash` (success, missing, directory,
+  short-digest validator, back-compat with `file_sha256`).
+- 5 new unit tests for `PredictionArtifactRef.role` (list path,
+  back-compat string path, rejection paths for empty list / empty
+  entries, validate-helper accepts list).
+
 ## [0.14.2] — 2026-05-13 — relaxed source_roles uniqueness ((source, role) pair)
 
 Closes F4.5 from the V4 consumer feedback log: ``validate_source_roles``

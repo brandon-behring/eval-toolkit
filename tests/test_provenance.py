@@ -10,7 +10,10 @@ from pathlib import Path
 import pytest
 
 from eval_toolkit.provenance import (
+    FileHash,
+    FileHashMissing,
     capture_git_sha,
+    compute_file_hash,
     figure_metadata,
     file_sha256,
     make_run_dir,
@@ -47,6 +50,52 @@ def test_file_sha256_strict_raises_on_directory(tmp_path: Path) -> None:
     """``strict=True`` rejects directories (not regular files)."""
     with pytest.raises(FileNotFoundError):
         file_sha256(tmp_path, strict=True)
+
+
+@pytest.mark.unit
+def test_compute_file_hash_returns_filehash_on_success(tmp_path: Path) -> None:
+    """v0.15.0 sentinel idiom — hit returns a FileHash with the hex digest."""
+    p = tmp_path / "data.txt"
+    p.write_text("hello world")
+    expected = hashlib.sha256(b"hello world").hexdigest()
+    result = compute_file_hash(p)
+    assert isinstance(result, FileHash)
+    assert result.sha256 == expected
+
+
+@pytest.mark.unit
+def test_compute_file_hash_returns_missing_when_absent() -> None:
+    """v0.15.0 sentinel idiom — miss carries reason='missing' and the path."""
+    result = compute_file_hash("/no/such/file/exists")
+    assert isinstance(result, FileHashMissing)
+    assert result.reason == "missing"
+    assert result.path == "/no/such/file/exists"
+
+
+@pytest.mark.unit
+def test_compute_file_hash_returns_missing_for_directory(tmp_path: Path) -> None:
+    """Directories return reason='not_a_file' so callers can distinguish."""
+    result = compute_file_hash(tmp_path)
+    assert isinstance(result, FileHashMissing)
+    assert result.reason == "not_a_file"
+
+
+@pytest.mark.unit
+def test_filehash_rejects_short_digest() -> None:
+    """FileHash post-init validates the hex-digest shape."""
+    with pytest.raises(ValueError, match="64-character"):
+        FileHash(sha256="too-short")
+
+
+@pytest.mark.unit
+def test_file_sha256_remains_backward_compatible(tmp_path: Path) -> None:
+    """v0.15.0 — file_sha256 still returns str|None and is consistent with compute_file_hash."""
+    p = tmp_path / "data.txt"
+    p.write_text("hello world")
+    sentinel = compute_file_hash(p)
+    legacy = file_sha256(p)
+    assert isinstance(sentinel, FileHash)
+    assert legacy == sentinel.sha256
 
 
 @pytest.mark.unit
