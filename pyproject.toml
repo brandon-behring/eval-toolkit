@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eval-toolkit"
-version = "0.24.0"
+version = "0.24.1"
 description = "Reusable evaluation contracts for binary classification: metrics, bootstrap CIs, calibration, artifacts, and evidence gates."
 readme = "README.md"
 license = "MIT"

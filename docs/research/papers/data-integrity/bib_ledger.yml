@@ -24,6 +24,14 @@ entries:
   authors: Roberts et al. (2017)
   venue: Ecography 40(8)
 
+- bibkey: yan2025timeseries
+  primary_url: https://arxiv.org/abs/2512.06932
+  title: 'Hidden Leaks in Time Series Forecasting'
+  status: verified
+  claim_family: splits_methodology
+  authors: Yan et al. (2025)
+  venue: arXiv preprint
+
 # ============================================================================
 # A2 — Nested CV and hyperparameter selection (claim_family: nested_cv)
 # ============================================================================
@@ -55,6 +63,14 @@ entries:
   claim_family: leakage_taxonomy
   authors: Kapoor & Narayanan (2023)
   venue: Patterns 4(9)
+
+- bibkey: pellizzoni2025leakage
+  primary_url: https://link.springer.com/article/10.1007/s10462-025-11326-3
+  title: "Don't push the button! Data leakage risks in ML and transfer learning"
+  status: verified
+  claim_family: leakage_taxonomy
+  authors: Pellizzoni et al. (2025)
+  venue: AI Review (Springer) DOI:10.1007/s10462-025-11326-3
 
 # ============================================================================
 # A4 — Benchmark contamination (claim_family: benchmark_contamination)

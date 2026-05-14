@@ -5,7 +5,7 @@
 **Purpose:** Provide future Claude agents working in `eval-toolkit` with a verified, primary-source research dossier covering the library's full methodological footprint — statistical inference, data integrity, eval-ecosystem positioning, prompt-injection consumer-domain methodology, and datasets. Designed for dual consumption (humans + LLM agents).
 
 **Last updated:** 2026-05-14.
-**Total entries across all clusters:** 69 (24 inference + 15 data-integrity + 9 eval-ecosystem + 10 prompt-injection + 11 datasets).
+**Total entries across all clusters:** 74 (24 inference + 17 data-integrity + 9 eval-ecosystem + 12 prompt-injection + 12 datasets).
 **Audit coverage:** All 5 clusters have completed their planned audit rounds (inference: 2, data-integrity: 2, eval-ecosystem: 1, prompt-injection: 1, datasets: condensed).
 **URL freshness:** 80 unique URLs across the dossier; 64 OK, 16 bot-blocked (paywall publishers), 0 broken — see `url-freshness-report.md`.
 
@@ -17,10 +17,10 @@ docs/research/
 ├── url-freshness-report.md            # URL liveness categorization
 ├── papers/
 │   ├── inference/                     # 24 entries: bootstrap CIs, ROC variance, calibration, thresholds
-│   ├── data-integrity/                # 15 entries: splits, leakage, dedup, contamination
+│   ├── data-integrity/                # 17 entries: splits, leakage, dedup, contamination
 │   ├── eval-ecosystem/                # 9 entries:  HELM, lm-eval, Inspect AI, NeurIPS checklist, Croissant
-│   └── prompt-injection/              # 10 entries: attacks, defenses, OWASP, eval benchmarks
-└── datasets/                          # 11 entries: PINT, AdvBench, HarmBench, UCI, C4, MMLU, etc.
+│   └── prompt-injection/              # 12 entries: attacks, defenses, OWASP, eval benchmarks
+└── datasets/                          # 12 entries: PINT, AdvBench, HarmBench, UCI, C4, MMLU, Open-Prompt-Injection, etc.
 ```
 
 Each `papers/<cluster>/` folder contains:
@@ -31,6 +31,20 @@ Each `papers/<cluster>/` folder contains:
 - `_dossier/` — raw 7-column dossier tables (for human review and audit trail)
 
 The `datasets/` folder uses a 5-bullet-per-dataset variant (Source / Access / Schema / Size+License / Tasks).
+
+## Scope: which clusters inform code vs. consumer repos
+
+The dossier covers **the full methodological footprint that motivates this library and its consumers**, but not every cluster maps to code in `src/eval_toolkit/`. The split:
+
+| Cluster | Maps to | Justification |
+|---|---|---|
+| **inference/** | `src/eval_toolkit/bootstrap.py`, `calibration.py`, `metrics.py`, `thresholds.py` | Core library: BCa/paired/CLT-corrected bootstrap, Platt/isotonic/temperature/beta calibration, ECE variants, threshold selectors. |
+| **data-integrity/** | `src/eval_toolkit/splits.py`, `leakage.py`, `text_dedup.py`, `manifest.py` | Core library: stratified/time-series/group/nested splits, leakage taxonomy detection, MinHash/LSH/TF-IDF/embedding/Jaccard dedup, provenance tracking (including `RunManifest.contamination_flags` per `data-integrity/` § B2). |
+| **eval-ecosystem/** | `src/eval_toolkit/manifest.py` + `README.md` positioning | Positioning material: NeurIPS reproducibility checklist alignment, Croissant metadata standard awareness. Some research informs design choices rather than translating to specific functions. |
+| **prompt-injection/** | *Consumer repos (e.g., `prompt-injection-v4`)* | **Out of toolkit scope.** Documents PI attacks (GCG, PAIR), defenses (Self-Reminder, DataSentinel + PromptLocate), benchmarks (PINT/HarmBench/JailbreakBench/HackAPrompt), OWASP LLM01:2025 as reference material for downstream consumers. eval-toolkit provides only generic primitives (harness slicing, `attack_style` pass-through label); PI-specific loaders, refusal metrics, and threat-model selectors live in consumer repos. |
+| **datasets/** | Mixed | Generic schemas (UCI Adult, Wisconsin Breast Cancer, OpenML, MMLU, C4) inform `loaders.py` shape recognition. PI dataset entries (PINT, AdvBench, HarmBench, JBB, Open-Prompt-Injection) are reference material for consumer repos. |
+
+This split is intentional: eval-toolkit's value proposition is *reusable, domain-agnostic eval primitives*. Domain-specific code (prompt-injection eval methodology, fairness audits, conformal prediction, etc.) lives in consumer repos that depend on this library.
 
 ## Cluster index
 

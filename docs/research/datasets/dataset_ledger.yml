@@ -52,6 +52,18 @@ entries:
     100 jailbreak behaviors aligned to OpenAI usage policies; both original and sourced from prior work.
     Permissive license; eval scripts + leaderboard infrastructure on jailbreakbench.github.io.
 
+- bibkey: open_prompt_injection_liu
+  primary_url: https://github.com/liu00222/Open-Prompt-Injection
+  title: 'Open-Prompt-Injection'
+  status: verified
+  claim_family: prompt_injection_eval
+  authors: Liu et al.
+  venue: GitHub
+  notes: |
+    Open-source reference dataset of attack prompts for prompt-injection eval; sibling to AdvBench /
+    HarmBench. Frequently cited as a benchmarking resource for PI defenses. Surfaced via the v0.24.1
+    RECONCILIATION pass.
+
 # ============================================================================
 # Classical binary-classification benchmarks (harness demos)
 # ============================================================================

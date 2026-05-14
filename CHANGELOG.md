@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1] — 2026-05-14 — research-dossier docs hygiene
+
+Builds on v0.24.0 (manifest.v3 + contamination_flags). No code surface
+changes; docs-only.
+
+### Docs
+
+- `docs/research/README.md`: new "Scope: which clusters inform code vs. consumer repos" section making the intentional split explicit — `inference/` and `data-integrity/` clusters map to library code (bootstrap, calibration, splits, leakage, dedup, manifest); `prompt-injection/` is reference material for downstream consumer repos (e.g., `prompt-injection-v4`); `datasets/` is mixed.
+- `docs/research/`: add 5 entries previously flagged by `RECONCILIATION.md` as gaps:
+  - **Yan et al. 2025** (`yan2025timeseries`) — *Hidden Leaks in Time Series Forecasting* — `data-integrity/` § A1.
+  - **Pellizzoni et al. 2025** (`pellizzoni2025leakage`) — *Don't push the button! Data leakage risks in ML and transfer learning* — `data-integrity/` § B1.
+  - **HackAPrompt × SQuAD 2025** (`hackaprompt_squad_2025`) — naive-dedup detection for PI benchmarks — `prompt-injection/` § C1.
+  - **DataSentinel + PromptLocate 2025** (`datasentinel_promptlocate_2025`) — strict-normalization PI defense — `prompt-injection/` § B1.
+  - **Open-Prompt-Injection (Liu et al.)** (`open_prompt_injection_liu`) — attack-prompt dataset — `datasets/dataset_ledger.yml`.
+- `docs/research/papers/data-integrity/02_leakage_and_contamination.md`: cross-link the Sainz 2023 § B2 entry to `RunManifest.contamination_flags` (manifest.v3, v0.24.0) — eval-toolkit's response to the per-benchmark contamination-disclosure norm; closes V4 audit issue A6.
+- `docs/research/RECONCILIATION.md`: append v0.24.1 status block documenting which gap-entries were absorbed.
+- Entry counts: 69 → 74 (data-integrity 15 → 17, prompt-injection 10 → 12, datasets 11 → 12).
+
 ## [0.24.0] — 2026-05-14 — manifest.v3 + contamination_flags (V4.4 D7)
 
 Closes V4 audit issue A6 (contamination flag docstring-only) by promoting

@@ -9,6 +9,7 @@ This file covers B1 (the general leakage taxonomy across ML applications) and B2
 | Title | Authors (year) | Venue | arXiv/DOI | GitHub | One-line description | Key contribution |
 |-------|----------------|-------|-----------|--------|----------------------|------------------|
 | Leakage and the reproducibility crisis in machine-learning-based science | Kapoor & Narayanan (2023) | Patterns 4(9) | arXiv:2207.07048 | — | Systematic review of 294 ML-based-science papers across 17 fields; introduces an 8-type hierarchical leakage taxonomy and a model-info-sheet checklist for self-reporting | Standard reference for the modern leakage taxonomy. Paper's 8 leaf types: L1.1 no test set; L1.2 preprocessing on train+test; L1.3 feature selection on train+test; L1.4 train-test duplicates; L2 illegitimate features (target leakage); L3.1 temporal; L3.2 train-test nonindependence (group/spatial); L3.3 sampling bias |
+| Don't push the button! Data leakage risks in ML and transfer learning | Pellizzoni et al. (2025) | AI Review (Springer) | DOI:10.1007/s10462-025-11326-3 | — | Extends the Kapoor & Narayanan taxonomy to cover transfer-learning and pre-training scenarios | Modern leakage taxonomy update bridging Kapoor framework to the LLM / transfer-learning era; covers pretraining-corpus overlap, fine-tuning contamination, foundation-model eval pitfalls |
 
 ## B2. Benchmark contamination measurement
 

@@ -1,0 +1,12 @@
+# gitleaks allowlist — fingerprints of false-positive matches.
+#
+# Format: <file>:<rule-id>:<line>
+# Each fingerprint matches one specific occurrence of one specific rule on one
+# specific line. New / moved findings still get scanned.
+
+# Citation bibkey "pellizzoni2025leakage" — 3.55 entropy generic-api-key match.
+# This is a research-dossier citation key (surname+year+topic) following the
+# repo's bib_ledger naming convention; structurally identical to existing
+# entries like "kapoor2023leakage" that predate gitleaks scanning. Added in
+# v0.24.1 RECONCILIATION pass.
+docs/research/papers/data-integrity/bib_ledger.yml:generic-api-key:67

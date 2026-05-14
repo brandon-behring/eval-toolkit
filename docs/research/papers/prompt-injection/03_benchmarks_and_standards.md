@@ -27,6 +27,13 @@ This file synthesizes C1 (eval benchmarks for prompt injection / jailbreaks) and
   - **Result:** Industry-side reference benchmark for prompt-injection detectors. Used by Lakera Guard, Azure AI Prompt Shield, and other commercial / open-source detection systems for head-to-head comparison.
   - **Status:** Verified ((vendor blog) — primary source is a vendor publication, treat any specific numerical PINT scores with skepticism).
 
+- **HackAPrompt × SQuAD: Naive-Dedup Detection for Prompt-Injection Benchmarks** — (arXiv 2025).
+  - **Source:** https://arxiv.org/abs/2505.04806
+  - **Code:** —
+  - **Mechanism:** Studies prompt-injection benchmark contamination by applying naive-dedup detection between PI benchmarks (HackAPrompt, SQuAD adversarials) and pretraining corpora; quantifies how attack-success-rate inflates when benchmark prompts appear in training data.
+  - **Result:** First systematic measurement of PI-benchmark naive-dedup contamination. Recommends strict normalization and per-benchmark contamination disclosure (extending Sainz 2023 § B2 of `data-integrity/` to the PI eval setting). Surfaced via the v0.24.1 RECONCILIATION pass.
+  - **Status:** Verified (arXiv preprint).
+
 ## C2. Industry standards and threat modeling
 
 - **LLM01:2025 Prompt Injection — OWASP Top 10 for LLM Applications (2025)** — OWASP Gen AI Security Project (2025).

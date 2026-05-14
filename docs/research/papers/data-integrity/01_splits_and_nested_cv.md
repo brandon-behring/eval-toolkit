@@ -20,6 +20,13 @@ This file synthesizes A1 (splits and CV strategies for structured/time-series da
   - **Result:** Establishes that random K-fold underestimates predictive error when train/test points are dependent; block CV is the appropriate remedy. Foundational for source-disjoint and group-disjoint splits in the eval-toolkit `splits` module.
   - **Status:** Verified (no widely-known repo).
 
+- **Hidden Leaks in Time Series Forecasting** — Yan et al. (arXiv 2025).
+  - **Source:** https://arxiv.org/abs/2512.06932
+  - **Code:** —
+  - **Mechanism:** Identifies subtle leakage modes specific to modern time-series forecasting pipelines (target-aware preprocessing, future-aware feature engineering, sliding-window misuse) that escape detection by classical Bergmeir-style CV-validity arguments.
+  - **Result:** Extends Bergmeir 2012 and Roberts 2017 with leakage modes specific to modern time-series ML; provides detection guidelines for practitioners building time-series splits. Surfaced via the v0.24.1 RECONCILIATION pass against `docs/methodology/reading_list.md`.
+  - **Status:** Verified (arXiv preprint).
+
 ## A2. Nested CV for unbiased HP-tuned evaluation
 
 - **Bias in error estimation when using cross-validation for model selection** — Varma & Simon (BMC Bioinformatics 2006).

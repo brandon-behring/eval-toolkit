@@ -67,6 +67,14 @@ entries:
   authors: Xie et al. (2023)
   venue: Nature Machine Intelligence 5
 
+- bibkey: datasentinel_promptlocate_2025
+  primary_url: https://arxiv.org/abs/2511.15759
+  title: 'DataSentinel + PromptLocate — Strict Normalization for Prompt-Injection Defense'
+  status: verified
+  claim_family: defense_method
+  authors: (2025)
+  venue: arXiv preprint
+
 # ============================================================================
 # A4 — Evaluation benchmarks (claim_family: benchmark)
 # ============================================================================
@@ -97,6 +105,14 @@ entries:
   authors: Lakera (2024)
   venue: Vendor blog (Lakera AI)
   code_url: https://github.com/lakeraai/pint-benchmark
+
+- bibkey: hackaprompt_squad_2025
+  primary_url: https://arxiv.org/abs/2505.04806
+  title: 'HackAPrompt × SQuAD: Naive-Dedup Detection for Prompt-Injection Benchmarks'
+  status: verified
+  claim_family: benchmark
+  authors: (2025)
+  venue: arXiv preprint
 
 # ============================================================================
 # A5 — Industry standards and threat modeling (claim_family: industry_standard)

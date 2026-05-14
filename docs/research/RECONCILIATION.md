@@ -118,3 +118,25 @@ If you want the dossier to absorb the 5 gap-entries from `reading_list.md`, the 
 - Open-Prompt-Injection (Liu et al.) → `datasets/dataset_ledger.yml`
 
 `reading_list.md` itself was left untouched per the dossier-build plan.
+
+---
+
+## Status update — v0.24.1 (2026-05-14)
+
+All 5 RECONCILIATION gap-entries listed above were absorbed into the dossier in the v0.24.1 docs patch:
+
+| Entry | bibkey | Synthesis location | Dossier-table location | bib_ledger.yml |
+|---|---|---|---|---|
+| Yan 2025 — *Hidden Leaks in Time Series Forecasting* | `yan2025timeseries` | `papers/data-integrity/01_splits_and_nested_cv.md` § A1 | `_dossier/01_splits_and_nested_cv.md` § A1 | `data-integrity/bib_ledger.yml` |
+| Pellizzoni 2025 — *Don't push the button! Data leakage risks* | `pellizzoni2025leakage` | `papers/data-integrity/02_leakage_and_contamination.md` § B1 | `_dossier/02_leakage_and_contamination.md` § B1 | `data-integrity/bib_ledger.yml` |
+| PI_HackAPrompt_SQuAD 2025 | `hackaprompt_squad_2025` | `papers/prompt-injection/03_benchmarks_and_standards.md` § C1 | `_dossier/03_benchmarks_and_standards.md` § C1 | `prompt-injection/bib_ledger.yml` |
+| DataSentinel + PromptLocate | `datasentinel_promptlocate_2025` | `papers/prompt-injection/02_defenses.md` § B1 | `_dossier/02_defenses.md` § B1 | `prompt-injection/bib_ledger.yml` |
+| Open-Prompt-Injection (Liu et al.) | `open_prompt_injection_liu` | n/a (datasets are ledger-only) | n/a | `datasets/dataset_ledger.yml` |
+
+Total dossier entries: 69 → 74 (data-integrity 15 → 17, prompt-injection 10 → 12, datasets 11 → 12).
+
+Also added in v0.24.1 (not part of this RECONCILIATION list, but part of the same docs patch):
+- Scope-boundary section in `docs/research/README.md` clarifying which clusters inform code (`inference/`, `data-integrity/`) vs. which inform consumer repos (`prompt-injection/` — out of toolkit scope).
+- Cross-link in Sainz 2023 § B2 entry pointing at `RunManifest.contamination_flags` (manifest.v3, v0.24.0) as eval-toolkit's response to per-benchmark contamination disclosure norms (closes V4 audit issue A6).
+
+Audit history above is preserved as-is.
