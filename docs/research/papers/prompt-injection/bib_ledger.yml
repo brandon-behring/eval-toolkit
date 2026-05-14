@@ -1,0 +1,111 @@
+# Bibliography ledger — prompt-injection cluster (eval-toolkit research dossier)
+# Schema: see ~/Claude/research_toolkit/templates/bib_ledger.template.yml
+# Plan:   ./research_plan.md
+
+entries:
+
+# ============================================================================
+# A1 — Attack taxonomy and foundational attacks (claim_family: attack_taxonomy)
+# ============================================================================
+
+- bibkey: perez2022ignore
+  primary_url: https://arxiv.org/abs/2211.09527
+  title: 'Ignore Previous Prompt: Attack Techniques For Language Models'
+  status: verified
+  claim_family: attack_taxonomy
+  authors: Perez & Ribeiro (2022)
+  venue: NeurIPS 2022 ML Safety Workshop (Best Paper Award)
+  code_url: https://github.com/agencyenterprise/PromptInject
+
+- bibkey: greshake2023indirect
+  primary_url: https://arxiv.org/abs/2302.12173
+  title: "Not what you've signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection"
+  status: verified
+  claim_family: attack_taxonomy
+  authors: Greshake et al. (2023)
+  venue: ACM AISec 2023
+
+- bibkey: wei2023jailbroken
+  primary_url: https://arxiv.org/abs/2307.02483
+  title: 'Jailbroken: How Does LLM Safety Training Fail?'
+  status: verified
+  claim_family: attack_taxonomy
+  authors: Wei, Haghtalab & Steinhardt (2023)
+  venue: NeurIPS 2023
+
+# ============================================================================
+# A2 — Specific attack methods (claim_family: attack_method)
+# ============================================================================
+
+- bibkey: zou2023gcg
+  primary_url: https://arxiv.org/abs/2307.15043
+  title: 'Universal and Transferable Adversarial Attacks on Aligned Language Models'
+  status: verified
+  claim_family: attack_method
+  authors: Zou et al. (2023)
+  venue: arXiv preprint
+  code_url: https://github.com/llm-attacks/llm-attacks
+
+- bibkey: chao2023pair
+  primary_url: https://arxiv.org/abs/2310.08419
+  title: 'Jailbreaking Black Box Large Language Models in Twenty Queries'
+  status: verified
+  claim_family: attack_method
+  authors: Chao et al. (2023)
+  venue: NeurIPS 2023 R0-FoMo Workshop
+  code_url: https://github.com/patrickrchao/JailbreakingLLMs
+
+# ============================================================================
+# A3 — Defense methods (claim_family: defense_method)
+# ============================================================================
+
+- bibkey: xie2023selfreminder
+  primary_url: https://www.nature.com/articles/s42256-023-00765-8
+  title: 'Defending ChatGPT against jailbreak attack via self-reminders'
+  status: verified
+  claim_family: defense_method
+  authors: Xie et al. (2023)
+  venue: Nature Machine Intelligence 5
+
+# ============================================================================
+# A4 — Evaluation benchmarks (claim_family: benchmark)
+# ============================================================================
+
+- bibkey: mazeika2024harmbench
+  primary_url: https://arxiv.org/abs/2402.04249
+  title: 'HarmBench: A Standardized Evaluation Framework for Automated Red Teaming and Robust Refusal'
+  status: verified
+  claim_family: benchmark
+  authors: Mazeika et al. (2024)
+  venue: ICML 2024
+  code_url: https://github.com/centerforaisafety/HarmBench
+
+- bibkey: chao2024jailbreakbench
+  primary_url: https://arxiv.org/abs/2404.01318
+  title: 'JailbreakBench: An Open Robustness Benchmark for Jailbreaking Large Language Models'
+  status: verified
+  claim_family: benchmark
+  authors: Chao et al. (2024)
+  venue: NeurIPS 2024 Datasets and Benchmarks
+  code_url: https://github.com/JailbreakBench/jailbreakbench
+
+- bibkey: lakera2024pint
+  primary_url: https://www.lakera.ai/blog/lakera-pint-benchmark
+  title: "Lakera's Prompt Injection Test (PINT) — A New Benchmark for Evaluating Prompt Injection Solutions"
+  status: verified
+  claim_family: benchmark
+  authors: Lakera (2024)
+  venue: Vendor blog (Lakera AI)
+  code_url: https://github.com/lakeraai/pint-benchmark
+
+# ============================================================================
+# A5 — Industry standards and threat modeling (claim_family: industry_standard)
+# ============================================================================
+
+- bibkey: owasp2025llmtop10
+  primary_url: https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+  title: 'LLM01:2025 Prompt Injection — OWASP Top 10 for LLM Applications (2025)'
+  status: verified
+  claim_family: industry_standard
+  authors: OWASP Gen AI Security Project (2025)
+  venue: OWASP Foundation (2025 edition)

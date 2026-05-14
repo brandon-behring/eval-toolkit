@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
 
+## [0.22.1] — 2026-05-14 — agent-grounding research dossier
+
+### Added
+
+- `docs/research/` — 52-file research dossier (~304K) covering inference,
+  data integrity, eval-ecosystem, prompt-injection, and datasets. 69
+  primary-source entries (all `status: verified` after six audit rounds);
+  80 URLs HEAD-checked (0 broken, 16 paywall-blocked, 64 OK). Top-level
+  cross-cluster index in `docs/research/README.md`; URL health in
+  `docs/research/url-freshness-report.md`; gap-analysis against the
+  existing `docs/methodology/reading_list.md` in
+  `docs/research/RECONCILIATION.md` (reading_list.md unchanged).
+
 ## [0.22.0] — 2026-05-13 — expanded `evaluate_scorer_on_slice` (C11 / F8.1)
 
 Closes F8.1 from the V4 consumer feedback log. The harness aggregator gains

@@ -1,0 +1,144 @@
+# Dataset ledger — datasets cluster (eval-toolkit research dossier)
+# Entries cover: prompt-injection eval datasets, classical binary classification benchmarks (harness demo),
+# pre-training corpora (deduplication / contamination examples), and contamination-target benchmarks.
+
+entries:
+
+# ============================================================================
+# Prompt-injection eval datasets
+# ============================================================================
+
+- bibkey: pint_benchmark_lakera
+  primary_url: https://github.com/lakeraai/pint-benchmark
+  title: 'PINT Benchmark (Prompt Injection Test)'
+  status: verified
+  claim_family: prompt_injection_eval
+  authors: Lakera AI (2024)
+  venue: GitHub (MIT)
+  notes: |
+    3007 English inputs covering public + proprietary prompt-injection techniques + false-positive controls
+    + large-document handling tests. Eval set is private (held by Lakera) to prevent overfitting.
+
+- bibkey: advbench_zou
+  primary_url: https://github.com/llm-attacks/llm-attacks
+  title: 'AdvBench (Harmful Behaviors)'
+  status: verified
+  claim_family: prompt_injection_eval
+  authors: Zou et al. (2023)
+  venue: GitHub (MIT) — bundled with the GCG paper
+  notes: |
+    520 harmful behaviors paired with targets; standard test set used in GCG paper and many follow-ups.
+    Format: CSV with goal + target columns.
+
+- bibkey: harmbench_dataset
+  primary_url: https://github.com/centerforaisafety/HarmBench
+  title: 'HarmBench Behaviors and Targets'
+  status: verified
+  claim_family: prompt_injection_eval
+  authors: Mazeika et al. (2024)
+  venue: GitHub (MIT) + huggingface.co/datasets/walledai/HarmBench
+  notes: |
+    Standardized harmful behaviors organized into four functional groups (standard, contextual,
+    copyright, multimodal). HuggingFace mirror: walledai/HarmBench.
+
+- bibkey: jbb_behaviors_chao
+  primary_url: https://huggingface.co/datasets/JailbreakBench/JBB-Behaviors
+  title: 'JBB-Behaviors (JailbreakBench)'
+  status: verified
+  claim_family: prompt_injection_eval
+  authors: Chao et al. (2024)
+  venue: HuggingFace Datasets + GitHub
+  notes: |
+    100 jailbreak behaviors aligned to OpenAI usage policies; both original and sourced from prior work.
+    Permissive license; eval scripts + leaderboard infrastructure on jailbreakbench.github.io.
+
+# ============================================================================
+# Classical binary-classification benchmarks (harness demos)
+# ============================================================================
+
+- bibkey: uci_adult
+  primary_url: https://archive.ics.uci.edu/dataset/2/adult
+  title: 'Adult (Census Income) — UCI Machine Learning Repository'
+  status: verified
+  claim_family: binary_classification_benchmark
+  authors: Becker & Kohavi (1996)
+  venue: UCI Machine Learning Repository
+  notes: |
+    Predict whether income exceeds $50K/yr from US Census data. 48,842 instances, 14 features
+    (categorical + continuous). Classic binary classification benchmark; CC BY 4.0.
+
+- bibkey: uci_breast_cancer_wisconsin
+  primary_url: https://archive.ics.uci.edu/dataset/17/breast+cancer+wisconsin+diagnostic
+  title: 'Breast Cancer Wisconsin (Diagnostic) — UCI Machine Learning Repository'
+  status: verified
+  claim_family: binary_classification_benchmark
+  authors: Wolberg, Mangasarian, Street & Street (1995)
+  venue: UCI Machine Learning Repository
+  notes: |
+    Predict diagnosis (M=malignant, B=benign) from 30 numerical features extracted from FNA images.
+    569 instances. CC BY 4.0. Standard test fixture for binary classifier examples.
+
+- bibkey: openml_repo
+  primary_url: https://www.openml.org/
+  title: 'OpenML (Open Machine Learning) — Collaborative Benchmark Platform'
+  status: verified
+  claim_family: binary_classification_benchmark
+  authors: Vanschoren et al. (2014)
+  venue: openml.org (web platform); paper at arxiv:1407.7722 (SIGKDD Explorations 2014)
+  notes: |
+    Meta-platform indexing thousands of ML datasets with standardized splits, baselines, and Croissant-
+    compatible metadata. Useful as a benchmark *source* rather than a single dataset.
+
+# ============================================================================
+# Pre-training corpora (dedup / contamination context)
+# ============================================================================
+
+- bibkey: c4_dataset
+  primary_url: https://huggingface.co/datasets/allenai/c4
+  title: 'C4 (Colossal Clean Crawled Corpus)'
+  status: verified
+  claim_family: pretraining_corpus
+  authors: Raffel et al. (2020); cleaned web crawl version
+  venue: HuggingFace Datasets (allenai/c4); originally introduced in T5 paper (arXiv:1910.10683)
+  notes: |
+    Cleaned subset of Common Crawl used to train T5 and many downstream LMs. ~750GB.
+    Subject of Lee et al. 2022 ACL deduplication study — substantial near-duplicate content found
+    (61-word English sentence repeated 60,000+ times pre-dedup). ODC-BY license.
+
+- bibkey: refinedweb_dataset
+  primary_url: https://huggingface.co/datasets/tiiuae/falcon-refinedweb
+  title: 'RefinedWeb (Falcon LLM pretraining corpus, public 500B-token subset)'
+  status: verified
+  claim_family: pretraining_corpus
+  authors: Penedo et al. (2023)
+  venue: HuggingFace Datasets (tiiuae/falcon-refinedweb); arXiv:2306.01116
+  notes: |
+    600B-token public subset of the 5T-token RefinedWeb corpus used to train Falcon. Heavy fuzzy
+    + exact dedup pipeline applied; demonstrates that web-only data can match curated mixtures.
+    ODC-BY license.
+
+# ============================================================================
+# Contamination-target benchmarks (commonly contaminated in LLM training)
+# ============================================================================
+
+- bibkey: mmlu_benchmark
+  primary_url: https://huggingface.co/datasets/cais/mmlu
+  title: 'MMLU (Massive Multitask Language Understanding)'
+  status: verified
+  claim_family: contamination_target
+  authors: Hendrycks et al. (2021)
+  venue: HuggingFace Datasets (cais/mmlu); ICLR 2021 (arXiv:2009.03300)
+  notes: |
+    57 subjects covering humanities, STEM, social sciences. Standard LLM knowledge eval but frequently
+    cited as a contamination target (per Sainz et al. 2023). Apache-2.0.
+
+- bibkey: hellaswag_benchmark
+  primary_url: https://huggingface.co/datasets/Rowan/hellaswag
+  title: 'HellaSwag'
+  status: verified
+  claim_family: contamination_target
+  authors: Zellers et al. (2019)
+  venue: HuggingFace Datasets (Rowan/hellaswag); ACL 2019 (arXiv:1905.07830)
+  notes: |
+    Commonsense NLI benchmark with adversarially generated wrong endings. Standard LLM benchmark in
+    HELM and lm-evaluation-harness. Frequently flagged as contaminated in modern LLMs. MIT.

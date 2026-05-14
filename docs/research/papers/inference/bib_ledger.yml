@@ -1,0 +1,231 @@
+# Bibliography ledger — inference cluster (eval-toolkit research dossier)
+# Schema: see ~/Claude/research_toolkit/templates/bib_ledger.template.yml
+# Plan:   ./research_plan.md
+
+entries:
+
+# ============================================================================
+# A1 — Bootstrap CI foundations (claim_family: bootstrap_ci)
+# ============================================================================
+
+- bibkey: efron1996bootstrap
+  primary_url: https://projecteuclid.org/journals/statistical-science/volume-11/issue-3/Bootstrap-confidence-intervals/10.1214/ss/1032280214.full
+  title: 'Bootstrap confidence intervals'
+  status: verified
+  claim_family: bootstrap_ci
+  authors: DiCiccio & Efron (1996)
+  venue: Statistical Science 11(3)
+
+# ============================================================================
+# A2 — ROC / AUC variance and comparison tests (claim_family: roc_variance)
+# ============================================================================
+
+- bibkey: hanley1982meaning
+  primary_url: https://pubs.rsna.org/doi/10.1148/radiology.143.1.7063747
+  title: 'The meaning and use of the area under a receiver operating characteristic (ROC) curve'
+  status: verified
+  claim_family: roc_variance
+  authors: Hanley & McNeil (1982)
+  venue: Radiology 143(1)
+
+- bibkey: hanley1983method
+  primary_url: https://pubs.rsna.org/doi/10.1148/radiology.148.3.6878708
+  title: 'A method of comparing the areas under receiver operating characteristic curves derived from the same cases'
+  status: verified
+  claim_family: roc_variance
+  authors: Hanley & McNeil (1983)
+  venue: Radiology 148(3)
+
+- bibkey: delong1988auc
+  primary_url: https://doi.org/10.2307/2531595
+  title: 'Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach'
+  status: verified
+  claim_family: roc_variance
+  authors: DeLong, DeLong & Clarke-Pearson (1988)
+  venue: Biometrics 44(3)
+
+- bibkey: sun2014fastdelong
+  primary_url: https://ieeexplore.ieee.org/document/6851192
+  title: "Fast implementation of DeLong's algorithm for comparing the areas under correlated receiver operating characteristic curves"
+  status: verified
+  claim_family: roc_variance
+  authors: Sun & Xu (2014)
+  venue: IEEE Signal Processing Letters 21(11)
+
+# ============================================================================
+# A3 — Cross-validation variance and CI construction (claim_family: cv_variance)
+# ============================================================================
+
+- bibkey: nadeau2003inference
+  primary_url: https://link.springer.com/article/10.1023/A:1024068626366
+  title: 'Inference for the generalization error'
+  status: verified
+  claim_family: cv_variance
+  authors: Nadeau & Bengio (2003)
+  venue: Machine Learning 52
+
+- bibkey: bengio2004nounbiased
+  primary_url: https://jmlr.csail.mit.edu/papers/v5/grandvalet04a.html
+  title: 'No unbiased estimator of the variance of K-fold cross-validation'
+  status: verified
+  claim_family: cv_variance
+  authors: Bengio & Grandvalet (2004)
+  venue: JMLR 5
+
+- bibkey: bates2024crossvalidation
+  primary_url: https://arxiv.org/abs/2104.00673
+  title: 'Cross-validation: what does it estimate and how well does it do it?'
+  status: verified
+  claim_family: cv_variance
+  authors: Bates, Hastie & Tibshirani (2024)
+  venue: JASA 119(546)
+  code_url: https://github.com/stephenbates19/nestedcv
+
+# ============================================================================
+# A4 — Probability calibration methods (claim_family: calibration_method)
+# ============================================================================
+
+- bibkey: platt1999probabilistic
+  primary_url: https://www.semanticscholar.org/paper/Probabilistic-Outputs-for-Support-vector-Machines-Platt/42e5ed832d4310ce4378c44d05570439df28a393
+  title: 'Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods'
+  status: verified
+  claim_family: calibration_method
+  authors: Platt (1999)
+  venue: Advances in Large Margin Classifiers (MIT Press)
+
+- bibkey: zadrozny2002transforming
+  primary_url: https://dl.acm.org/doi/10.1145/775047.775151
+  title: 'Transforming classifier scores into accurate multiclass probability estimates'
+  status: verified
+  claim_family: calibration_method
+  authors: Zadrozny & Elkan (2002)
+  venue: KDD 2002
+
+- bibkey: niculescumizil2005calibration
+  primary_url: https://dl.acm.org/doi/10.1145/1102351.1102430
+  title: 'Predicting good probabilities with supervised learning'
+  status: verified
+  claim_family: calibration_method
+  authors: Niculescu-Mizil & Caruana (2005)
+  venue: ICML 2005
+
+- bibkey: naeini2015bbq
+  primary_url: https://ojs.aaai.org/index.php/AAAI/article/view/9602
+  title: 'Obtaining well calibrated probabilities using Bayesian binning'
+  status: verified
+  claim_family: calibration_method
+  authors: Naeini, Cooper & Hauskrecht (2015)
+  venue: AAAI 2015
+
+- bibkey: guo2017calibration
+  primary_url: https://arxiv.org/abs/1706.04599
+  title: 'On calibration of modern neural networks'
+  status: verified
+  claim_family: calibration_method
+  authors: Guo et al. (2017)
+  venue: ICML 2017
+
+- bibkey: kull2017beta
+  primary_url: https://proceedings.mlr.press/v54/kull17a.html
+  title: 'Beta calibration: a well-founded and easily implemented improvement on logistic calibration for binary classifiers'
+  status: verified
+  claim_family: calibration_method
+  authors: Kull, Silva Filho & Flach (2017)
+  venue: AISTATS 2017
+
+# ============================================================================
+# A5 — Calibration metrics and diagnostic decompositions (claim_family: calibration_metric)
+# ============================================================================
+
+- bibkey: brier1950verification
+  primary_url: https://journals.ametsoc.org/view/journals/mwre/78/1/1520-0493_1950_078_0001_vofeit_2_0_co_2.xml
+  title: 'Verification of forecasts expressed in terms of probability'
+  status: verified
+  claim_family: calibration_metric
+  authors: Brier (1950)
+  venue: Monthly Weather Review 78(1)
+
+- bibkey: murphy1973vector
+  primary_url: https://journals.ametsoc.org/view/journals/apme/12/4/1520-0450_1973_012_0595_anvpot_2_0_co_2.xml
+  title: 'A new vector partition of the probability score'
+  status: verified
+  claim_family: calibration_metric
+  authors: Murphy (1973)
+  venue: Journal of Applied Meteorology 12(4)
+
+- bibkey: kumar2019verified
+  primary_url: https://arxiv.org/abs/1909.10155
+  title: 'Verified uncertainty calibration'
+  status: verified
+  claim_family: calibration_metric
+  authors: Kumar, Liang & Ma (2019)
+  venue: NeurIPS 2019 Spotlight
+  code_url: https://github.com/p-lambda/verified_calibration
+
+- bibkey: roelofs2022mitigating
+  primary_url: https://arxiv.org/abs/2012.08668
+  title: 'Mitigating bias in calibration error estimation'
+  status: verified
+  claim_family: calibration_metric
+  authors: Roelofs et al. (2022)
+  venue: AISTATS 2022
+
+# ============================================================================
+# A6 — Threshold selection and decision theory (claim_family: threshold_decision)
+# ============================================================================
+
+- bibkey: youden1950index
+  primary_url: https://pubmed.ncbi.nlm.nih.gov/15405679/
+  title: 'Index for rating diagnostic tests'
+  status: verified
+  claim_family: threshold_decision
+  authors: Youden (1950)
+  venue: Cancer 3(1)
+
+- bibkey: elkan2001foundations
+  primary_url: https://dl.acm.org/doi/10.5555/1642194.1642224
+  title: 'The foundations of cost-sensitive learning'
+  status: verified
+  claim_family: threshold_decision
+  authors: Elkan (2001)
+  venue: IJCAI 2001
+
+- bibkey: saerens2002adjusting
+  primary_url: https://direct.mit.edu/neco/article/14/1/21/6577/Adjusting-the-Outputs-of-a-Classifier-to-New-a
+  title: 'Adjusting the outputs of a classifier to new a priori probabilities: a simple procedure'
+  status: verified
+  claim_family: threshold_decision
+  authors: Saerens, Latinne & Decaestecker (2002)
+  venue: Neural Computation 14(1)
+
+- bibkey: lipton2014thresholding
+  primary_url: https://arxiv.org/abs/1402.1892
+  title: 'Thresholding classifiers to maximize F1 score'
+  status: verified
+  claim_family: threshold_decision
+  authors: Lipton, Elkan & Narayanaswamy (2014)
+  venue: arXiv (also ECML PKDD 2014 as "Optimal Thresholding of Classifiers to Maximize F1 Measure")
+
+# ============================================================================
+# A7 — Power analysis and minimum detectable effect (claim_family: power_analysis)
+# ============================================================================
+
+- bibkey: obuchowski1998sample
+  primary_url: https://journals.sagepub.com/doi/abs/10.1177/096228029800700405
+  title: 'Sample size calculations in studies of test accuracy'
+  status: verified
+  claim_family: power_analysis
+  authors: Obuchowski (1998)
+  venue: Statistical Methods in Medical Research 7(4)
+
+# ============================================================================
+# Foundational text (claim_family: foundational_text)
+# ============================================================================
+
+- bibkey: hastie2009elements
+  primary_url: https://hastie.su.domains/ElemStatLearn/
+  title: 'The Elements of Statistical Learning: Data Mining, Inference, and Prediction'
+  status: verified
+  claim_family: foundational_text
+  authors: Hastie, Tibshirani & Friedman (2009)
+  venue: Springer Series in Statistics (2nd ed., free PDF available from authors)

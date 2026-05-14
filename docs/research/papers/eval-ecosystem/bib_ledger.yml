@@ -1,0 +1,96 @@
+# Bibliography ledger — eval-ecosystem cluster (eval-toolkit research dossier)
+# Schema: see ~/Claude/research_toolkit/templates/bib_ledger.template.yml
+# Plan:   ./research_plan.md
+
+entries:
+
+# ============================================================================
+# A1 — LLM evaluation harness frameworks (claim_family: eval_harness)
+# ============================================================================
+
+- bibkey: liang2022helm
+  primary_url: https://arxiv.org/abs/2211.09110
+  title: 'Holistic Evaluation of Language Models'
+  status: verified
+  claim_family: eval_harness
+  authors: Liang et al. (2022)
+  venue: arXiv preprint (Stanford CRFM); later TMLR 2023
+  code_url: https://github.com/stanford-crfm/helm
+
+- bibkey: gao2024lmevalharness
+  primary_url: https://zenodo.org/records/12608602
+  title: 'The Language Model Evaluation Harness'
+  status: verified
+  claim_family: eval_harness
+  authors: Gao et al. (2024)
+  venue: Zenodo (DOI 10.5281/zenodo.12608602)
+  code_url: https://github.com/EleutherAI/lm-evaluation-harness
+
+- bibkey: aisi2024inspect
+  primary_url: https://github.com/UKGovernmentBEIS/inspect_ai
+  title: 'Inspect: A framework for large language model evaluations'
+  status: verified
+  claim_family: eval_harness
+  authors: UK AI Security Institute (2024)
+  venue: GitHub (open-source framework)
+
+# ============================================================================
+# A2 — Reproducibility checklists and standards (claim_family: reproducibility_standard)
+# ============================================================================
+
+- bibkey: pineau2021reproducibility
+  primary_url: https://arxiv.org/abs/2003.12206
+  title: 'Improving Reproducibility in Machine Learning Research (A Report from the NeurIPS 2019 Reproducibility Program)'
+  status: verified
+  claim_family: reproducibility_standard
+  authors: Pineau et al. (2021)
+  venue: JMLR 22
+
+# ============================================================================
+# A3 — Dataset and model metadata standards (claim_family: metadata_standard)
+# ============================================================================
+
+- bibkey: gebru2021datasheets
+  primary_url: https://arxiv.org/abs/1803.09010
+  title: 'Datasheets for Datasets'
+  status: verified
+  claim_family: metadata_standard
+  authors: Gebru et al. (2021)
+  venue: Communications of the ACM 64(12)
+
+- bibkey: mitchell2019modelcards
+  primary_url: https://arxiv.org/abs/1810.03993
+  title: 'Model Cards for Model Reporting'
+  status: verified
+  claim_family: metadata_standard
+  authors: Mitchell et al. (2019)
+  venue: FAT* 2019 (Fairness, Accountability, and Transparency)
+
+- bibkey: akhtar2024croissant
+  primary_url: https://arxiv.org/abs/2403.19546
+  title: 'Croissant: A Metadata Format for ML-Ready Datasets'
+  status: verified
+  claim_family: metadata_standard
+  authors: Akhtar et al. (2024)
+  venue: NeurIPS 2024 Datasets and Benchmarks (also DEEM 2024)
+  code_url: https://github.com/mlcommons/croissant
+
+# ============================================================================
+# A4 — Methodology surveys and best-practices critiques (claim_family: methodology_survey)
+# ============================================================================
+
+- bibkey: bowman2021benchmarking
+  primary_url: https://arxiv.org/abs/2104.02145
+  title: 'What Will it Take to Fix Benchmarking in Natural Language Understanding?'
+  status: verified
+  claim_family: methodology_survey
+  authors: Bowman & Dahl (2021)
+  venue: NAACL 2021
+
+- bibkey: dehghani2021benchmarklottery
+  primary_url: https://arxiv.org/abs/2107.07002
+  title: 'The Benchmark Lottery'
+  status: verified
+  claim_family: methodology_survey
+  authors: Dehghani et al. (2021)
+  venue: arXiv preprint

@@ -1,0 +1,152 @@
+# Bibliography ledger — data-integrity cluster (eval-toolkit research dossier)
+# Schema: see ~/Claude/research_toolkit/templates/bib_ledger.template.yml
+# Plan:   ./research_plan.md
+
+entries:
+
+# ============================================================================
+# A1 — Splits and CV strategies (claim_family: splits_methodology)
+# ============================================================================
+
+- bibkey: bergmeir2012timeseries
+  primary_url: https://doi.org/10.1016/j.ins.2011.12.028
+  title: 'On the use of cross-validation for time series predictor evaluation'
+  status: verified
+  claim_family: splits_methodology
+  authors: Bergmeir & Benitez (2012)
+  venue: Information Sciences 191
+
+- bibkey: roberts2017blockcv
+  primary_url: https://doi.org/10.1111/ecog.02881
+  title: 'Cross-validation strategies for data with temporal, spatial, hierarchical, or phylogenetic structure'
+  status: verified
+  claim_family: splits_methodology
+  authors: Roberts et al. (2017)
+  venue: Ecography 40(8)
+
+# ============================================================================
+# A2 — Nested CV and hyperparameter selection (claim_family: nested_cv)
+# ============================================================================
+
+- bibkey: varma2006bias
+  primary_url: https://link.springer.com/article/10.1186/1471-2105-7-91
+  title: 'Bias in error estimation when using cross-validation for model selection'
+  status: verified
+  claim_family: nested_cv
+  authors: Varma & Simon (2006)
+  venue: BMC Bioinformatics 7
+
+- bibkey: cawley2010overfitting
+  primary_url: https://www.jmlr.org/papers/v11/cawley10a.html
+  title: 'On over-fitting in model selection and subsequent selection bias in performance evaluation'
+  status: verified
+  claim_family: nested_cv
+  authors: Cawley & Talbot (2010)
+  venue: JMLR 11
+
+# ============================================================================
+# A3 — Data leakage taxonomy (claim_family: leakage_taxonomy)
+# ============================================================================
+
+- bibkey: kapoor2023leakage
+  primary_url: https://arxiv.org/abs/2207.07048
+  title: 'Leakage and the reproducibility crisis in machine-learning-based science'
+  status: verified
+  claim_family: leakage_taxonomy
+  authors: Kapoor & Narayanan (2023)
+  venue: Patterns 4(9)
+
+# ============================================================================
+# A4 — Benchmark contamination (claim_family: benchmark_contamination)
+# ============================================================================
+
+- bibkey: magar2022contamination
+  primary_url: https://arxiv.org/abs/2203.08242
+  title: 'Data Contamination: From Memorization to Exploitation'
+  status: verified
+  claim_family: benchmark_contamination
+  authors: Magar & Schwartz (2022)
+  venue: ACL 2022 Short Papers
+  code_url: https://github.com/schwartz-lab-NLP/data_contamination
+
+- bibkey: sainz2023nlp
+  primary_url: https://arxiv.org/abs/2310.18018
+  title: 'NLP Evaluation in trouble: On the Need to Measure LLM Data Contamination for each Benchmark'
+  status: verified
+  claim_family: benchmark_contamination
+  authors: Sainz et al. (2023)
+  venue: Findings of EMNLP 2023
+
+- bibkey: roberts2023contamination
+  primary_url: https://arxiv.org/abs/2310.10628
+  title: 'Data Contamination Through the Lens of Time'
+  status: verified
+  claim_family: benchmark_contamination
+  authors: Roberts et al. (2023)
+  venue: arXiv preprint
+
+# ============================================================================
+# A5 — Text deduplication methods (claim_family: text_dedup_method)
+# ============================================================================
+
+- bibkey: broder1997minhash
+  primary_url: https://ieeexplore.ieee.org/document/666900
+  title: 'On the resemblance and containment of documents'
+  status: verified
+  claim_family: text_dedup_method
+  authors: Broder (1997)
+  venue: Compression and Complexity of Sequences (IEEE)
+
+- bibkey: indyk1998lsh
+  primary_url: https://dl.acm.org/doi/10.1145/276698.276876
+  title: 'Approximate nearest neighbors: towards removing the curse of dimensionality'
+  status: verified
+  claim_family: text_dedup_method
+  authors: Indyk & Motwani (1998)
+  venue: STOC 1998
+
+- bibkey: abbas2023semdedup
+  primary_url: https://arxiv.org/abs/2303.09540
+  title: 'SemDeDup: Data-efficient learning at web-scale through semantic deduplication'
+  status: verified
+  claim_family: text_dedup_method
+  authors: Abbas et al. (2023)
+  venue: arXiv preprint
+  code_url: https://github.com/facebookresearch/SemDeDup
+
+# ============================================================================
+# A6 — Pre-training corpus dedup and downstream effects (claim_family: pretrain_dedup)
+# ============================================================================
+
+- bibkey: carlini2021extracting
+  primary_url: https://arxiv.org/abs/2012.07805
+  title: 'Extracting Training Data from Large Language Models'
+  status: verified
+  claim_family: pretrain_dedup
+  authors: Carlini et al. (2021)
+  venue: USENIX Security 2021 (Distinguished Paper)
+
+- bibkey: lee2022deduplicating
+  primary_url: https://arxiv.org/abs/2107.06499
+  title: 'Deduplicating Training Data Makes Language Models Better'
+  status: verified
+  claim_family: pretrain_dedup
+  authors: Lee et al. (2022)
+  venue: ACL 2022
+
+- bibkey: carlini2022memorization
+  primary_url: https://arxiv.org/abs/2202.07646
+  title: 'Quantifying Memorization Across Neural Language Models'
+  status: verified
+  claim_family: pretrain_dedup
+  authors: Carlini et al. (2023)
+  venue: ICLR 2023
+  code_url: https://github.com/ethz-spylab/lm_memorization_data
+
+- bibkey: penedo2023refinedweb
+  primary_url: https://arxiv.org/abs/2306.01116
+  title: 'The RefinedWeb Dataset for Falcon LLM: Outperforming Curated Corpora with Web Data, and Web Data Only'
+  status: verified
+  claim_family: pretrain_dedup
+  authors: Penedo et al. (2023)
+  venue: NeurIPS 2023 Datasets and Benchmarks
