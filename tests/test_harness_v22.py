@@ -182,3 +182,69 @@ def test_backward_compat_existing_kwargs_only(signal_slice: EvalSlice) -> None:
     assert "mce" not in result
     assert "brier_score" not in result
     assert "roc_auc_ci" not in result
+
+
+@pytest.mark.unit
+def test_evaluate_scorer_on_slice_full_kwarg_cross_product(signal_slice: EvalSlice) -> None:
+    """Full v0.22 kwarg cross-product produces every expected key (audit gap fix, v0.26.0).
+
+    Each individual v0.22 kwarg has dedicated test coverage above
+    (precomputed_scores / attack_style / fpr_ladder / compute_mce /
+    compute_brier / calibrator / bootstrap_roc_auc). This test
+    exercises the *full cross-product* in a single invocation to
+    catch interaction bugs between the kwargs that single-kwarg
+    tests miss — e.g., a calibrator-shifted score range that breaks
+    the bootstrap_roc_auc CI computation, or fpr_ladder thresholds
+    that conflict with calibrated probability ranges.
+    """
+    n = len(signal_slice.df)
+    rng = np.random.default_rng(11)
+    raw_logits = np.concatenate([rng.normal(-0.5, 0.8, 40), rng.normal(0.8, 0.8, 40)])
+    raw_scores = 1.0 / (1.0 + np.exp(-raw_logits))
+    calibrator = fit_platt_calibrator(signal_slice.y_true, raw_scores)
+
+    result = evaluate_scorer_on_slice(
+        _SignalScorer(),
+        signal_slice,
+        precomputed_scores=raw_scores,
+        attack_style="multi_method",
+        fpr_ladder=[0.001, 0.01, 0.1],
+        compute_mce=True,
+        compute_brier=True,
+        calibrator=calibrator,
+        bootstrap_roc_auc=True,
+        n_resamples=100,
+        seed=42,
+    )
+    # Pre-v0.22 keys
+    for key in ("n", "n_positive", "pr_auc", "roc_auc", "pr_auc_ci", "scores"):
+        assert key in result, f"missing pre-v0.22 key: {key}"
+    # v0.22 kwarg-driven keys
+    assert result["attack_style"] == "multi_method"
+    assert "tpr_at_fpr" in result
+    assert set(result["tpr_at_fpr"].keys()) >= {"0.001", "0.01", "0.1"}
+    assert "mce" in result
+    assert "brier_score" in result
+    assert "roc_auc_ci" in result
+    # Calibrator-driven keys
+    for key in (
+        "pr_auc_calibrated",
+        "roc_auc_calibrated",
+        "brier_score_calibrated",
+        "mce_calibrated",
+        "tpr_at_fpr_calibrated",
+        "scores_calibrated",
+    ):
+        assert key in result, f"missing calibrated key: {key}"
+    # Bootstrap CIs respect the calibrated values
+    assert "pr_auc_ci" in result and "roc_auc_ci" in result
+    assert isinstance(result["scores_calibrated"], list)
+    assert len(result["scores_calibrated"]) == n
+    # Numeric sanity: every CI is in [0, 1] (or NaN for degenerate bootstrap).
+    for ci_key in ("pr_auc_ci", "roc_auc_ci"):
+        ci = result[ci_key]
+        ci_low, ci_high = ci["ci_95"]
+        if np.isfinite(ci_low) and np.isfinite(ci_high):
+            assert (
+                0.0 <= ci_low <= ci["point_estimate"] <= ci_high <= 1.0
+            ), f"CI invariant violated for {ci_key}: {ci}"

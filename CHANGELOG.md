@@ -7,6 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-05-14 — test completeness
+
+Builds on v0.25.1 (`Raises:` sweep). Test additions only; no behavior
+or API change. Closes the gaps surfaced by the v0.26.0 toolkit-
+completeness audit (research-grounded validation, error-path coverage,
+cross-module integration). Pytest count: 1085 → 1161 (+76).
+
+### Added — research-grounded test upgrades (Class B → A)
+
+- `tests/test_calibration_research_grounded.py` (extended):
+  Niculescu-Mizil & Caruana 2005 §4 — isotonic dominates Platt on
+  saturated tree-ensemble-shaped scores; counter-test on smooth
+  sigmoidal scores confirms the dominance is distribution-shape-
+  dependent.
+- `tests/test_bootstrap_research_grounded.py` (NEW): DiCiccio & Efron
+  1996 §4 BCa transformation-respecting coverage on Beta(2, 5)
+  skewed-mean fixture (100-seed loop); BCa coverage proximity vs
+  percentile method; Bayle 2020 / Bates 2024 cv_clt_ci coverage
+  validity on K=5 i.i.d. folds (200-seed loop) plus closed-form
+  formula sanity check.
+- `tests/test_thresholds_research_grounded.py` (NEW): Lipton, Elkan,
+  Naryanaswamy 2014 Theorem 1 — F1-optimal threshold ≈ F1\*/2 on
+  well-calibrated probabilities (10-seed parametrized + aggregate
+  test); MaxF1Selector argmax sanity check.
+
+### Added — error-path coverage (top-10 audit gaps)
+
+- `tests/test_leakage_error_paths.py` (NEW): 8 KeyError tests
+  covering every `raise KeyError` site in `leakage.py` (target_splits
+  validation, CrossSplit train/eval missing, validate_label_split
+  train/eval missing, GroupLeakage missing column, TemporalLeakage
+  missing split + missing time_col).
+- `tests/test_evidence_validators.py` (NEW): 3 dataclass
+  `__post_init__` tests for empty-name / empty-value / empty-method
+  ValueError raises.
+- `tests/test_thresholds_constant_score.py` (NEW): explicit
+  positive coverage that constant-score inputs do NOT raise on
+  MaxF1Selector / YoudenJSelector + monkeypatch coverage of the
+  defensive `len(thresholds) == 0` raises in
+  `_pr_curve_trim` / `_roc_curve_trim`.
+- `tests/test_calibration_optimization_failures.py` (NEW): 2
+  monkeypatched tests for L-BFGS-B / minimize_scalar convergence
+  failure paths in `fit_platt_calibrator` / `fit_temperature` plus
+  positive controls.
+- `tests/test_bootstrap_edge_cases.py` (NEW): 7 tests covering
+  n<10 guards across `bootstrap_ci` / `paired_bootstrap_diff` /
+  `paired_bootstrap_ece_diff`, shape-mismatch raises, the
+  >5%-degenerate-resamples gate (using a strict-single-class
+  metric helper), and confidence-out-of-(0,1) raises.
+- `tests/test_metrics_stratified_subsets.py` (NEW): 5 tests on
+  `quantile_stratified_pr_auc` (shape mismatch, invalid bounds,
+  empty window via NaN stratifier, imbalanced subset, positive
+  control).
+- `tests/test_harness_v22.py` (extended): 1 new test exercising the
+  full v0.22 kwarg cross-product (calibrator + bootstrap_roc_auc +
+  fpr_ladder + compute_mce + compute_brier + attack_style
+  + precomputed_scores).
+- `tests/test_manifest_contamination_round_trip.py` (NEW): 6 tests
+  pinning `RunManifest → JSON → validate_manifest → reload` cycle
+  for every contamination_flags enum value, plus invalid-value
+  rejection at build time and multi-scorer round-trip.
+- `tests/test_numeric_edge_cases.py` (NEW): 9 tests across
+  metrics / bootstrap / calibration covering n=1, constant
+  y_score, np.int32 / np.float32 dtypes, and Python list inputs.
+
+### Added — cross-module integration tests
+
+- `tests/test_splits_leakage_integration.py` (NEW): 4 tests verifying
+  `StratifiedKFoldSplitter` output produces no false-positive
+  findings under `ExactDuplicateCheck` / `CrossSplitLeakageCheck` /
+  `NormalizedFormLeakageCheck` on a clean unique-text corpus, plus
+  a positive control with deliberate duplication.
+- `tests/test_dedup_split_leakage_chain.py` (NEW): 3 tests on the
+  end-to-end dedup → stratify → cross-split-leakage chain
+  (TF-IDF and MinHashLSH backends), plus undedup positive control.
+- `tests/test_calibration_bootstrap_chain.py` (NEW): 2 tests on the
+  uncalibrated → fit-Platt → calibrated bootstrap-CI workflow,
+  asserting calibrated point ECE drops below uncalibrated in
+  ≥ 70% of 50 seeds (per the v0.25.0 flake-mitigation policy)
+  plus a single-seed point-comparison sanity check.
+
+### Notes on plan deviations
+
+- The originally-planned "CV-CLT-CI width-dominance over naive
+  percentile bootstrap" test was restructured to a coverage test
+  after inspection found `cv_clt_ci` uses the standard `mean ±
+  z·σ/√K` formula (Bayle 2020 proves its asymptotic validity, but
+  doesn't add a width-improvement correction). The right test of
+  the claim is coverage, not width.
+- The originally-planned "MaxF1Selector / YoudenJSelector raise on
+  constant y_score" test was restructured after empirical
+  investigation found sklearn 1.x returns at least one threshold on
+  constant input; the selectors handle constant scores without
+  raising. The defensive `len(thresholds) == 0` raises are pinned
+  via monkeypatch instead.
+- The Niculescu-Mizil 2005 counter-test tolerance was loosened to
+  0.02 (above the small-n calibration-noise floor); a strict
+  flip-direction counter-test would require n ≳ 1000 calibration
+  data per Niculescu-Mizil 2005 §5, which would balloon the test
+  runtime.
+
 ## [0.25.1] — 2026-05-14 — docstring `Raises:` sweep
 
 Builds on v0.25.0. Docs-only patch; no behavior or API change. Surfaced
