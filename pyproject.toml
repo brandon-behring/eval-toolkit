@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eval-toolkit"
-version = "0.22.1"
+version = "0.23.0"
 description = "Reusable evaluation contracts for binary classification: metrics, bootstrap CIs, calibration, artifacts, and evidence gates."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.13"
 authors = [
     { name = "Brandon Behring" },
 ]
@@ -27,8 +27,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -89,11 +87,11 @@ include = [
 
 [tool.black]
 line-length = 100
-target-version = ["py311"]
+target-version = ["py313"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "C4"]
@@ -110,7 +108,7 @@ ignore = [
 known-first-party = ["eval_toolkit"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 mypy_path = "src"
 strict = true
 warn_return_any = true

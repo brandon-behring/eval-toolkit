@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-05-14 — Python 3.13+ floor; restore green CI
+
+### BREAKING
+
+- **Python floor raised to `>=3.13`** (was `>=3.11,<3.14`). Consumers
+  on Python 3.11 or 3.12 must either upgrade to 3.13+ or pin
+  `eval-toolkit<0.23`. The upper bound is now open — 3.14 and later
+  are nominally allowed but not yet smoke-tested in CI.
+- `[tool.{black,ruff,mypy}]` `target-version` / `python_version` all
+  raised to `py313` / `3.13`. Tooling now emits 3.13-only idiom
+  suggestions (`datetime.UTC` over `datetime.timezone.utc`, etc.).
+- Trove classifiers `Programming Language :: Python :: 3.11` and
+  `… 3.12` dropped.
+
+### Changed
+
+- CI matrix slimmed: `ubuntu-latest` + `macos-latest` + `windows-latest`,
+  all at Python 3.13. Drops the prior 3.11 / 3.12 Ubuntu jobs (the
+  cross-OS coverage added in v0.10.0 is preserved). Removes the
+  `include:` block from `.github/workflows/ci.yml`.
+- `eval_toolkit.config`: `frozen_config` and `from_yaml` migrated to
+  PEP 695 type-parameter syntax (`def frozen_config[T](...)`). Drops
+  the module-level `TypeVar("T")` declaration. Caller-visible behavior
+  unchanged; surfaces a cleaner generic signature in IDE hover / docs.
+
 ### Fixed
 
 - Restore green CI on `main`. Five ruff lint violations accumulated
@@ -32,6 +57,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "should we extract sub-package X?", and the audit cadence
   (every 3 minor releases; next at v0.13.0). Linked from
   `README.md` Documentation section.
+
+### Migration notes for downstream consumers
+
+Consumers pinning `eval-toolkit>=0.22,<0.23` on Python 3.11 / 3.12:
+
+1. Bump the Python floor of the consumer to `>=3.13` (or stay on
+   `eval-toolkit<0.23` and accept that v0.22 won't receive backports).
+2. Re-run `uv sync` / `pip install -e .` — the lockfile resolves to
+   `eval-toolkit==0.23.0` once `requires-python` is compatible.
+3. No Python API changes — all v0.22.x callsites work unchanged.
 
 ## [0.22.1] — 2026-05-14 — agent-grounding research dossier
 

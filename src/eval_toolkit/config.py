@@ -13,14 +13,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields, is_dataclass
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 __all__ = ["frozen_config", "from_yaml"]
 
-T = TypeVar("T")
 
-
-def frozen_config(cls: type[T]) -> type[T]:
+def frozen_config[T](cls: type[T]) -> type[T]:
     """Decorator: apply ``@dataclass(frozen=True, slots=True)`` and validate.
 
     Subclasses must implement ``__post_init__`` for field validation; the
@@ -59,7 +57,7 @@ def frozen_config(cls: type[T]) -> type[T]:
     return dataclass(frozen=True, slots=True)(cls)
 
 
-def from_yaml(path: Path | str, cls: type[T]) -> T:
+def from_yaml[T](path: Path | str, cls: type[T]) -> T:
     """Load a YAML file into an instance of ``cls`` (a frozen dataclass).
 
     Requires the ``yaml`` extra: ``pip install eval-toolkit[yaml]``.
