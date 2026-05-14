@@ -372,6 +372,14 @@ def plot_pr_curve(
     Returns
     -------
     matplotlib.figure.Figure
+
+    Raises
+    ------
+    ValueError
+        If ``y_true``/``y_score`` fail shape/dtype/value-range checks
+        (re-raised from validators); if ``threshold`` or ``prevalence`` is
+        outside [0, 1]; or if ``baseline_curve`` is not a length-2 tuple
+        with matching-shape ``(recall, precision)`` arrays.
     """
     y_true = _ensure_ndarray("y_true", y_true)
     y_score = _ensure_ndarray("y_score", y_score)
@@ -477,6 +485,14 @@ def plot_reliability_diagram(
     Returns
     -------
     matplotlib.figure.Figure
+
+    Raises
+    ------
+    ValueError
+        If ``y_true``/``y_prob`` fail shape/dtype/value-range checks
+        (re-raised from validators); if ``bin_counts`` does not have
+        shape ``(n_bins,)``; or if ``bin_counts`` contains negative
+        values.
     """
     y_true = _ensure_ndarray("y_true", y_true)
     y_prob = _ensure_ndarray("y_prob", y_prob)
@@ -672,6 +688,11 @@ def plot_metric_bars(
     Returns
     -------
     matplotlib.figure.Figure
+
+    Raises
+    ------
+    ValueError
+        If ``values`` is empty.
     """
     if not values:
         raise ValueError("values must contain at least one entry")
@@ -725,6 +746,12 @@ def plot_score_histograms(
     Returns
     -------
     matplotlib.figure.Figure
+
+    Raises
+    ------
+    ValueError
+        If ``scores_by_slice`` is empty, or if any slice array is not 1-D,
+        is empty, or contains NaN/inf.
     """
     if not scores_by_slice:
         raise ValueError("scores_by_slice must contain at least one slice")
@@ -810,6 +837,14 @@ def plot_lift_ci(
     Returns
     -------
     matplotlib.figure.Figure
+
+    Raises
+    ------
+    ValueError
+        If ``estimates`` is empty.
+    TypeError
+        If any value in ``estimates`` lacks ``point_estimate``, ``ci_low``,
+        or ``ci_high`` attributes (BootstrapCI-like duck typing).
     """
     if not estimates:
         raise ValueError("estimates must contain at least one comparison")

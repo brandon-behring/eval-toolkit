@@ -87,7 +87,15 @@ def load_prediction_arrays(
     *,
     reader: PredictionReader | None = None,
 ) -> PredictionArrays:
-    """Load labels and scores from a prediction artifact reference."""
+    """Load labels and scores from a prediction artifact reference.
+
+    Raises
+    ------
+    ValueError
+        If ``ref`` lacks a ``columns`` mapping, lacks a non-empty ``uri``,
+        or its ``columns`` mapping is missing the ``label`` / ``score``
+        keys (re-raised from :func:`_required_column`).
+    """
     columns = ref.get("columns")
     if not isinstance(columns, Mapping):
         raise ValueError("prediction ref must include a columns mapping")
@@ -135,7 +143,15 @@ def paired_diff_from_prediction_refs(
     n_resamples: int = 1000,
     seed: int = 42,
 ) -> dict[str, object]:
-    """Compute paired PR-AUC delta from two prediction refs."""
+    """Compute paired PR-AUC delta from two prediction refs.
+
+    Raises
+    ------
+    ValueError
+        If the two refs disagree on row count, label values, ``row_ids``,
+        or ``content_hashes``; or if either ref is malformed (re-raised
+        from :func:`load_prediction_arrays`).
+    """
     baseline = load_prediction_arrays(baseline_ref, reader=baseline_reader)
     candidate = load_prediction_arrays(candidate_ref, reader=candidate_reader)
     if baseline.labels.shape != candidate.labels.shape:

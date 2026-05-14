@@ -282,6 +282,11 @@ def low_fpr_feasibility_gate(
     support a claim of ``FPR <= max_fpr`` even in the best empirical case of
     zero false positives. The best-case upper bound is the Wilson score upper
     confidence bound for ``0 / n_negative``.
+
+    Raises
+    ------
+    ValueError
+        If ``max_fpr`` is not in (0, 1] or ``confidence`` is not in (0, 1).
     """
     if not 0.0 < max_fpr <= 1.0:
         raise ValueError(f"max_fpr must be in (0, 1], got {max_fpr}")
@@ -511,6 +516,13 @@ def external_diagnostic_gate(
     That keeps diagnostics generic: consumers can store them in results when
     computed during analysis, or in manifests when they are precomputed source
     evidence.
+
+    Raises
+    ------
+    ValueError
+        If ``path`` is empty, or if exactly one of ``op``/``threshold`` is
+        supplied (both required together, or both ``None`` for
+        presence-only check).
     """
     if not path:
         raise ValueError("path must be non-empty")

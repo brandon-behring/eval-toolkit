@@ -183,7 +183,14 @@ class WilsonInterval:
 
 
 def wilson_interval(successes: int, n: int, *, confidence: float = 0.95) -> WilsonInterval:
-    """Wilson score interval for a binomial rate."""
+    """Wilson score interval for a binomial rate.
+
+    Raises
+    ------
+    ValueError
+        If ``successes`` is negative, ``n`` is negative, ``successes > n``,
+        or ``confidence`` is not in (0, 1).
+    """
     if successes < 0:
         raise ValueError("successes must be non-negative")
     if n < 0:
@@ -287,7 +294,14 @@ class CISafeThresholdSelector:
                 raise ValueError(f"{name} must be in [0, 1], got {value}")
 
     def select(self, y_true: np.ndarray, y_score: np.ndarray) -> ThresholdResult:
-        """Return the best accepted threshold."""
+        """Return the best accepted threshold.
+
+        Raises
+        ------
+        RuntimeError
+            If no candidate threshold satisfies all the configured CI-safe
+            constraints (``max_fpr_ci_upper`` / ``min_recall_ci_lower``).
+        """
         accepted = [row for row in self.candidate_records(y_true, y_score) if row["accepted"]]
         if not accepted:
             raise RuntimeError("no threshold satisfies the configured CI-safe constraints")
@@ -513,7 +527,14 @@ class TargetRecallSelector:
         return f"recall_{self.recall:.2f}"
 
     def select(self, y_true: np.ndarray, y_score: np.ndarray) -> ThresholdResult:
-        """Return the highest threshold meeting recall ≥ ``self.recall``."""
+        """Return the highest threshold meeting recall ≥ ``self.recall``.
+
+        Raises
+        ------
+        RuntimeError
+            If no threshold achieves the recall target (``max(recalls) <
+            self.recall``).
+        """
         _validate_inputs(y_true, y_score)
         precisions, recalls, thresholds = _pr_curve_trim(y_true, y_score)
         # Recall is monotonically non-increasing in threshold; eligible is
@@ -575,7 +596,13 @@ class TargetPrecisionSelector:
         return f"precision_{self.precision:.2f}"
 
     def select(self, y_true: np.ndarray, y_score: np.ndarray) -> ThresholdResult:
-        """Return the smallest threshold meeting precision ≥ ``self.precision``."""
+        """Return the smallest threshold meeting precision ≥ ``self.precision``.
+
+        Raises
+        ------
+        RuntimeError
+            If no threshold achieves the precision target.
+        """
         _validate_inputs(y_true, y_score)
         precisions, recalls, thresholds = _pr_curve_trim(y_true, y_score)
         eligible = np.where(precisions >= self.precision)[0]
@@ -629,7 +656,13 @@ class TargetFPRSelector:
         return f"fpr_{self.fpr:.2f}"
 
     def select(self, y_true: np.ndarray, y_score: np.ndarray) -> ThresholdResult:
-        """Return the smallest threshold (highest TPR) meeting FPR ≤ target."""
+        """Return the smallest threshold (highest TPR) meeting FPR ≤ target.
+
+        Raises
+        ------
+        RuntimeError
+            If no threshold achieves the FPR ceiling.
+        """
         _validate_inputs(y_true, y_score)
         fprs, _tprs, thresholds = _roc_curve_trim(y_true, y_score)
         eligible = np.where(fprs <= self.fpr)[0]

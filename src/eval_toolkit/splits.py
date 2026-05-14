@@ -294,7 +294,13 @@ class SourceDisjointKFoldSplitter:
         *,
         groups: np.ndarray | None = None,
     ) -> Iterator[dict[str, EvalSlice]]:
-        """Yield k fold dicts; each fold's test sources are disjoint from train sources."""
+        """Yield k fold dicts; each fold's test sources are disjoint from train sources.
+
+        Raises
+        ------
+        KeyError
+            If ``self.source_col`` is not a column in ``slice_.df``.
+        """
         if self.source_col not in slice_.df.columns:
             raise KeyError(
                 f"source_col {self.source_col!r} not in slice columns " f"{list(slice_.df.columns)}"
@@ -355,7 +361,13 @@ class TimeSeriesSplitter:
         *,
         groups: np.ndarray | None = None,
     ) -> Iterator[dict[str, EvalSlice]]:
-        """Yield k fold dicts respecting the temporal ordering."""
+        """Yield k fold dicts respecting the temporal ordering.
+
+        Raises
+        ------
+        KeyError
+            If ``self.time_col`` is set but not present in ``slice_.df``.
+        """
         if self.time_col is not None:
             if self.time_col not in slice_.df.columns:
                 raise KeyError(
@@ -448,6 +460,12 @@ def iter_folds_with_pool(
     ------
     dict[str, EvalSlice]
         Per-fold dict with at minimum ``train``, ``val``, ``test``.
+
+    Raises
+    ------
+    ValueError
+        If the ``pool_builder.build(...)`` return dict does not contain
+        both ``"train"`` and ``"val"`` keys.
 
     Examples
     --------

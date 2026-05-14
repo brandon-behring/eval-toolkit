@@ -791,6 +791,13 @@ def expected_calibration_error_l2(
     float
         L2 ECE in [0, 1]. 0 = perfectly calibrated.
 
+    Raises
+    ------
+    ValueError
+        If ``y_true``/``y_score`` shape, dtype, or value-range checks fail
+        (re-raised from input validators); if ``n_bins < 2``; or if
+        ``n < n_bins`` (cannot form quantile bins).
+
     Examples
     --------
     >>> import numpy as np
@@ -863,6 +870,13 @@ def expected_calibration_error_l2_debiased(
         Debiased L2 ECE in [0, 1]. The bias correction can drive the
         estimate to exactly 0 on well-calibrated data; this is correct
         Kumar 2019 behavior, not a bug.
+
+    Raises
+    ------
+    ValueError
+        If ``y_true``/``y_score`` shape, dtype, or value-range checks fail
+        (re-raised from input validators); if ``n_bins < 2``; or if
+        ``n < n_bins`` (cannot form quantile bins).
 
     Examples
     --------

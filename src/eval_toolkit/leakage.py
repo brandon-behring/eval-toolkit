@@ -675,7 +675,14 @@ class CrossSplitLeakageCheck:
         return "CrossSplitLeakageCheck"
 
     def validate(self, splits: Mapping[str, EvalSlice]) -> LeakageFinding:
-        """Find eval-side rows that near-duplicate any train-side row."""
+        """Find eval-side rows that near-duplicate any train-side row.
+
+        Raises
+        ------
+        KeyError
+            If ``self.train_split`` is missing from ``splits``, or if any
+            entry in ``self.eval_splits`` is missing.
+        """
         if self.train_split not in splits:
             raise KeyError(f"train_split {self.train_split!r} not in splits")
         eval_targets = (
@@ -733,6 +740,12 @@ class CrossSplitLeakageCheck:
         :func:`cross_dedup_pairs` (v0.17.0) so the train-side index of each
         match is preserved. Same-label = memorization risk; cross-label =
         supervision conflict + memorization.
+
+        Raises
+        ------
+        KeyError
+            If ``self.train_split`` is missing from ``splits``, or if any
+            entry in ``self.eval_splits`` is missing.
         """
         if self.train_split not in splits:
             raise KeyError(f"train_split {self.train_split!r} not in splits")
@@ -853,7 +866,13 @@ class GroupLeakageCheck:
         return "GroupLeakageCheck"
 
     def validate(self, splits: Mapping[str, EvalSlice]) -> LeakageFinding:
-        """Find group ids appearing in more than one target split."""
+        """Find group ids appearing in more than one target split.
+
+        Raises
+        ------
+        KeyError
+            If any target split's dataframe lacks ``self.group_col``.
+        """
         targets = _select_targets(splits, self.target_splits)
         group_to_splits: dict[object, set[str]] = defaultdict(set)
         group_rows: dict[tuple[object, str], list[int]] = defaultdict(list)
@@ -917,7 +936,14 @@ class TemporalLeakageCheck:
         return "TemporalLeakageCheck"
 
     def validate(self, splits: Mapping[str, EvalSlice]) -> LeakageFinding:
-        """Check the temporal ordering invariant pairwise."""
+        """Check the temporal ordering invariant pairwise.
+
+        Raises
+        ------
+        KeyError
+            If any entry in ``self.split_order`` is missing from ``splits``,
+            or if any target split's dataframe lacks ``self.time_col``.
+        """
         for split_name in self.split_order:
             if split_name not in splits:
                 raise KeyError(f"split {split_name!r} (in split_order) not in splits")

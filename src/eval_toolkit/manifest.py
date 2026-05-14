@@ -175,7 +175,14 @@ class RunManifest:
     schema_version: str = MANIFEST_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, object]:
-        """JSON-serializable representation."""
+        """JSON-serializable representation.
+
+        Raises
+        ------
+        TypeError
+            If JSON-sanitization returns a non-mapping payload (defensive;
+            ``sanitize_for_json`` normally preserves dict shape).
+        """
         out = sanitize_for_json(asdict(self))
         if not isinstance(out, dict):
             raise TypeError("RunManifest.to_dict expected a mapping payload")
@@ -451,6 +458,16 @@ def build_manifest(
     RunManifest
         With ``captured_at`` auto-populated to the current UTC time (ISO-8601,
         1-second resolution).
+
+    Raises
+    ------
+    ValueError
+        If ``source_roles`` is malformed (missing required roles, invalid
+        record shape), if any ``guardrails`` entry is an empty string or
+        empty mapping, or if any ``contamination_flags`` value is not in
+        the manifest.v3 enum
+        ``{"verified_disjoint", "suspected_contamination",
+        "vendor_black_box", "unknown"}``.
 
     Examples
     --------

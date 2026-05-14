@@ -37,6 +37,16 @@ def set_global_seeds(seed: int, *, strict_torch_determinism: bool = False) -> No
         is required across runs. Has no effect if torch is not installed.
         Default ``False``.
 
+    Raises
+    ------
+    TypeError
+        If ``seed`` is not an ``int``.
+    ValueError
+        If ``seed`` is negative.
+    RuntimeError
+        If ``strict_torch_determinism=True`` is requested but ``torch`` is
+        not installed.
+
     Notes
     -----
     Full determinism on CUDA is not always achievable — some kernels lack

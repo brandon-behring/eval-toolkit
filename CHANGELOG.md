@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.1] — 2026-05-14 — docstring `Raises:` sweep
+
+Builds on v0.25.0. Docs-only patch; no behavior or API change. Surfaced
+by a three-agent toolkit-completeness audit (code-quality /
+research-to-code mapping / test-coverage) that found 44 public
+functions raising exceptions without a corresponding `Raises:` section
+in their docstrings — the only systematic code-quality issue across
+the 13,733-LOC package.
+
+### Docs
+
+- Added `Raises:` sections to **44 public functions** spanning
+  `analysis.py`, `bootstrap.py`, `calibration.py`, `claims.py`,
+  `docs.py`, `harness.py`, `leakage.py`, `loaders.py`, `manifest.py`,
+  `metrics.py`, `operating_points.py`, `plotting.py`, `seeds.py`,
+  `splits.py`, `text_dedup.py`, and `thresholds.py`.
+- Added `scripts/audit_raises_sections.py` — an AST-based check that
+  walks every public function, compares its `raise` sites against the
+  NumPy-style `Raises:` block, and prints mismatches. Used to drive
+  the v0.25.1 sweep; retained for future regression prevention.
+
+### Tests
+
+- `tests/test_seeds.py:54` — replaced placeholder
+  `assert True  # smoke check` with a real assertion that
+  `set_global_seeds(0)` actually seeds the numpy global RNG (compares
+  `np.random.rand(5)` outputs across two seeded calls).
+- `tests/conftest.py` — added 4 shared input fixtures
+  (`balanced_binary_inputs`, `imbalanced_binary_inputs`,
+  `single_class_inputs`, `constant_score_inputs`) defining the common
+  scaffolds copy-pasted across 15+ test files. Adoption rollout
+  deferred to v0.26.0 to keep this release docs-only.
+
 ## [0.25.0] — 2026-05-14 — research-grounded test additions
 
 Builds on v0.24.1 (research-dossier docs hygiene) by validating

@@ -48,10 +48,18 @@ def test_set_global_seeds_validates_negative() -> None:
 
 @pytest.mark.unit
 def test_set_global_seeds_works_without_torch() -> None:
-    """If torch is not installed, set_global_seeds should still work for numpy/random."""
-    # Even if torch IS installed, this confirms no exception is raised.
+    """If torch is not installed, set_global_seeds should still work for numpy/random.
+
+    Verifies the call seeds the numpy global RNG even when torch is absent,
+    by comparing two ``np.random.rand`` outputs after the same seed.
+    """
+    import numpy as np
+
     set_global_seeds(0)
-    assert True  # smoke check: no exception
+    a1 = np.random.rand(5)
+    set_global_seeds(0)
+    a2 = np.random.rand(5)
+    assert np.array_equal(a1, a2), "set_global_seeds did not seed the numpy global RNG"
 
 
 @pytest.mark.unit

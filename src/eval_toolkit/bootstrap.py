@@ -405,6 +405,14 @@ def paired_bootstrap_diff(
     -------
     PairedBootstrapCI
 
+    Raises
+    ------
+    ValueError
+        If ``y_true``, ``y_score_a``, ``y_score_b`` do not share the same
+        shape; if ``n < 10`` (too small for paired bootstrap); if more
+        than 5% of resamples raised in ``metric`` (rare-positive
+        degeneracy); or if no resamples produced a usable Δ.
+
     Examples
     --------
     >>> import numpy as np
@@ -821,6 +829,14 @@ def mde_from_ci(
     -------
     MDEEstimate
         ``n`` is set to -1 (unknown without source arrays).
+
+    Raises
+    ------
+    ValueError
+        If ``alpha`` or ``power`` is not in (0, 1).
+    RuntimeError
+        If the supplied CI has non-positive width (paired bootstrap
+        degenerate; no usable variance signal).
 
     Notes
     -----

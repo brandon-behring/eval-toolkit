@@ -196,6 +196,11 @@ def render_text(
         ``(rendered_text, errors)``. Unknown keys leave the body unchanged
         and append a diagnostic; errors list does not raise.
 
+    Raises
+    ------
+    TypeError
+        If ``text`` is not a ``str`` or ``metrics`` is not a ``dict``.
+
     Examples
     --------
     >>> text = "<!-- begin:metric.pr_auc -->X<!-- end:metric.pr_auc -->"
@@ -251,6 +256,11 @@ def render_files(
     dict[str, Any]
         ``{"updated": [...], "unchanged": [...], "drift": {...}, "errors": {...}}``
         where ``drift`` is populated only in check mode.
+
+    Raises
+    ------
+    ValueError
+        If ``mode`` is not one of ``{"apply", "check"}``.
     """
     if mode not in {"apply", "check"}:
         raise ValueError(f"mode must be 'apply' or 'check', got {mode!r}")

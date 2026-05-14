@@ -204,7 +204,14 @@ class RunResult:
     schema_version: str = RUN_RESULT_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, object]:
-        """Serialize using the stable JSON schema (v1 — see ``schema_version``)."""
+        """Serialize using the stable JSON schema (v1 — see ``schema_version``).
+
+        Raises
+        ------
+        TypeError
+            If JSON-sanitization returns a non-mapping payload (defensive;
+            ``sanitize_for_json`` normally preserves dict shape).
+        """
         out = sanitize_for_json(
             {
                 "schema_version": self.schema_version,
@@ -453,6 +460,15 @@ def evaluate_scorer_on_slice(
         (``on_scorer_error="record"``), the dict carries
         ``{"error", "exc_type", "traceback", "n", "n_positive", "scores": []}``
         — same shape downstream consumers expect, plus the error fields.
+
+    Raises
+    ------
+    ValueError
+        If ``precomputed_scores`` shape does not match the slice length.
+    Exception
+        Re-raises any scorer exception when ``on_scorer_error="raise"``
+        (the default). Set ``on_scorer_error="record"`` to capture
+        scorer failures in the result dict instead.
     """
     y_true = slice_.y_true
     if precomputed_scores is not None:

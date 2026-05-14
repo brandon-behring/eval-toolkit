@@ -114,6 +114,14 @@ def fit_operating_points(
     Raises from the underlying selector if the data cannot support threshold
     selection, for example single-class labels or no feasible target
     precision/recall/FPR threshold.
+
+    Raises
+    ------
+    ValueError
+        If the fit slice is single-class (the function requires both
+        positive and negative labels for threshold fitting). Selector
+        raises (e.g. :exc:`RuntimeError` on infeasible target rates) are
+        propagated unchanged.
     """
     y_true_arr = np.asarray(y_true)
     y_score_arr = np.asarray(y_score)
@@ -150,7 +158,13 @@ def apply_operating_points(
     applied_to_slice: str = "",
     scorer_name: str = "",
 ) -> dict[str, dict[str, object]]:
-    """Apply fitted thresholds to a mixed-class or single-class target slice."""
+    """Apply fitted thresholds to a mixed-class or single-class target slice.
+
+    Raises
+    ------
+    ValueError
+        If ``y_true`` contains labels outside ``{0, 1}``.
+    """
     y_true_arr = np.asarray(y_true)
     y_score_arr = np.asarray(y_score)
     labels = set(np.unique(y_true_arr).tolist())

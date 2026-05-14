@@ -507,6 +507,11 @@ class CostMatrix:
         float
             Mean cost per row.
 
+        Raises
+        ------
+        ValueError
+            If ``y_true`` and ``y_score`` have mismatched shapes.
+
         Examples
         --------
         >>> cm = CostMatrix(prior=0.5, fp_cost=1.0, fn_cost=10.0)
@@ -743,6 +748,9 @@ def fit_platt_calibrator(y_true: np.ndarray, y_score: np.ndarray) -> PlattFit:
     ValueError
         On shape mismatch, empty input, non-finite scores, or single-class
         ``y_true``.
+    RuntimeError
+        If the L-BFGS-B optimizer fails to converge. The error message
+        includes the SciPy optimizer message for diagnostics.
 
     Examples
     --------

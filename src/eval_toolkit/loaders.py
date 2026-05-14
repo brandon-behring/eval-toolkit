@@ -261,7 +261,14 @@ class ParquetGlobLoader:
         return out
 
     def load_splits(self) -> dict[str, EvalSlice]:
-        """Read + concat each split's parquet files into an EvalSlice."""
+        """Read + concat each split's parquet files into an EvalSlice.
+
+        Raises
+        ------
+        KeyError
+            If any split's loaded DataFrame is missing ``feature_col`` or
+            ``label_col``.
+        """
         files_by_split = self._resolve_files()
         out: dict[str, EvalSlice] = {}
         for split_name, files in files_by_split.items():
@@ -367,7 +374,14 @@ class HFDatasetsLoader:
         return cast(Mapping[str, Any], load_dataset(self.repo_id))
 
     def load_splits(self) -> dict[str, EvalSlice]:
-        """Convert each requested HF split to an :class:`EvalSlice`."""
+        """Convert each requested HF split to an :class:`EvalSlice`.
+
+        Raises
+        ------
+        KeyError
+            If any split's pandas DataFrame is missing ``feature_col`` or
+            ``label_col``.
+        """
         ds = self._load_dataset()
         ds_splits = list(ds.keys()) if self.splits is None else list(self.splits)
         out: dict[str, EvalSlice] = {}

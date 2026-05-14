@@ -223,6 +223,11 @@ def normalize_text_for_dedup(text: str) -> str:
     str
         Normalized text.
 
+    Raises
+    ------
+    TypeError
+        If ``text`` is not a ``str``.
+
     Examples
     --------
     >>> normalize_text_for_dedup("Hello   World")
@@ -263,6 +268,12 @@ def sha256_text(text: str, *, normalize: bool = True) -> str:
     64
     >>> sha256_text("foo", normalize=False) != sha256_text("FOO", normalize=False)
     True
+
+    Raises
+    ------
+    TypeError
+        If ``text`` is not a ``str`` (or, when ``normalize=True``, on the
+        re-raised :class:`TypeError` from :func:`normalize_text_for_dedup`).
     """
     if not isinstance(text, str):
         raise TypeError(f"text must be str, got {type(text).__name__}")
@@ -582,6 +593,15 @@ class EmbeddingCosineStrategy:
         reference_texts: Sequence[str],
         k: int,
     ) -> tuple[np.ndarray, np.ndarray]:
+        """Top-k cosine-similar reference rows per query row.
+
+        Raises
+        ------
+        ValueError
+            If the embedder returns inconsistent feature dimensions for
+            ``reference_texts`` vs ``query_texts`` (would silently
+            mis-align cosine; better to fail loudly).
+        """
         n_q, n_r = len(query_texts), len(reference_texts)
         if n_q == 0 or n_r == 0:
             return (
@@ -1149,6 +1169,13 @@ def audit_source_label_similarity(
     same pluggable similarity strategies but returns pair findings annotated
     with source/label relationships so consumers can decide whether duplicates
     are leakage, benign repeated labels, or label conflicts.
+
+    Raises
+    ------
+    ValueError
+        If ``threshold`` is not in (0, 1]; if ``k_neighbors < 1``; or if
+        ``sources``/``labels`` is supplied but does not have the same
+        length as ``texts``.
     """
     text_list = list(texts)
     n = len(text_list)
@@ -1290,6 +1317,11 @@ def cross_dedup_pairs(
 
     Parameters mirror :func:`cross_dedup`. Returns ``[]`` when either side
     is empty.
+
+    Raises
+    ------
+    ValueError
+        If ``threshold`` is not in (0, 1).
     """
     if not 0.0 < threshold < 1.0:
         raise ValueError(f"threshold must be in (0, 1), got {threshold}")
@@ -1347,6 +1379,11 @@ def cross_dedup(
     >>> kept = cross_dedup(train, eval_set, threshold=0.8)
     >>> 1 in kept  # second eval text has no train match
     True
+
+    Raises
+    ------
+    ValueError
+        If ``threshold`` is not in (0, 1).
     """
     if not 0.0 < threshold < 1.0:
         raise ValueError(f"threshold must be in (0, 1), got {threshold}")
