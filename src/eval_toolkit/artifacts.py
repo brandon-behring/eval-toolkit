@@ -262,16 +262,16 @@ def validate_payload(payload: object, schema_name: str) -> None:
     Draft202012Validator(schema).validate(sanitize_for_json(payload))
 
 
-_KNOWN_MANIFEST_VERSIONS: frozenset[str] = frozenset({"v1", "v2"})
+_KNOWN_MANIFEST_VERSIONS: frozenset[str] = frozenset({"v1", "v2", "v3"})
 
 
 def validate_manifest(payload: Mapping[str, object]) -> None:
     """Validate a serialized ``RunManifest`` payload.
 
-    Dispatches on ``payload["schema_version"]`` (``"v1"`` or ``"v2"``); falls
-    back to the current default (``"v2"``) when the field is absent. Closes
-    F9.2: callers no longer pass magic schema-name strings to
-    :func:`validate_payload` and risk drift when the version bumps.
+    Dispatches on ``payload["schema_version"]`` (``"v1"``, ``"v2"``, or
+    ``"v3"``); falls back to ``"v2"`` when the field is absent (preserves
+    V4.2/V4.3-era manifest readability). v3 (v0.23.0+) adds the required
+    ``contamination_flags`` field for per-scorer contamination posture.
 
     Parameters
     ----------

@@ -57,11 +57,74 @@ def test_build_manifest_data_revisions_metadata_default_empty() -> None:
 
 
 @pytest.mark.unit
-def test_manifest_schema_version_is_v2() -> None:
-    """v0.14.0 bumps the default schema_version from v1 to v2."""
-    assert MANIFEST_SCHEMA_VERSION == "v2"
+def test_manifest_schema_version_default() -> None:
+    """v0.23.0 bumps the default schema_version from v2 to v3 (contamination_flags).
+
+    v0.14.0 was the v1 → v2 bump (captured_at + data_revisions + metadata).
+    v0.23.0 is the v2 → v3 bump (contamination_flags).
+    """
+    assert MANIFEST_SCHEMA_VERSION == "v3"
     m = build_manifest(run_id="demo", config={})
-    assert m.schema_version == "v2"
+    assert m.schema_version == "v3"
+    # v3 default: contamination_flags is present but empty when not supplied.
+    assert m.contamination_flags == {}
+
+
+@pytest.mark.unit
+def test_manifest_contamination_flags_accepts_valid_values() -> None:
+    """v0.23.0 — contamination_flags accepts the 4 enum values."""
+    m = build_manifest(
+        run_id="demo",
+        config={},
+        contamination_flags={
+            "scorer_a": "verified_disjoint",
+            "scorer_b": "suspected_contamination",
+            "scorer_c": "vendor_black_box",
+            "scorer_d": "unknown",
+        },
+    )
+    assert m.contamination_flags == {
+        "scorer_a": "verified_disjoint",
+        "scorer_b": "suspected_contamination",
+        "scorer_c": "vendor_black_box",
+        "scorer_d": "unknown",
+    }
+
+
+@pytest.mark.unit
+def test_manifest_contamination_flags_rejects_invalid_values() -> None:
+    """v0.23.0 — invalid enum values raise at build time."""
+    with pytest.raises(ValueError, match="invalid contamination_flags"):
+        build_manifest(
+            run_id="demo",
+            config={},
+            contamination_flags={"scorer_x": "totally_clean"},
+        )
+
+
+@pytest.mark.unit
+def test_manifest_guardrails_accepts_strings_and_objects() -> None:
+    """v0.23.0 — guardrails permits non-empty strings or non-empty dicts."""
+    m = build_manifest(
+        run_id="demo",
+        config={},
+        guardrails=[
+            "no-leakage",
+            {"source_freshness_check": {"timestamp": "2026-05-14T00:00:00Z"}},
+        ],
+    )
+    assert len(m.guardrails) == 2
+    assert m.guardrails[0] == "no-leakage"
+    assert isinstance(m.guardrails[1], dict)
+
+
+@pytest.mark.unit
+def test_manifest_guardrails_rejects_empty_entries() -> None:
+    """v0.23.0 — empty strings AND empty dicts both fail validation."""
+    with pytest.raises(ValueError, match="guardrails must be non-empty"):
+        build_manifest(run_id="demo", config={}, guardrails=["valid", ""])
+    with pytest.raises(ValueError, match="guardrails must be non-empty"):
+        build_manifest(run_id="demo", config={}, guardrails=[{}])
 
 
 @pytest.mark.unit

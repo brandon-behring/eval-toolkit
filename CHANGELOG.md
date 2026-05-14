@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-05-14 — manifest.v3 + contamination_flags (V4.4 D7)
+
+Closes V4 audit issue A6 (contamination flag docstring-only) by promoting
+per-scorer contamination posture to a required manifest field. Drives V4.4's
+audit closure phase before V5 paper-canonical. Lands on top of v0.23.0's
+Python 3.13 floor.
+
+### Added
+
+- `schemas/manifest.v3.json` — new schema with required `contamination_flags`
+  field (object mapping scorer-name → enum string of `verified_disjoint`,
+  `suspected_contamination`, `vendor_black_box`, `unknown`). May be an empty
+  object for runs not tracking contamination.
+- `RunManifest.contamination_flags: dict[str, str]` field on the dataclass.
+- `build_manifest(..., contamination_flags=...)` parameter; validates enum
+  membership at build time (raises `ValueError` for invalid values).
+- v3 schema permits `guardrails` entries to be either strings (v2 back-compat)
+  or non-empty objects (forward-compatibility for structured sub-fields like
+  V4.4 D5's `source_freshness_check`).
+
+### Changed
+
+- `MANIFEST_SCHEMA_VERSION` constant flipped from `"v2"` to `"v3"`. New
+  manifests written by `build_manifest()` default to schema_version `"v3"`.
+  Callers that need v2 explicitly should construct `RunManifest(...,
+  schema_version="v2")` directly.
+- `validate_manifest()` knows `"v3"` in `_KNOWN_MANIFEST_VERSIONS`; existing
+  v1/v2 manifests continue to validate against their declared schema.
+- `guardrails` field on `RunManifest` typed as `list[object]` to permit
+  dict entries; build-time validation rejects empty strings AND empty dicts.
+
 ## [0.23.0] — 2026-05-14 — Python 3.13+ floor; restore green CI
 
 ### BREAKING

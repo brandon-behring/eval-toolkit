@@ -48,7 +48,7 @@ __all__ = [
     "write_manifest",
 ]
 
-MANIFEST_SCHEMA_VERSION = "v2"
+MANIFEST_SCHEMA_VERSION = "v3"
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,8 +169,9 @@ class RunManifest:
     versioned_objects: dict[str, str] = field(default_factory=dict)
     leakage_report: dict[str, object] | None = None
     source_roles: list[dict[str, object]] = field(default_factory=list)
-    guardrails: list[str] = field(default_factory=list)
+    guardrails: list[object] = field(default_factory=list)
     prediction_artifacts: list[dict[str, object]] = field(default_factory=list)
+    contamination_flags: dict[str, str] = field(default_factory=dict)
     schema_version: str = MANIFEST_SCHEMA_VERSION
 
     def to_dict(self) -> dict[str, object]:
@@ -368,6 +369,11 @@ def _utc_now_iso8601() -> str:
     return _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+_VALID_CONTAMINATION_FLAGS: frozenset[str] = frozenset(
+    {"verified_disjoint", "suspected_contamination", "vendor_black_box", "unknown"}
+)
+
+
 def build_manifest(
     *,
     run_id: str,
@@ -381,8 +387,9 @@ def build_manifest(
     leakage_report: object | None = None,
     source_roles: Sequence[SourceRoleRecord | Mapping[str, object]] | None = None,
     required_source_roles: Sequence[str] = (),
-    guardrails: Sequence[str] | None = None,
+    guardrails: Sequence[str | Mapping[str, object]] | None = None,
     prediction_artifacts: Sequence[PredictionArtifactRef | Mapping[str, object]] | None = None,
+    contamination_flags: Mapping[str, str] | None = None,
     wall_clock_seconds: float | None = None,
     repo_root: Path | str | None = None,
     git_sha: str | None = None,
@@ -450,7 +457,7 @@ def build_manifest(
     >>> from eval_toolkit.manifest import build_manifest
     >>> m = build_manifest(run_id="demo", config={"k": 5})
     >>> m.run_id, m.schema_version
-    ('demo', 'v2')
+    ('demo', 'v3')
     """
     data_hashes: dict[str, str] = {}
     if data_files:
@@ -480,10 +487,33 @@ def build_manifest(
         joined = "; ".join(source_role_errors)
         raise ValueError(f"invalid source_roles: {joined}")
 
-    guardrail_list = list(guardrails) if guardrails else []
-    bad_guardrails = [g for g in guardrail_list if not isinstance(g, str) or not g.strip()]
+    guardrail_list: list[object] = list(guardrails) if guardrails else []
+    bad_guardrails: list[object] = []
+    for g in guardrail_list:
+        if isinstance(g, str):
+            if not g.strip():
+                bad_guardrails.append(g)
+        elif isinstance(g, Mapping):
+            if not g:
+                bad_guardrails.append(g)
+        else:
+            bad_guardrails.append(g)
     if bad_guardrails:
-        raise ValueError("guardrails must be non-empty strings")
+        raise ValueError("guardrails must be non-empty strings or non-empty objects")
+
+    contamination_flag_dict: dict[str, str] = (
+        dict(contamination_flags) if contamination_flags else {}
+    )
+    invalid_flags = {
+        scorer: flag
+        for scorer, flag in contamination_flag_dict.items()
+        if flag not in _VALID_CONTAMINATION_FLAGS
+    }
+    if invalid_flags:
+        raise ValueError(
+            f"invalid contamination_flags values: {invalid_flags}; "
+            f"expected one of {sorted(_VALID_CONTAMINATION_FLAGS)}"
+        )
 
     prediction_artifact_dicts = (
         [_prediction_artifact_to_dict(record) for record in prediction_artifacts]
@@ -513,6 +543,7 @@ def build_manifest(
         source_roles=source_role_dicts,
         guardrails=guardrail_list,
         prediction_artifacts=prediction_artifact_dicts,
+        contamination_flags=contamination_flag_dict,
         schema_version=MANIFEST_SCHEMA_VERSION,
     )
 

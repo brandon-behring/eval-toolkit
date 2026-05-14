@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eval-toolkit/schemas/manifest.v3.json",
+  "version": "3",
+  "title": "eval-toolkit RunManifest (v3)",
+  "description": "Schema for run_dir/manifest.json. Produced by eval_toolkit.manifest.write_manifest. NeurIPS Reproducibility Checklist-aligned. v3 adds: contamination_flags (required object; per-scorer contamination posture audit trail). v2 fields preserved. Default schema for new manifests starting v0.23.0.",
+  "type": "object",
+  "required": ["schema_version", "run_id", "captured_at", "code_versions", "env", "contamination_flags"],
+  "properties": {
+    "schema_version": {
+      "const": "v3"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "captured_at": {
+      "type": "string",
+      "description": "ISO-8601 UTC timestamp captured at build_manifest() call time.",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "git_sha": {
+      "type": ["string", "null"]
+    },
+    "dirty_flag": {
+      "type": "boolean"
+    },
+    "code_versions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "data_revisions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "seeds": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "data_hashes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "config_hash": {
+      "type": "string"
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "gpu_info": {
+      "type": "object",
+      "properties": {
+        "name": {"type": "string"},
+        "count": {"type": "integer", "minimum": 0},
+        "memory_gb": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "cuda_version": {
+      "type": ["string", "null"]
+    },
+    "wall_clock_seconds": {
+      "type": ["number", "null"]
+    },
+    "versioned_objects": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "leakage_report": {
+      "type": ["object", "null"],
+      "properties": {
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["check_name", "severity", "drop_indices", "evidence", "message", "n_affected"],
+            "properties": {
+              "check_name": {"type": "string"},
+              "severity": {"enum": ["error", "warning", "info"]},
+              "drop_indices": {"type": ["object", "null"]},
+              "evidence": {"type": "object"},
+              "message": {"type": "string"},
+              "n_affected": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "source_roles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "role"],
+        "properties": {
+          "source": {"type": "string", "minLength": 1},
+          "role": {"type": "string", "minLength": 1},
+          "n_rows": {"type": "integer", "minimum": 0},
+          "notes": {"type": "string"},
+          "metadata": {"type": "object"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "guardrails": {
+      "type": "array",
+      "description": "Optional predeclared guardrails for claim/evidence discipline. v3 may use either string entries (v2 back-compat) or structured objects (e.g., source_freshness_check sub-objects with timestamp + method).",
+      "items": {
+        "oneOf": [
+          {"type": "string", "minLength": 1},
+          {"type": "object", "minProperties": 1}
+        ]
+      }
+    },
+    "contamination_flags": {
+      "type": "object",
+      "description": "v3 addition. Per-scorer contamination posture flags. Keys are scorer names; values are enum strings. Required field; may be an empty object for runs not tracking contamination (e.g., eval-toolkit's own test runs).",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["verified_disjoint", "suspected_contamination", "vendor_black_box", "unknown"]
+      }
+    },
+    "prediction_artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["uri", "media_type", "columns"],
+        "properties": {
+          "uri": {"type": "string", "minLength": 1},
+          "media_type": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string"},
+          "n_rows": {"type": "integer", "minimum": 0},
+          "role": {
+            "oneOf": [
+              {"type": "string", "minLength": 1},
+              {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "minLength": 1}
+              }
+            ]
+          },
+          "metadata": {"type": "object"},
+          "columns": {
+            "type": "object",
+            "required": ["label", "score"],
+            "properties": {
+              "row_id": {"type": "string", "minLength": 1},
+              "content_hash": {"type": "string", "minLength": 1},
+              "label": {"type": "string", "minLength": 1},
+              "score": {"type": "string", "minLength": 1},
+              "scorer": {"type": "string", "minLength": 1},
+              "slice": {"type": "string", "minLength": 1},
+              "text": {"type": "string", "minLength": 1},
+              "provenance": {
+                "type": "object",
+                "additionalProperties": {"type": "string"}
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
