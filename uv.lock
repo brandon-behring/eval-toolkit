@@ -237,9 +237,10 @@ wheels = [
 
 [[package]]
 name = "eval-toolkit"
-version = "0.10.0"
+version = "0.22.1"
 source = { editable = "." }
 dependencies = [
+    { name = "jsonschema" },
     { name = "numpy" },
     { name = "scikit-learn" },
     { name = "scipy" },
@@ -248,7 +249,6 @@ dependencies = [
 [package.optional-dependencies]
 all = [
     { name = "hypothesis" },
-    { name = "jsonschema" },
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "pillow" },
@@ -261,7 +261,6 @@ dataframe = [
 dev = [
     { name = "black" },
     { name = "hypothesis" },
-    { name = "jsonschema" },
     { name = "matplotlib" },
     { name = "mypy" },
     { name = "pandas" },
@@ -284,9 +283,6 @@ plotting = [
 property = [
     { name = "hypothesis" },
 ]
-validation = [
-    { name = "jsonschema" },
-]
 yaml = [
     { name = "pyyaml" },
 ]
@@ -297,7 +293,7 @@ requires-dist = [
     { name = "eval-toolkit", extras = ["all"], marker = "extra == 'dev'" },
     { name = "eval-toolkit", extras = ["dataframe", "plotting", "property", "yaml", "parquet", "validation"], marker = "extra == 'all'" },
     { name = "hypothesis", marker = "extra == 'property'", specifier = ">=6.100" },
-    { name = "jsonschema", marker = "extra == 'validation'", specifier = ">=4.21" },
+    { name = "jsonschema", specifier = ">=4.21" },
     { name = "matplotlib", marker = "extra == 'plotting'", specifier = ">=3.8" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "numpy", specifier = ">=1.26" },

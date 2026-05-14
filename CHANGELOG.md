@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Restore green CI on `main`. Five ruff lint violations accumulated
+  across v0.13.0 → v0.22.0 were blocking the CI lint step (which
+  fast-fails before black / mypy / pytest):
+  - `bootstrap.py:1285` (C401) — set generator → set comprehension.
+  - `manifest.py:256` (SIM105) — `try / except ValueError: pass` →
+    `contextlib.suppress(ValueError)`.
+  - `manifest.py:372` (UP017) — `_dt.timezone.utc` → `_dt.UTC`.
+  - `plotting.py:27` (F401) — drop unused `typing.Literal` import.
+  - `tests/test_harness_v22.py:32` (F841) — drop dead `rng` (the
+    fixture's docstring incorrectly claimed gaussian scores; tests
+    inject scores per-case via `np.linspace`). Docstring tightened.
+- Mechanical black 26 reformat across 12 files (line re-wrapping +
+  string quote normalization). Pure formatting; no semantic changes.
+
 ### Added
 
 - `docs/repo-strategy.md` — repo organization strategy document.

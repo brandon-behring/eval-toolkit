@@ -120,9 +120,7 @@ class PredictionArtifactRef:
         if self.n_rows is not None and (isinstance(self.n_rows, bool) or self.n_rows < 0):
             raise ValueError("PredictionArtifactRef.n_rows must be non-negative when present")
         if isinstance(self.role, list):
-            if not self.role or not all(
-                isinstance(r, str) and r.strip() for r in self.role
-            ):
+            if not self.role or not all(isinstance(r, str) and r.strip() for r in self.role):
                 raise ValueError(
                     "PredictionArtifactRef.role list must be non-empty and contain "
                     "only non-empty strings"
@@ -214,8 +212,7 @@ def sanitize_for_json(
         if nan_strategy == "raise":
             raise ValueError(f"non-finite numeric value: {payload!r}")
         raise ValueError(
-            f"nan_strategy must be one of 'skipped', 'null', 'raise'; "
-            f"got {nan_strategy!r}"
+            f"nan_strategy must be one of 'skipped', 'null', 'raise'; " f"got {nan_strategy!r}"
         )
     if isinstance(payload, np.generic):
         return sanitize_for_json(payload.item(), nan_strategy=nan_strategy)

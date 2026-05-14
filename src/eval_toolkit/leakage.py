@@ -138,9 +138,7 @@ class LeakageFinding:
 
     def to_dict(self) -> dict[str, object]:
         """JSON-serializable representation for the manifest."""
-        drop: object = (
-            dict(self.drop_indices) if self.drop_indices is not None else None
-        )
+        drop: object = dict(self.drop_indices) if self.drop_indices is not None else None
         return {
             "check_name": self.check_name,
             "severity": self.severity,

@@ -1298,9 +1298,7 @@ def cross_dedup_pairs(
     active_strategy: SimilarityStrategy = (
         strategy if strategy is not None else TfidfCosineStrategy()
     )
-    similarities, indices = active_strategy.pairs_across(
-        eval_texts, train_texts, k_neighbors
-    )
+    similarities, indices = active_strategy.pairs_across(eval_texts, train_texts, k_neighbors)
     if similarities.size == 0:
         return []
     out: list[tuple[int, int, float]] = []

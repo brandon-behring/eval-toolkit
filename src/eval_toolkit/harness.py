@@ -368,9 +368,7 @@ def _evaluate_scores(
         metrics["tpr_at_fpr"] = tpr_at_fpr
     if compute_brier:
         try:
-            metrics["brier_score"] = brier_score(
-                y_true, y_score, empty_strategy="return_none"
-            )
+            metrics["brier_score"] = brier_score(y_true, y_score, empty_strategy="return_none")
         except (ValueError, RuntimeError) as exc:
             metrics["brier_score"] = error_metric(str(exc))
     if compute_mce:

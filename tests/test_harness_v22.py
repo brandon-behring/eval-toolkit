@@ -28,8 +28,7 @@ class _RaisingScorer:
 
 @pytest.fixture
 def signal_slice() -> EvalSlice:
-    """80 rows; class-conditional gaussian scores. Mixed-class."""
-    rng = np.random.default_rng(13)
+    """80-row mixed-class slice; tests inject their own scores per-case."""
     n = 80
     labels = np.concatenate([np.zeros(40), np.ones(40)]).astype(int)
     df = pd.DataFrame({"text": [f"t{i}" for i in range(n)], "label": labels})

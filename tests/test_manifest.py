@@ -43,10 +43,10 @@ def test_build_manifest_captures_data_revisions_and_metadata() -> None:
         run_id="demo",
         config={},
         data_revisions={"hf_dataset:foo": "abc123", "hf_model:bar": "deadbeef"},
-        metadata={"meta:cli_args": "[\"--profile\", \"fixtures\"]"},
+        metadata={"meta:cli_args": '["--profile", "fixtures"]'},
     )
     assert m.data_revisions == {"hf_dataset:foo": "abc123", "hf_model:bar": "deadbeef"}
-    assert m.metadata == {"meta:cli_args": "[\"--profile\", \"fixtures\"]"}
+    assert m.metadata == {"meta:cli_args": '["--profile", "fixtures"]'}
 
 
 @pytest.mark.unit

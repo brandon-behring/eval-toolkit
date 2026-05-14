@@ -324,9 +324,7 @@ def maximum_calibration_error(
     y_true_arr = np.asarray(y_true).astype(int)
     y_score_arr = np.asarray(y_score).astype(float)
     if y_true_arr.shape != y_score_arr.shape:
-        raise ValueError(
-            f"shape mismatch: y_true {y_true_arr.shape}, y_score {y_score_arr.shape}"
-        )
+        raise ValueError(f"shape mismatch: y_true {y_true_arr.shape}, y_score {y_score_arr.shape}")
     if y_true_arr.size == 0:
         raise ValueError("y_true is empty")
     if n_bins <= 1:

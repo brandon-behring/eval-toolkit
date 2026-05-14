@@ -336,6 +336,7 @@ def test_pr_auc_empty_strategy_default_preserves_legacy_behavior() -> None:
         roc_auc(np.array([]), np.array([]))
     # Single-class roc_auc under default: sklearn warns + returns nan
     import warnings
+
     y_single = np.zeros(10, dtype=int)
     s = np.linspace(0.1, 0.9, 10)
     with warnings.catch_warnings():

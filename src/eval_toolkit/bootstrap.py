@@ -1219,9 +1219,7 @@ def _delong_structural(
     m = len(pos_scores)
     n = len(neg_scores)
     if m == 0 or n == 0:
-        raise ValueError(
-            "delong_roc_variance requires at least one positive and one negative"
-        )
+        raise ValueError("delong_roc_variance requires at least one positive and one negative")
     combined = np.concatenate([pos_scores, neg_scores])
     combined_ranks = _scipy_rankdata(combined, method="average")
     tx10 = combined_ranks[:m]
@@ -1282,11 +1280,9 @@ def delong_roc_variance(
             "delong_roc_variance: y_true, y_score_a, y_score_b must share shape "
             f"(got {y_true_arr.shape}, {y_a.shape}, {y_b.shape})"
         )
-    unique = set(int(v) for v in np.unique(y_true_arr).tolist())
+    unique = {int(v) for v in np.unique(y_true_arr).tolist()}
     if not unique.issubset({0, 1}):
-        raise ValueError(
-            f"delong_roc_variance: y_true must be binary {{0, 1}}, got {unique}"
-        )
+        raise ValueError(f"delong_roc_variance: y_true must be binary {{0, 1}}, got {unique}")
     pos_mask = y_true_arr == 1
     neg_mask = y_true_arr == 0
     m = int(pos_mask.sum())

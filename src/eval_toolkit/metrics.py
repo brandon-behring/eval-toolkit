@@ -92,6 +92,7 @@ def _empty_strategy_guard(
             )
     return _SENTINEL_OK
 
+
 __all__ = [
     "DEFAULT_ASSUMED_PRIORS",
     "ThresholdResult",

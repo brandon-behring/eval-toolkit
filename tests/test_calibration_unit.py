@@ -106,9 +106,7 @@ def test_maximum_calibration_error_agrees_with_reliability_curve_max_gap(
     for strategy in ("uniform", "quantile"):
         mce = maximum_calibration_error(y, s, n_bins=10, strategy=strategy)
         rc = reliability_curve(y, s, n_bins=10, strategy=strategy)
-        expected = float(
-            np.abs(np.asarray(rc["prob_true"]) - np.asarray(rc["prob_pred"])).max()
-        )
+        expected = float(np.abs(np.asarray(rc["prob_true"]) - np.asarray(rc["prob_pred"])).max())
         assert mce == pytest.approx(expected), f"strategy={strategy}"
 
 

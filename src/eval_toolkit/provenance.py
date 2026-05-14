@@ -154,9 +154,7 @@ def file_sha256(path: Path | str, *, strict: bool = False) -> str | None:
     if isinstance(result, FileHash):
         return result.sha256
     if strict:
-        raise FileNotFoundError(
-            f"file_sha256: path missing or not a regular file: {result.path}"
-        )
+        raise FileNotFoundError(f"file_sha256: path missing or not a regular file: {result.path}")
     return None
 
 

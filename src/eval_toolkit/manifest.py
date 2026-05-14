@@ -22,6 +22,7 @@ deterministic and side-effect-free; :func:`write_manifest` is the sole IO sink.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
 import hashlib
 import json
@@ -253,10 +254,8 @@ def gpu_info() -> tuple[dict[str, object], str | None]:
     memory_mb = first_parts[1]
     driver_version = first_parts[2]
     info: dict[str, object] = {"name": name, "count": len(rows)}
-    try:
+    with contextlib.suppress(ValueError):
         info["memory_gb"] = round(int(memory_mb) / 1024, 1)
-    except ValueError:
-        pass
     return info, driver_version
 
 
@@ -342,10 +341,7 @@ def validate_source_roles(
             assert isinstance(role, str)
             pair = (source, role)
             if pair in seen_pairs:
-                errors.append(
-                    f"{prefix}: duplicate (source, role) pair "
-                    f"({source!r}, {role!r})"
-                )
+                errors.append(f"{prefix}: duplicate (source, role) pair " f"({source!r}, {role!r})")
             else:
                 seen_pairs.add(pair)
             roles_seen.add(role)
@@ -369,7 +365,7 @@ def validate_source_roles(
 
 def _utc_now_iso8601() -> str:
     """Return current UTC time as ``YYYY-MM-DDTHH:MM:SSZ`` (1-second resolution)."""
-    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def build_manifest(
