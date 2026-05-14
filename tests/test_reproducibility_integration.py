@@ -167,9 +167,7 @@ def test_evaluate_scorer_on_slice_different_seed_changes_output() -> None:
     assert leaves_a.keys() == leaves_b.keys()
     # At least one CI bound or bootstrap-derived stat must differ
     differing = [
-        k
-        for k in leaves_a
-        if not np.array_equal(np.asarray(leaves_a[k]), np.asarray(leaves_b[k]))
+        k for k in leaves_a if not np.array_equal(np.asarray(leaves_a[k]), np.asarray(leaves_b[k]))
     ]
     assert differing, (
         "Expected at least one numeric leaf to differ between seed=42 and seed=43; "

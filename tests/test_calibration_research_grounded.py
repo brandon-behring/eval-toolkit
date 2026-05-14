@@ -51,9 +51,7 @@ DOMINANCE_FRACTION = 0.75  # 9/12 — slightly looser than 8/10 for the n=12 cas
 MARGIN_SIGMA_MULTIPLIER = 0.5
 
 
-def _asymmetric_miscalibration(
-    rng: np.random.Generator, n: int
-) -> tuple[np.ndarray, np.ndarray]:
+def _asymmetric_miscalibration(rng: np.random.Generator, n: int) -> tuple[np.ndarray, np.ndarray]:
     """Generate (y, raw_score) with asymmetric miscalibration that Platt cannot fix.
 
     Per Kull et al. 2017 §5, Beta calibration's advantage over Platt
@@ -230,9 +228,9 @@ def test_ece_plugin_upward_bias_on_miscalibrated_small_n() -> None:
         diffs.append(ece_plugin - ece_debiased)
 
     diffs_arr = np.asarray(diffs)
-    assert len(diffs_arr) >= 80, (
-        f"Need ≥ 80 valid seeds; got {len(diffs_arr)} after dropping single-class slices."
-    )
+    assert (
+        len(diffs_arr) >= 80
+    ), f"Need ≥ 80 valid seeds; got {len(diffs_arr)} after dropping single-class slices."
     mean_diff = float(diffs_arr.mean())
     ci_lo = _bootstrap_ci_lower(diffs_arr)
 
