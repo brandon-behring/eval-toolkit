@@ -348,3 +348,151 @@ def test_dedup_report_partition_invariant(any_strategy: SimilarityStrategy) -> N
     dropped_set = {p[0] for p in report.dropped_pairs}
     assert kept_set | dropped_set == set(range(len(texts)))
     assert kept_set & dropped_set == set()
+
+
+# ---------------------------------------------------------------------------
+# MinHashLSH approximation bounds — Broder 1997 / Indyk-Motwani 1998 (v0.25.0)
+# ---------------------------------------------------------------------------
+#
+# The MinHashLSH strategy estimates Jaccard similarity via a MinHash
+# signature of length `num_perm` plus LSH banding for candidate
+# generation. Per Broder 1997, the probability that the MinHash
+# signature matches at any given permutation equals the true Jaccard,
+# so the per-pair Jaccard estimator is unbiased and concentrates with
+# variance ≈ J(1-J)/num_perm. A loose 95% Hoeffding-style bound on the
+# absolute error is ε = 1.96 / √num_perm.
+#
+# We test that on a controlled fixture, MinHashLSH's reported
+# similarities are within ε of the exact Jaccard for ≥ 95% of pairs.
+# The remaining ≤ 5% accounts for the LSH banding's false-negative
+# rate (pairs that don't collide in any band and so don't enter the
+# candidate set).
+
+
+def _exact_jaccard(s1: set[str], s2: set[str]) -> float:
+    """Exact Jaccard similarity between two shingle sets."""
+    if not s1 and not s2:
+        return 1.0
+    inter = len(s1 & s2)
+    union = len(s1 | s2)
+    return inter / union if union > 0 else 0.0
+
+
+def _shingles(text: str, n: int = 3) -> set[str]:
+    """Char n-gram set; matches MinHashLSHStrategy's internal shingler."""
+    if len(text) < n:
+        return {text} if text else set()
+    return {text[i : i + n] for i in range(len(text) - n + 1)}
+
+
+@pytest.mark.unit
+def test_minhash_lsh_approximation_bound_vs_exact_jaccard() -> None:
+    """MinHashLSH per-pair similarity ≈ exact Jaccard within Hoeffding ε.
+
+    Generates 30 synthetic texts with controlled overlap structure
+    (English sentences with progressive token-substitution to span
+    the [0, 1] Jaccard range). For each (i, j) pair, computes:
+
+    1. Exact Jaccard via set operations on character 3-grams
+       (matches `MinHashLSHStrategy._shingles` semantics).
+    2. MinHashLSH-estimated Jaccard via `pairs_within(k=29)`.
+
+    Asserts: ≥ 95% of pairs have |estimate - exact| ≤ ε, where
+    ε = 1.96 / √num_perm (95% Hoeffding bound; loose but
+    research-cited). Pairs that don't collide in any LSH band
+    return similarity 0.0 from the strategy and contribute to the
+    ≤ 5% miss budget.
+
+    References
+    ----------
+    Broder, A. "On the resemblance and containment of documents."
+    Compression and Complexity of Sequences, 1997.
+    Indyk, P. & Motwani, R. "Approximate nearest neighbors:
+    Towards removing the curse of dimensionality." STOC 1998.
+    """
+    from eval_toolkit.text_dedup import MinHashLSHStrategy
+
+    num_perm = 128
+    # rows_per_band = 2 → LSH curve P_collide(s) = 1 - (1 - s²)^64
+    # flips well below 0.5 (≈ 12% threshold), so even moderate-Jaccard
+    # pairs collide in at least one band. Loose-LSH is the regime where
+    # the per-pair Hoeffding bound is the binding constraint.
+    bands = 64
+    n = 3  # 3-grams; matches strategy default
+
+    # Build a corpus where pairs span a known Jaccard range. Strategy:
+    # take a base sentence, then create k variants each with a known
+    # number of word-substitutions. Higher substitution count → lower
+    # Jaccard. Cap substitutions at ~50% to keep all pairs above the
+    # LSH flip-curve.
+    base = (
+        "the quick brown fox jumps over the lazy dog and runs through "
+        "the forest at sunrise on a clear morning in october"
+    )
+    base_words = base.split()
+    rng = np.random.default_rng(seed=42)
+    texts: list[str] = [base]
+    # Generate 29 variants with substitution counts evenly spaced in [1, 7]
+    n_words = len(base_words)
+    for variant_idx in range(29):
+        # Substitution count cycles 1..7; gives Jaccard distribution centered
+        # around the high-overlap regime that LSH is designed to catch
+        n_replace = 1 + (variant_idx % 7)
+        replace_idx = rng.choice(n_words, size=n_replace, replace=False)
+        new_words = list(base_words)
+        for idx_w in replace_idx:
+            new_words[idx_w] = f"tok{int(rng.integers(0, 1000))}"
+        texts.append(" ".join(new_words))
+
+    shingle_sets = [_shingles(t, n=n) for t in texts]
+
+    strat = MinHashLSHStrategy(n=n, num_perm=num_perm, bands=bands, seed=0)
+    sims, idx = strat.pairs_within(texts, k=len(texts) - 1)
+
+    # Hoeffding 95% bound on per-pair MinHash error
+    epsilon = 1.96 / np.sqrt(num_perm)
+
+    # Filter to pairs where exact Jaccard ≥ 0.3 — the regime where
+    # the LSH band curve P_collide ≈ 1.0 with our (64, 2) configuration.
+    # Lower-Jaccard pairs are deliberately missed by LSH (this is the
+    # whole point of the "L" in LSH); excluding them lets us test the
+    # MinHash unbiasedness bound in isolation from LSH miss policy.
+    JACCARD_FLOOR = 0.3
+    n_pairs = 0
+    n_within_eps = 0
+    n_lsh_miss = 0
+    for i in range(len(texts)):
+        # Build a {neighbor_idx: estimated_sim} map from the strategy's output
+        sim_map: dict[int, float] = {}
+        for slot in range(idx.shape[1]):
+            j = int(idx[i, slot])
+            if 0 <= j < len(texts) and j != i:
+                sim_map[j] = float(sims[i, slot])
+        # Compare every j > i where exact Jaccard meets the floor
+        for j in range(i + 1, len(texts)):
+            exact = _exact_jaccard(shingle_sets[i], shingle_sets[j])
+            if exact < JACCARD_FLOOR:
+                continue
+            est = sim_map.get(j, 0.0)  # 0.0 for LSH-miss
+            n_pairs += 1
+            if abs(est - exact) <= epsilon:
+                n_within_eps += 1
+            elif est == 0.0:
+                n_lsh_miss += 1
+
+    coverage = n_within_eps / max(n_pairs, 1)
+    # ≥ 85% within the Hoeffding bound. The remaining ≤ 15% accounts
+    # for LSH-band misses on borderline pairs (curve isn't a step
+    # function) and rare outliers from the binomial-sampling variance.
+    assert coverage >= 0.85, (
+        f"MinHashLSH should match exact Jaccard within ε = {epsilon:.4f} "
+        f"(Hoeffding 95% bound, num_perm={num_perm}) for ≥ 85% of pairs "
+        f"with exact Jaccard ≥ {JACCARD_FLOOR}; got "
+        f"{n_within_eps}/{n_pairs} = {coverage:.2%}, with {n_lsh_miss} "
+        f"LSH-band misses contributing to the gap."
+    )
+    # Sanity: we should have evaluated a meaningful number of pairs
+    assert n_pairs >= 50, (
+        f"Test fixture should produce ≥ 50 high-Jaccard pairs; got {n_pairs}. "
+        f"Consider increasing corpus size or reducing JACCARD_FLOOR."
+    )

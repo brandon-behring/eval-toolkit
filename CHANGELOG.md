@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-05-14 — research-grounded test additions
+
+Builds on v0.24.1 (research-dossier docs hygiene) by validating
+implementations against the methodology cited in the dossier. Tests
+only — no API or schema changes.
+
+### Added
+
+- `tests/test_calibration_research_grounded.py` (new file, ~250 LOC):
+  - **Beta dominates Platt on miscalibrated fixture** (Kull et al.
+    2017 §5; `inference/_dossier/` § C1 entry `kull2017beta`).
+    Asymmetric mixture fixture where Platt's symmetric sigmoid
+    cannot apply correction in only one tail; Beta's 3-parameter
+    log-feature form can. Seed-loop guard rails: 12 seeds, dominance
+    in ≥ 9/12, margin > 0.5σ.
+  - **ECE plug-in upward bias on miscalibrated small-n** (Roelofs
+    2022 + Kumar 2019; `inference/` § D2 entries
+    `roelofs2022mitigating`, `kumar2019verified`). Plug-in ECE
+    over-estimates the debiased variant on small-n miscalibrated
+    samples; bias amplified by miscalibration vs. calibrated
+    counter-test.
+- `tests/test_text_dedup_strategies.py` (extended, +120 LOC):
+  - **MinHashLSH approximation bound vs exact Jaccard** (Broder
+    1997 + Indyk-Motwani 1998; `data-integrity/` § C1 entries
+    `broder1997minhash`, `indyk1998lsh`). Per-pair MinHash estimates
+    within Hoeffding 95% bound ε = 1.96 / √num_perm of exact Jaccard
+    for ≥ 85% of pairs above the LSH band-curve flip threshold.
+- `tests/test_reproducibility_integration.py` (new file, ~180 LOC):
+  - **End-to-end harness output bit-identity under replay** (Pineau
+    et al. 2021; `eval-ecosystem/` § B1 entry `pineau2021reproducibility`).
+    Same-seed re-runs of `evaluate_scorer_on_slice` produce
+    `np.array_equal`-identical metric dicts (with `equal_nan=True` for
+    degenerate-CI NaN preservation). Negative control: different seed
+    produces different output. Cross-call isolation: bit-identity
+    holds even when sibling harness calls happen between replays.
+- `tests/test_leakage.py` (extended, +90 LOC):
+  - **Kapoor 2023 L2 (illegitimate features) — partial coverage**
+    via `LabelConflictCheck`. Tests the same-text-conflicting-labels
+    sub-case of L2; explicit docstring caveat that this does NOT
+    cover general illegitimate-feature detection.
+
+### Deferred (Kapoor 2023 leakage taxonomy gaps)
+
+Per Phase-0 audit of `src/eval_toolkit/leakage.py`, the following
+Kapoor 2023 leaf-level leakage modes lack detector machinery in
+v0.25.0 and are deferred to a future release:
+
+- **L1.2** preprocessing on combined train+test data — requires
+  new `PreprocessingLeakageCheck` (detect StandardScaler / similar
+  fit on combined data via statistics-drift signature).
+- **L1.3** feature selection on combined train+test — requires
+  new `FeatureSelectionLeakageCheck` (detect SelectKBest / similar
+  fit on combined data via rank-drift signature).
+- **L3.3** sampling bias (different distributions train vs. test) —
+  requires new `SamplingBiasCheck` (KS-test or similar
+  distribution-shift detector).
+- **L2-general** illegitimate features (post-prediction sources,
+  target-derived aggregates) — requires generalized
+  `IllegitimateFeatureCheck` beyond `LabelConflictCheck`'s
+  same-text-conflict sub-case.
+
+Reference: Kapoor & Narayanan, "Leakage and the reproducibility
+crisis in ML-based science," Patterns 4(9), 2023; arXiv:2207.07048;
+Table 2 (8-leaf taxonomy).
+
 ## [0.24.1] — 2026-05-14 — research-dossier docs hygiene
 
 Builds on v0.24.0 (manifest.v3 + contamination_flags). No code surface

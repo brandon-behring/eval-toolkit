@@ -389,3 +389,122 @@ def test_cross_dedup_pairs_returns_eval_train_sim_tuples() -> None:
         assert 0 <= eval_idx < len(eval_set)
         assert 0 <= train_idx < len(train)
         assert 0.4 <= sim <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Kapoor 2023 leakage taxonomy — L2 partial coverage (v0.25.0)
+# ---------------------------------------------------------------------------
+#
+# This block tests the toolkit's coverage of Kapoor & Narayanan 2023's
+# 8-leaf leakage taxonomy (Patterns 4(9); arXiv:2207.07048; see
+# `docs/research/papers/data-integrity/02_leakage_and_contamination.md` § B1).
+#
+# Phase-0 audit verdict (see plan file): of the 4 modes flagged missing
+# in earlier surveys, only **L2** has *partial* detector coverage in
+# eval-toolkit v0.24.x:
+#
+#     | Kapoor leaf | Detector class               | Status                  |
+#     |-------------|-----------------------------|-------------------------|
+#     | L1.2        | (none)                       | DEFERRED — needs        |
+#     |             |                              | PreprocessingLeakageCheck|
+#     | L1.3        | (none)                       | DEFERRED — needs        |
+#     |             |                              | FeatureSelectionLeakageCheck |
+#     | L2          | LabelConflictCheck (partial) | SHIPPED below           |
+#     | L3.3        | (none)                       | DEFERRED — needs        |
+#     |             |                              | SamplingBiasCheck       |
+#
+# **L2 = "model uses features that are not legitimate"** (target leakage).
+# `LabelConflictCheck` covers the *specific* sub-case where the same
+# input text appears with conflicting labels across splits — i.e., the
+# label itself is implicitly part of the model's input distribution
+# (the dataset reveals "this exact text means y=0 for split A, y=1 for
+# split B"). It does NOT cover the general L2 case (e.g., features
+# computed from post-prediction sources, target-derived features). A
+# generalized illegitimate-feature detector would be a separate v0.26+
+# addition.
+
+
+@pytest.mark.unit
+def test_kapoor_l2_partial_via_label_conflict_check() -> None:
+    """Kapoor 2023 L2 (illegitimate features) — partial coverage smoke test.
+
+    Constructs a synthetic train/test pair where the same text appears
+    in both splits with contradictory labels — a specific form of
+    target leakage in which the input itself is the label signal.
+    `LabelConflictCheck` should fire (severity="error") with both rows
+    in `drop_indices`. Negative control: distinct texts produce no
+    finding.
+
+    **Coverage caveat (research-grounded):** This test validates only
+    the same-text-conflicting-labels sub-case of Kapoor 2023 L2. It
+    does NOT validate general illegitimate-feature detection (e.g.,
+    features computed from post-prediction sources, target-leaked
+    aggregates). The toolkit lacks a generic L2 detector as of v0.25.0
+    — see CHANGELOG `[0.25.0]` "Deferred" sub-section for L1.2, L1.3,
+    L3.3 and the L2-general gap.
+
+    References
+    ----------
+    Kapoor, S. & Narayanan, A. "Leakage and the reproducibility crisis
+    in machine-learning-based science." Patterns 4(9), 2023.
+    arXiv:2207.07048. § Table 2 (8-leaf taxonomy).
+    """
+    # Positive case: 3 train rows, 3 test rows. Two rows share text
+    # ("alpha rare token") with contradictory labels — L2 leakage signal.
+    splits_leaky = {
+        "train": EvalSlice(
+            name="train",
+            df=pd.DataFrame(
+                {
+                    "text": ["alpha rare token", "beta unique line", "gamma other"],
+                    "label": [0, 1, 0],
+                }
+            ),
+        ),
+        "test": EvalSlice(
+            name="test",
+            df=pd.DataFrame(
+                {
+                    "text": ["alpha rare token", "delta different", "beta unique line"],
+                    "label": [1, 0, 1],
+                }
+            ),
+        ),
+    }
+    finding = LabelConflictCheck().validate(splits_leaky)
+    assert finding.severity == "error"
+    assert finding.n_affected == 2  # one row each from train + test on conflict
+    assert "train" in finding.drop_indices
+    assert "test" in finding.drop_indices
+    # Verify the specific row indices flagged are the conflict rows
+    assert finding.drop_indices["train"] == [0]  # "alpha rare token" at train[0]
+    assert finding.drop_indices["test"] == [0]  # "alpha rare token" at test[0]
+    # Evidence dict should expose the conflict structure
+    assert "conflicts" in finding.evidence
+    conflicts = finding.evidence["conflicts"]
+    assert len(conflicts) == 1, f"expected 1 conflict cluster; got {len(conflicts)}"
+
+    # Negative control: distinct texts → no finding
+    splits_clean = {
+        "train": EvalSlice(
+            name="train",
+            df=pd.DataFrame(
+                {
+                    "text": ["alpha", "beta", "gamma"],
+                    "label": [0, 1, 0],
+                }
+            ),
+        ),
+        "test": EvalSlice(
+            name="test",
+            df=pd.DataFrame(
+                {
+                    "text": ["delta", "epsilon", "zeta"],
+                    "label": [1, 0, 1],
+                }
+            ),
+        ),
+    }
+    finding_clean = LabelConflictCheck().validate(splits_clean)
+    assert finding_clean.n_affected == 0
+    assert finding_clean.evidence["conflicts"] == []
