@@ -104,3 +104,59 @@ def constant_score_inputs() -> tuple[np.ndarray, np.ndarray]:
     y_true = rng.integers(0, 2, size=100)
     y_score = np.full(100, 0.5, dtype=float)
     return y_true, y_score
+
+
+# ---------------------------------------------------------------------------
+# Shared Scorer test doubles (v0.30.0 refactor #4 — DRY)
+#
+# The Scorer Protocol is `predict_proba(X) -> np.ndarray`. Three minimal
+# implementations cover the common test patterns. Specialized stubs
+# (slice-content-sensitive, deterministic-text-score, etc.) stay in their
+# own test files because their behavior is the point of the test.
+# ---------------------------------------------------------------------------
+
+
+class StubScorer:
+    """Returns a precomputed scores array on every call.
+
+    Use when the test needs deterministic, known outputs (golden tests,
+    schema-validation round-trips, etc.).
+    """
+
+    def __init__(self, scores: np.ndarray) -> None:
+        self._scores = scores
+
+    def predict_proba(self, X: object) -> np.ndarray:
+        return self._scores
+
+
+class UniformScorer:
+    """Returns ``rng.uniform(0, 1, size=len(X))`` on every call.
+
+    Use when test only needs a valid scorer (input shape correct, output
+    in [0, 1]) but doesn't care about specific values.
+    """
+
+    def __init__(self, seed: int = 42) -> None:
+        self._rng = np.random.default_rng(seed)
+
+    def predict_proba(self, X: object) -> np.ndarray:
+        return self._rng.uniform(0, 1, size=len(X))  # type: ignore[arg-type]
+
+
+class ErrorScorer:
+    """Raises a configurable exception on every call.
+
+    Use to exercise the harness's ``on_scorer_error`` paths.
+    """
+
+    def __init__(
+        self,
+        exc_type: type[BaseException] = RuntimeError,
+        message: str = "intentional failure for tests",
+    ) -> None:
+        self._exc_type = exc_type
+        self._message = message
+
+    def predict_proba(self, X: object) -> np.ndarray:
+        raise self._exc_type(self._message)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -16,20 +15,11 @@ from eval_toolkit.harness import (
 from eval_toolkit.leakage import LabelConflictCheck, NormalizedFormLeakageCheck
 from eval_toolkit.splits import HoldoutSplitter, StratifiedKFoldSplitter
 
-
-class _UniformScorer:
-    """Deterministic scorer for tests — returns shuffled uniforms keyed on seed=42."""
-
-    def predict_proba(self, X: list[str]) -> np.ndarray:
-        rng = np.random.default_rng(42)
-        return rng.uniform(0, 1, size=len(X))
-
-
-class _BrokenScorer:
-    """Always raises RuntimeError. Used to exercise on_scorer_error paths."""
-
-    def predict_proba(self, X: list[str]) -> np.ndarray:
-        raise RuntimeError("intentional failure for tests")
+# v0.30.0 refactor #4: shared scorer doubles moved to tests/conftest.py.
+# Imports below alias to the names this file already uses, minimizing
+# call-site churn.
+from tests.conftest import ErrorScorer as _BrokenScorer  # noqa: E402
+from tests.conftest import UniformScorer as _UniformScorer  # noqa: E402
 
 
 @pytest.fixture

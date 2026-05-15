@@ -20,13 +20,9 @@ from eval_toolkit.harness import (
     write_run_result,
 )
 
-
-class _StubScorer:
-    def __init__(self, scores: np.ndarray) -> None:
-        self._scores = scores
-
-    def predict_proba(self, X: object) -> np.ndarray:
-        return self._scores
+# StubScorer moved to tests/conftest.py (v0.30.0 refactor #4); import alias
+# preserves existing usage names in this file with minimal diff churn.
+from tests.conftest import StubScorer as _StubScorer  # noqa: E402
 
 
 class _SliceAwareStub:
