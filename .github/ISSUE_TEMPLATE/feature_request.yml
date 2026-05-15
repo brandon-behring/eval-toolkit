@@ -1,0 +1,66 @@
+name: Feature request
+description: Propose new functionality or an API change.
+title: "[feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a feature. Before filing, consider whether the idea is better suited to GitHub Discussions (open-ended ideas) vs an Issue (concrete proposal with a clear API). The fields below assume the latter.
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation / use case
+      description: What problem does this solve? Who would use it, and in what workflow? Concrete scenarios beat abstract benefits.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_api
+    attributes:
+      label: Proposed API or behavior
+      description: Code sketch, function signatures, or a short prose description of the proposed surface. If you've prototyped, share the diff.
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you think about? Why is the proposed one the right one? "None" is a valid answer if the design space is narrow.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Affected module
+      description: Where would this feature live? Pick `cross-cutting` if it spans multiple submodules.
+      options:
+        - harness
+        - metrics
+        - bootstrap
+        - calibration
+        - leakage
+        - thresholds
+        - text_dedup
+        - splits
+        - manifest
+        - loaders
+        - claims
+        - plotting
+        - cli
+        - cross-cutting
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Research references, related issues, prior-art implementations in other libraries, anything that informs the design.
+    validations:
+      required: false

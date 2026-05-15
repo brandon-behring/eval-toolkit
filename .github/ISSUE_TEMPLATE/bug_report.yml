@@ -1,0 +1,80 @@
+name: Bug report
+description: Report unexpected behavior, a crash, or a divergence from documented behavior.
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. Please fill out the structured fields below — the more context you provide, the faster the issue can be diagnosed.
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Affected module
+      description: Which submodule does the bug live in? Pick the closest match; use `other` for cross-cutting issues.
+      options:
+        - harness
+        - metrics
+        - bootstrap
+        - calibration
+        - leakage
+        - thresholds
+        - text_dedup
+        - splits
+        - manifest
+        - loaders
+        - claims
+        - plotting
+        - cli
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Versions and platform. The first three are required.
+      value: |
+        - eval-toolkit version: `<output of `uv run eval-toolkit --help` header or `python -c "import eval_toolkit; print(eval_toolkit.__version__)"`>`
+        - Python version: `<python --version>`
+        - OS: `<e.g. Ubuntu 24.04, macOS 14, Windows 11>`
+        - Install method: `<uv pip install -e ., pip install eval-toolkit, other>`
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Minimal code or CLI sequence that triggers the bug. Aim for the smallest example that still fails.
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual behavior
+      description: What did you expect to happen? What happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Traceback (if applicable)
+      description: Full traceback, log output, or error message. Will be rendered as a code block.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Anything else relevant — workarounds tried, related issues, screenshots, links to research papers if the bug relates to a methodology claim.
+    validations:
+      required: false

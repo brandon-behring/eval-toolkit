@@ -1,0 +1,3 @@
+# Disable blank issues so the structured forms above are the only entry points.
+# Open-ended questions go in GitHub Discussions (if enabled on the repo).
+blank_issues_enabled: false
