@@ -108,30 +108,50 @@ for the full design rationale.
 
 ## Release flow
 
-eval-toolkit follows [Semantic Versioning](https://semver.org/). The release
-checklist:
+eval-toolkit follows [Semantic Versioning](https://semver.org/). Per SemVer
+pre-1.0 expectations, breaking changes are allowed in MINOR bumps (`0.X.0`)
+during the 0.x series; PATCH bumps (`0.X.Y`) remain backward-compatible.
 
-1. Update `version = "X.Y.Z"` in `pyproject.toml`
+The release checklist:
+
+1. Update `__version__` in `src/eval_toolkit/_version.py` (single source of
+   truth — `pyproject.toml` reads it dynamically via `[tool.hatch.version]`,
+   so editing it in two places is no longer possible)
 2. Add a `## [X.Y.Z] — YYYY-MM-DD — <short description>` section to
    `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com/)
    format. Use `### Added` / `### Changed` / `### Fixed` / `### Internal`
    sub-headings as relevant.
-3. Commit: `git commit -m "release: vX.Y.Z — <short description>"`
-4. Push to `main` (CI runs)
-5. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z — <short description>"`
-6. Push tag: `git push origin vX.Y.Z`
-7. The push tags `v*` trigger the `v4 sibling smoke` workflow (see above) as
-   one extra contract check on the release commit
+3. Commit: `git commit -m "release: vX.Y.Z — <short description>"` and push
+   to `main`; wait for CI green
+4. Tag: `git tag -a vX.Y.Z -m "vX.Y.Z — <short description>"` and
+   `git push origin vX.Y.Z`
+5. The `Publish to PyPI` workflow (`.github/workflows/publish.yml`) runs
+   automatically:
+   - Prerelease tags (`v*rc*`, `v*a*`, `v*b*`, `v*dev*`) → **TestPyPI**
+   - Stable tags (any other `v*`) → **PyPI**
+6. Verify: `pip install eval-toolkit==X.Y.Z` in a clean venv prints the
+   expected `__version__`
+7. The `v4 sibling smoke` workflow also runs on `v*` tags as one extra
+   contract check on the release commit
 
-**PyPI publishing is currently manual.** Auto-publish on tag via a
-`.github/workflows/publish.yml` workflow with PyPI Trusted Publishing is a
-deferred Tier D item in the project's plan archive — pick it up when PyPI
-discoverability becomes valuable. Manual publish:
+Publishing uses [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
+(OIDC) — no API tokens are stored in the repo. The `pypi` and `testpypi`
+GitHub Environments scope which workflow file may publish. No manual approval
+gate is configured on the `pypi` environment; the TestPyPI rehearsal step
+(via a prerelease tag) is the safety net before a real release.
 
-```bash
-uv build                  # produces dist/eval_toolkit-X.Y.Z-{tar.gz,whl}
-uv publish dist/*         # requires PyPI credentials configured
-```
+**Rehearsing a release on TestPyPI**: tag a prerelease first, e.g.
+`git tag -a vX.Y.Zrc1 -m "rc1"` then `git push origin vX.Y.Zrc1`. The
+workflow publishes `X.Y.Zrc1` to TestPyPI; install it in a clean venv with
+`pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ eval-toolkit==X.Y.Zrc1`
+(the `--extra-index-url` lets pip resolve numpy/scipy from real PyPI). Once
+verified, tag the stable `vX.Y.Z` for the real publish.
+
+**Rollback**: PyPI does not allow re-uploading the same filename. If a
+release is broken, yank it on PyPI (this hides it from new `pip install`
+resolution while preserving pinned installs) and ship `0.X.Y+1` with the
+fix. There is no fix-and-re-tag path; the TestPyPI rehearsal catches the
+common configuration errors before they touch real PyPI.
 
 ## Filing issues
 

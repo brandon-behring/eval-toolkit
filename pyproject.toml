@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eval-toolkit"
-version = "0.27.0"
+dynamic = ["version"]
 description = "Reusable evaluation contracts for binary classification: metrics, bootstrap CIs, calibration, artifacts, and evidence gates."
 readme = "README.md"
 license = "MIT"
@@ -78,6 +78,9 @@ Changelog = "https://github.com/brandon-behring/eval-toolkit/blob/main/CHANGELOG
 
 [project.scripts]
 eval-toolkit = "eval_toolkit.__main__:main"
+
+[tool.hatch.version]
+path = "src/eval_toolkit/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/eval_toolkit"]
