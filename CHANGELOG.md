@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Section B (PurgedKFold splitter from temporalcv-cross-pollination bundle):
+  `PurgedKFoldSplitter(n_splits, purge_gap, embargo_pct, time_col)` and a
+  standalone `compute_label_overlap(t_train, t_test, horizon)` helper, both
+  now public via `from eval_toolkit import ...`. Time-aware k-fold with
+  explicit purge gap straddling the test fold + post-test embargo —
+  prevents label-window leakage when labels have a forward horizon
+  (e.g., H-step forward returns). The standalone helper audits arbitrary
+  train/test overlap independent of the splitter. Adapted from López de
+  Prado (2018) Chapter 7 via temporalcv's `cv_financial.py`; API names
+  preserved verbatim for cross-library muscle memory. Public-API
+  drift-guard snapshot regenerated for the two new exports.
+
 ### Internal
 
 - Section A (Monte Carlo bootstrap CI calibration, from temporalcv-cross-pollination

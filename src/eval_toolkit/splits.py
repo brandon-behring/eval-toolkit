@@ -36,10 +36,12 @@ __all__ = [
     "GroupKFoldSplitter",
     "HoldoutSplitter",
     "PoolBuilder",
+    "PurgedKFoldSplitter",
     "SourceDisjointKFoldSplitter",
     "Splitter",
     "StratifiedKFoldSplitter",
     "TimeSeriesSplitter",
+    "compute_label_overlap",
     "iter_folds_with_pool",
 ]
 
@@ -513,3 +515,283 @@ def iter_folds_with_pool(
         # PoolBuilder's keys (train, val, possibly more) take precedence;
         # test is reattached from the Splitter.
         yield {**built, "test": test}
+
+
+# ---------------------------------------------------------------------------
+# Purged K-fold for label-overlap protection (v0.28.0)
+#
+# Adapted from temporalcv (Behring 2026) for the financial / forecasting
+# label-overlap case: when labels use future data (e.g., H-day forward
+# returns), train and test folds can overlap in their LABEL windows even
+# when their FEATURE windows don't. Purging drops a band of training
+# samples within ``purge_gap`` of each test fold; embargo drops an
+# additional fraction of n samples bordering each test fold.
+# ---------------------------------------------------------------------------
+
+
+def compute_label_overlap(
+    t_train: np.ndarray,
+    t_test: np.ndarray,
+    horizon: int,
+) -> np.ndarray:
+    r"""Boolean ``(n_train, n_test)`` matrix: True where label windows overlap.
+
+    For h-step forward labels, the label at time ``t`` depends on the data
+    at times ``[t, t+h]``. Two samples ``t_train[i]`` and ``t_test[j]``
+    have label-window overlap if their windows share at least one time
+    point — equivalently, if ``|t_train[i] - t_test[j]| < horizon``.
+
+    Use this to audit whether a given train/test split has any label
+    leakage. Standalone helper; does NOT require a particular splitter.
+
+    Parameters
+    ----------
+    t_train : np.ndarray, shape (n_train,)
+        Time indices of the training set (any sortable numeric type).
+    t_test : np.ndarray, shape (n_test,)
+        Time indices of the test set.
+    horizon : int
+        Label horizon (e.g., ``5`` for 5-step forward returns). Must be
+        non-negative; ``horizon=0`` means no overlap is possible.
+
+    Returns
+    -------
+    np.ndarray, shape (n_train, n_test), dtype bool
+        Entry ``(i, j)`` is ``True`` iff
+        ``|t_train[i] - t_test[j]| < horizon``.
+
+    Raises
+    ------
+    ValueError
+        If ``horizon`` is negative.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> t_train = np.array([0, 1, 5, 6])
+    >>> t_test = np.array([3, 4])
+    >>> overlap = compute_label_overlap(t_train, t_test, horizon=3)
+    >>> overlap
+    array([[False, False],
+           [ True, False],
+           [ True,  True],
+           [False,  True]])
+    >>> # Sample 0 (t=0): no overlap with test (|0-3|=3, |0-4|=4 ≥ horizon)
+    >>> # Sample 1 (t=1): overlaps test[0]=3 (|1-3|=2 < 3)
+    >>> # Sample 2 (t=5): overlaps both (|5-3|=2, |5-4|=1)
+    >>> # Sample 3 (t=6): overlaps test[1]=4 (|6-4|=2 < 3)
+
+    Notes
+    -----
+    The check is **symmetric in time**: ``|t_train - t_test| < horizon``
+    treats overlap in either temporal direction equally. For strictly
+    forward-only label overlap (train-before-test), filter the result
+    with ``(t_test[None, :] - t_train[:, None]) > 0``.
+
+    For h-step forward labels: label at time t covers ``[t, t+h)``, so
+    two labels at times ``t1, t2`` share data iff their intervals
+    overlap, which holds iff ``|t1 - t2| < h``.
+
+    References
+    ----------
+    .. [1] López de Prado, M. (2018). "Advances in Financial Machine
+           Learning." Wiley. Chapter 7: Cross-Validation in Finance.
+    """
+    if horizon < 0:
+        raise ValueError(f"horizon must be >= 0, got {horizon}")
+    if horizon == 0:
+        return np.zeros((len(t_train), len(t_test)), dtype=bool)
+    t_train_arr = np.asarray(t_train)
+    t_test_arr = np.asarray(t_test)
+    # Outer absolute difference: (n_train, n_test)
+    dist = np.abs(t_train_arr[:, None] - t_test_arr[None, :])
+    overlap: np.ndarray = dist < horizon
+    return overlap
+
+
+def _apply_purge_embargo(
+    test_idx: np.ndarray,
+    n_samples: int,
+    purge_gap: int,
+    embargo_pct: float,
+) -> np.ndarray:
+    """Build a training-index array excluding the test fold + purge + embargo.
+
+    The test fold's indices are contiguous (TimeSeriesSplit-style); purging
+    drops `[test_min - purge_gap, test_max + purge_gap]` from training;
+    embargo drops an additional `floor(embargo_pct * n_samples)` indices
+    after the test fold (one-sided: protects the post-test region from
+    label-window leakage when labels are forward-looking).
+
+    Adapted from temporalcv's ``_apply_purge_and_embargo`` but vectorized
+    (no Python-level set/loop) and asymmetric-by-default (embargo only on
+    the post-test side, matching López de Prado's original definition).
+    """
+    test_min = int(np.min(test_idx))
+    test_max = int(np.max(test_idx))
+    purge_start = max(0, test_min - purge_gap)
+    purge_end = min(n_samples, test_max + 1 + purge_gap)
+    n_embargo = int(embargo_pct * n_samples)
+    embargo_end = min(n_samples, test_max + 1 + n_embargo)
+
+    full_idx = np.arange(n_samples)
+    # Mask out: the test fold itself + purge band on both sides + post-test embargo
+    keep = np.ones(n_samples, dtype=bool)
+    keep[purge_start:purge_end] = False  # zeroes out test + purge band
+    keep[test_max + 1 : embargo_end] = False  # post-test embargo
+    return full_idx[keep]
+
+
+@dataclass(frozen=True, slots=True)
+class PurgedKFoldSplitter:
+    r"""Time-aware k-fold with explicit purge gap + post-test embargo.
+
+    Pattern from López de Prado (2018) Ch. 7: when labels have a forward
+    lookahead (e.g., H-step returns), train and test folds can overlap in
+    their **label windows** even when their **feature windows** don't.
+    Standard k-fold leaks information through this overlap. PurgedKFold
+    drops a ``purge_gap``-sample band straddling each test fold's boundary
+    plus a post-test ``embargo_pct * n`` window — preventing both
+    backward and forward label-overlap leakage.
+
+    Implements the :class:`Splitter` Protocol, yielding
+    ``{"train": EvalSlice, "test": EvalSlice}`` dicts.
+
+    Parameters
+    ----------
+    n_splits : int, optional
+        Number of folds. Default 5. Must be ≥ 2.
+    purge_gap : int, optional
+        Samples to drop on each side of every test fold's boundary.
+        Default 0 (no purging — equivalent to vanilla TimeSeriesSplit).
+        For h-step forward labels, ``purge_gap=h`` is the canonical choice.
+    embargo_pct : float, optional
+        Additional embargo as a fraction of total ``n``, applied **after**
+        each test fold (one-sided, López de Prado convention). Default
+        0.0. Typical: 0.01 (1%).
+    time_col : str or None, optional
+        Column carrying a sortable timestamp. If set, the parent slice is
+        sorted by this column before splitting. ``None`` assumes the slice
+        is already in temporal order. Default ``"timestamp"``.
+
+    Raises
+    ------
+    ValueError
+        At construction time if ``n_splits < 2`` or ``purge_gap < 0`` or
+        ``embargo_pct ∉ [0, 1)``.
+    KeyError
+        At ``iter_folds`` time if ``time_col`` is set but not present in
+        the slice DataFrame.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> from eval_toolkit.harness import EvalSlice
+    >>> from eval_toolkit.splits import PurgedKFoldSplitter
+    >>> df = pd.DataFrame({
+    ...     "text": [f"row{i}" for i in range(50)],
+    ...     "label": [i % 2 for i in range(50)],
+    ...     "t": list(range(50)),
+    ... })
+    >>> parent = EvalSlice(name="all", df=df)
+    >>> spl = PurgedKFoldSplitter(n_splits=5, purge_gap=2, embargo_pct=0.02, time_col="t")
+    >>> folds = list(spl.iter_folds(parent))
+    >>> len(folds)
+    5
+    >>> sorted(folds[0].keys())
+    ['test', 'train']
+
+    Notes
+    -----
+    **Two units in one signature**: ``purge_gap`` is an absolute count of
+    samples (int) while ``embargo_pct`` is a fraction (float). This
+    mirrors López de Prado / temporalcv conventions verbatim — users
+    moving between libraries see the same parameter names. Use the
+    standalone helper :func:`compute_label_overlap` to size ``purge_gap``
+    for a known label horizon.
+
+    See Also
+    --------
+    eval_toolkit.splits.compute_label_overlap :
+        Audit label-window overlap between arbitrary train/test sets.
+    eval_toolkit.splits.TimeSeriesSplitter :
+        Time-aware k-fold without purging — use when labels have no
+        lookahead horizon.
+
+    References
+    ----------
+    .. [1] López de Prado, M. (2018). "Advances in Financial Machine
+           Learning." Wiley. Chapter 7.
+    """
+
+    n_splits: int = 5
+    purge_gap: int = 0
+    embargo_pct: float = 0.0
+    time_col: str | None = "timestamp"
+
+    def __post_init__(self) -> None:
+        """Validate parameters."""
+        if self.n_splits < 2:
+            raise ValueError(f"n_splits must be >= 2, got {self.n_splits}")
+        if self.purge_gap < 0:
+            raise ValueError(f"purge_gap must be >= 0, got {self.purge_gap}")
+        if not 0.0 <= self.embargo_pct < 1.0:
+            raise ValueError(f"embargo_pct must be in [0, 1), got {self.embargo_pct}")
+
+    def iter_folds(
+        self,
+        slice_: EvalSlice,
+        *,
+        groups: np.ndarray | None = None,
+    ) -> Iterator[dict[str, EvalSlice]]:
+        """Yield ``n_splits`` fold dicts with purge + embargo applied.
+
+        Raises
+        ------
+        KeyError
+            If ``self.time_col`` is set but not present in ``slice_.df``.
+        """
+        if self.time_col is not None:
+            if self.time_col not in slice_.df.columns:
+                raise KeyError(
+                    f"time_col {self.time_col!r} not in slice columns " f"{list(slice_.df.columns)}"
+                )
+            sorted_df = slice_.df.sort_values(self.time_col).reset_index(drop=True)
+            sorted_slice = EvalSlice(
+                name=slice_.name,
+                df=sorted_df,
+                description=slice_.description,
+                feature_col=slice_.feature_col,
+                label_col=slice_.label_col,
+                strata_col=slice_.strata_col,
+            )
+        else:
+            sorted_slice = slice_
+
+        n_samples = len(sorted_slice.df)
+        if self.n_splits >= n_samples:
+            raise ValueError(f"n_splits ({self.n_splits}) must be < n_samples ({n_samples})")
+
+        # Fold sizes (mirrors TimeSeriesSplit / temporalcv: trailing folds
+        # absorb the remainder)
+        fold_sizes = np.full(self.n_splits, n_samples // self.n_splits)
+        fold_sizes[: n_samples % self.n_splits] += 1
+
+        current = 0
+        for fold_size in fold_sizes:
+            test_idx = np.arange(current, current + fold_size)
+            train_idx = _apply_purge_embargo(
+                test_idx,
+                n_samples=n_samples,
+                purge_gap=self.purge_gap,
+                embargo_pct=self.embargo_pct,
+            )
+            yield {
+                "train": _slice_subset(sorted_slice, train_idx, "train"),
+                "test": _slice_subset(sorted_slice, test_idx, "test"),
+            }
+            current += fold_size
+
+    def get_n_splits(self, slice_: EvalSlice) -> int:
+        """Return ``self.n_splits``."""
+        return self.n_splits

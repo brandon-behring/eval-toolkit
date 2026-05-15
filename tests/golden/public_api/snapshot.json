@@ -68,6 +68,7 @@
     "PredictionArtifactRef",
     "PredictionColumns",
     "PredictionReader",
+    "PurgedKFoldSplitter",
     "RECOMMENDED_SOURCE_ROLES",
     "RUN_RESULT_SCHEMA_VERSION",
     "RunManifest",
@@ -107,6 +108,7 @@
     "build_manifest",
     "capture_git_sha",
     "compute_file_hash",
+    "compute_label_overlap",
     "cross_dedup",
     "cross_validate_metric",
     "cv_clt_ci",
@@ -763,6 +765,14 @@
       "kind": "class",
       "signature": "(*args, **kwargs)"
     },
+    "PurgedKFoldSplitter": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Time-aware k-fold with explicit purge gap + post-test embargo.",
+      "kind": "class",
+      "signature": "(n_splits: 'int' = 5, purge_gap: 'int' = 0, embargo_pct: 'float' = 0.0, time_col: 'str | None' = 'timestamp') -> None"
+    },
     "RECOMMENDED_SOURCE_ROLES": {
       "doc_first_line": "Built-in immutable sequence.",
       "kind": "value",
@@ -1033,6 +1043,11 @@
       "doc_first_line": "SHA-256 hex digest of an existing file (sentinel-typed).",
       "kind": "function",
       "signature": "(path: 'Path | str') -> 'FileHash | FileHashMissing'"
+    },
+    "compute_label_overlap": {
+      "doc_first_line": "Boolean ``(n_train, n_test)`` matrix: True where label windows overlap.",
+      "kind": "function",
+      "signature": "(t_train: 'np.ndarray', t_test: 'np.ndarray', horizon: 'int') -> 'np.ndarray'"
     },
     "cross_dedup": {
       "doc_first_line": "Return eval indices to KEEP (drop those near-duplicate to any train text).",
