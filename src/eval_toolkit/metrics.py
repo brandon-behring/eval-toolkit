@@ -672,8 +672,7 @@ def expected_calibration_error(
     """
     _validate_inputs(y_true, y_score)
     _validate_calibrated_score(y_score)
-    if n_bins < 2:
-        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
+    _validate_bin_count(n_bins)
     bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
     bin_idx = np.clip(np.digitize(y_score, bin_edges, right=False) - 1, 0, n_bins - 1)
     n = len(y_true)
@@ -743,8 +742,7 @@ def expected_calibration_error_equal_mass(
     """
     _validate_inputs(y_true, y_score)
     _validate_calibrated_score(y_score)
-    if n_bins < 2:
-        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
+    _validate_bin_count(n_bins)
     n = len(y_true)
     if n < n_bins:
         raise ValueError(f"n={n} smaller than n_bins={n_bins}; cannot form quantile bins")
@@ -814,8 +812,7 @@ def expected_calibration_error_l2(
     """
     _validate_inputs(y_true, y_score)
     _validate_calibrated_score(y_score)
-    if n_bins < 2:
-        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
+    _validate_bin_count(n_bins)
     n = len(y_true)
     if n < n_bins:
         raise ValueError(f"n={n} smaller than n_bins={n_bins}; cannot form quantile bins")
@@ -909,8 +906,7 @@ def expected_calibration_error_l2_debiased(
     """
     _validate_inputs(y_true, y_score)
     _validate_calibrated_score(y_score)
-    if n_bins < 2:
-        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
+    _validate_bin_count(n_bins)
     n = len(y_true)
     if n < n_bins:
         raise ValueError(f"n={n} smaller than n_bins={n_bins}; cannot form quantile bins")
@@ -1030,8 +1026,7 @@ def expected_calibration_error_debiased(
     """
     _validate_inputs(y_true, y_score)
     _validate_calibrated_score(y_score)
-    if n_bins < 2:
-        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
+    _validate_bin_count(n_bins)
     if n_sweep < 10:
         raise ValueError(f"n_sweep must be ≥ 10, got {n_sweep}")
     n = len(y_true)
@@ -1211,8 +1206,7 @@ def brier_decomposition(
     """
     _validate_inputs(y_true, y_score)
     _validate_calibrated_score(y_score)
-    if n_bins < 2:
-        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
+    _validate_bin_count(n_bins)
     n = len(y_true)
     if n < n_bins:
         raise ValueError(f"n={n} smaller than n_bins={n_bins}; cannot form quantile bins")
@@ -1681,6 +1675,23 @@ def headline_metrics(
         except RuntimeError as exc:
             out["precision_at_prior"] = {"error": str(exc)}
     return out
+
+
+def _validate_bin_count(n_bins: int) -> None:
+    """Common ECE/reliability bin-count validation (v0.30.0 refactor #3).
+
+    Centralizes the ``if n_bins < 2: raise`` pattern that was previously
+    duplicated 6 times across ECE variants, brier_decomposition, and
+    reliability_curve. Calling this at function entry produces identical
+    error messages for all metric kernels that take ``n_bins``.
+
+    Raises
+    ------
+    ValueError
+        If ``n_bins < 2`` (ECE-style binning requires at least 2 bins).
+    """
+    if n_bins < 2:
+        raise ValueError(f"n_bins must be ≥ 2, got {n_bins}")
 
 
 def _validate_inputs(y_true: np.ndarray, y_score: np.ndarray) -> None:
