@@ -387,6 +387,129 @@ def _evaluate_scores(
     return dict(metrics)
 
 
+def _resolve_y_score(
+    scorer: Scorer,
+    slice_: EvalSlice,
+    precomputed_scores: np.ndarray | None,
+    *,
+    on_scorer_error: Literal["raise", "record"],
+    attack_style: str | None,
+) -> np.ndarray | dict[str, object]:
+    """Resolve ``y_score`` for a (scorer, slice) pair.
+
+    Returns the ndarray on success. When ``on_scorer_error='record'``
+    and the scorer raises, returns the full error-dict that
+    :func:`evaluate_scorer_on_slice` would have returned (same shape
+    downstream consumers expect).
+
+    ``MemoryError`` and ``AssertionError`` propagate even in
+    ``'record'`` mode. The former signals an environment failure
+    (OOM, resource exhaustion); the latter signals an internal-invariant
+    violation. Neither belongs in per-scorer error recording —
+    surfacing them lets the run fail loudly with the correct cause.
+
+    Raises
+    ------
+    ValueError
+        If ``precomputed_scores`` shape does not match the slice length.
+    MemoryError
+        Always re-raised (environment failure).
+    AssertionError
+        Always re-raised (internal-invariant violation).
+    Exception
+        Re-raised when ``on_scorer_error='raise'``; otherwise returned
+        as an error-dict.
+    """
+    y_true = slice_.y_true
+    if precomputed_scores is not None:
+        if precomputed_scores.shape != (len(slice_.df),):
+            raise ValueError(
+                f"precomputed_scores shape {precomputed_scores.shape} does not "
+                f"match slice length {len(slice_.df)}"
+            )
+        return np.asarray(precomputed_scores)
+    try:
+        return scorer.predict_proba(slice_.features)
+    except MemoryError:
+        raise
+    except AssertionError:
+        raise
+    except Exception as exc:
+        if on_scorer_error == "raise":
+            raise
+        err: dict[str, object] = {
+            "error": str(exc),
+            "error_state": error_metric(str(exc), exc_type=type(exc).__name__),
+            "exc_type": type(exc).__name__,
+            "traceback": traceback.format_exc(),
+            "n": int(len(slice_.df)),
+            "n_positive": int(y_true.sum()),
+            "scores": [],
+        }
+        if attack_style is not None:
+            err["attack_style"] = attack_style
+        return err
+
+
+def _compute_paired_diffs(
+    slice_: EvalSlice,
+    scores_by_scorer: Mapping[str, np.ndarray],
+    scorers: Mapping[str, Scorer],
+    paired_diffs: list[tuple[str, str]],
+    *,
+    n_resamples: int,
+    seed: int,
+) -> dict[str, dict[str, object]]:
+    """Per-slice paired bootstrap on ``pr_auc(b) - pr_auc(a)``.
+
+    Returns a dict keyed by ``f"{b}_minus_{a}"`` with either a
+    :class:`~eval_toolkit.bootstrap.PairedDiff` payload (point/ci/mde)
+    or a ``{"skipped": <reason>}`` marker.
+
+    Skip conditions (checked in order):
+
+    1. Either scorer not in ``scorers`` — silently skipped (no entry).
+    2. Either scorer has no scores for this slice (skipped/errored)
+       → ``{"skipped": "one or both scorers skipped this slice"}``.
+    3. Single-class slice (PR-AUC Δ degenerate)
+       → ``{"skipped": "single-class slice; PR-AUC Δ degenerate"}``.
+    4. ``len(slice_.y_true) < 30`` → ``{"skipped": "n=N < 30"}``.
+
+    Otherwise: ``paired_bootstrap_diff`` payload plus
+    ``mde_at_80_power`` (or error sentinel if MDE estimation fails).
+    Pure: no caches mutated, no side effects.
+    """
+    diffs: dict[str, dict[str, object]] = {}
+    is_single_class = len({int(v) for v in slice_.y_true}) == 1
+    for a, b in paired_diffs:
+        if a not in scorers or b not in scorers:
+            continue
+        if a not in scores_by_scorer or b not in scores_by_scorer:
+            diffs[f"{b}_minus_{a}"] = {"skipped": "one or both scorers skipped this slice"}
+            continue
+        if is_single_class:
+            diffs[f"{b}_minus_{a}"] = {"skipped": "single-class slice; PR-AUC Δ degenerate"}
+            continue
+        if len(slice_.y_true) < 30:
+            diffs[f"{b}_minus_{a}"] = {"skipped": f"n={len(slice_.y_true)} < 30"}
+            continue
+        pdiff = paired_bootstrap_diff(
+            slice_.y_true,
+            scores_by_scorer[a],
+            scores_by_scorer[b],
+            pr_auc,
+            n_resamples=n_resamples,
+            seed=seed,
+        )
+        pdiff_dict = pdiff.to_dict()
+        try:
+            pdiff_dict["mde_at_80_power"] = mde_from_ci(pdiff, alpha=0.05, power=0.80).to_dict()
+        except (ValueError, RuntimeError) as exc:
+            pdiff_dict["mde_at_80_power"] = {"error": str(exc)}
+        diffs[f"{b}_minus_{a}"] = pdiff_dict
+    return diffs
+
+
 def evaluate_scorer_on_slice(
     scorer: Scorer,
     slice_: EvalSlice,
@@ -465,37 +588,30 @@ def evaluate_scorer_on_slice(
     ------
     ValueError
         If ``precomputed_scores`` shape does not match the slice length.
+    MemoryError
+        Always re-raised — environment failure (e.g., OOM), not a scorer
+        bug. v0.27.0 carve-out from ``on_scorer_error='record'``.
+    AssertionError
+        Always re-raised — internal-invariant violations should surface
+        loudly. v0.27.0 carve-out from ``on_scorer_error='record'``.
     Exception
-        Re-raises any scorer exception when ``on_scorer_error="raise"``
-        (the default). Set ``on_scorer_error="record"`` to capture
-        scorer failures in the result dict instead.
+        Re-raises any *other* scorer exception when
+        ``on_scorer_error="raise"`` (the default). Set
+        ``on_scorer_error="record"`` to capture scorer failures in the
+        result dict instead. ``KeyboardInterrupt`` and ``SystemExit``
+        also propagate (they inherit from ``BaseException``).
     """
     y_true = slice_.y_true
-    if precomputed_scores is not None:
-        if precomputed_scores.shape != (len(slice_.df),):
-            raise ValueError(
-                f"precomputed_scores shape {precomputed_scores.shape} does not "
-                f"match slice length {len(slice_.df)}"
-            )
-        y_score = np.asarray(precomputed_scores)
-    else:
-        try:
-            y_score = scorer.predict_proba(slice_.features)
-        except Exception as exc:
-            if on_scorer_error == "raise":
-                raise
-            err = {
-                "error": str(exc),
-                "error_state": error_metric(str(exc), exc_type=type(exc).__name__),
-                "exc_type": type(exc).__name__,
-                "traceback": traceback.format_exc(),
-                "n": int(len(slice_.df)),
-                "n_positive": int(y_true.sum()),
-                "scores": [],
-            }
-            if attack_style is not None:
-                err["attack_style"] = attack_style
-            return err
+    resolved = _resolve_y_score(
+        scorer,
+        slice_,
+        precomputed_scores,
+        on_scorer_error=on_scorer_error,
+        attack_style=attack_style,
+    )
+    if isinstance(resolved, dict):
+        return resolved
+    y_score = resolved
 
     metrics = _evaluate_scores(
         y_true,
@@ -675,37 +791,18 @@ def evaluate(
             pr_display = f"{pr:.4f}" if isinstance(pr, float) else "N/A"
             _logger.info("    %s: PR-AUC=%s (%.1fs)", sname, pr_display, elapsed)
 
-        diffs: dict[str, dict[str, object]] = {}
-        is_single_class = len({int(v) for v in slice_.y_true}) == 1
-        if paired_diffs:
-            for a, b in paired_diffs:
-                if a not in scorers or b not in scorers:
-                    continue
-                if a not in scores_by_scorer or b not in scores_by_scorer:
-                    diffs[f"{b}_minus_{a}"] = {"skipped": "one or both scorers skipped this slice"}
-                    continue
-                if is_single_class:
-                    diffs[f"{b}_minus_{a}"] = {"skipped": "single-class slice; PR-AUC Δ degenerate"}
-                    continue
-                if len(slice_.y_true) < 30:
-                    diffs[f"{b}_minus_{a}"] = {"skipped": f"n={len(slice_.y_true)} < 30"}
-                    continue
-                pdiff = paired_bootstrap_diff(
-                    slice_.y_true,
-                    scores_by_scorer[a],
-                    scores_by_scorer[b],
-                    pr_auc,
-                    n_resamples=n_resamples,
-                    seed=seed,
-                )
-                pdiff_dict = pdiff.to_dict()
-                try:
-                    pdiff_dict["mde_at_80_power"] = mde_from_ci(
-                        pdiff, alpha=0.05, power=0.80
-                    ).to_dict()
-                except (ValueError, RuntimeError) as exc:
-                    pdiff_dict["mde_at_80_power"] = {"error": str(exc)}
-                diffs[f"{b}_minus_{a}"] = pdiff_dict
+        diffs = (
+            _compute_paired_diffs(
+                slice_,
+                scores_by_scorer,
+                scorers,
+                paired_diffs,
+                n_resamples=n_resamples,
+                seed=seed,
+            )
+            if paired_diffs
+            else {}
+        )
 
         by_slice[slice_.name] = {
             "n": int(len(slice_.df)),

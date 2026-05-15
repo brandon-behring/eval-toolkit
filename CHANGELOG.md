@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-05-14 — harness decomposition + exception carve-outs
+
+Internal refactor + small behavior change in error-recording. No public
+API change. Output schema unchanged (the existing `additionalProperties:
+true` on `by_slice` already accommodates the recorded-error fields).
+
+### Internal
+
+- Extracted two private helpers from `harness.py`:
+  - `_resolve_y_score(scorer, slice_, precomputed_scores, *, on_scorer_error, attack_style)`
+    — resolves `y_score` from the scorer or a precomputed array; returns
+    the ndarray on success or the full error-dict on caught failure.
+    Replaces the inline precomputed-shape-check + try/except block in
+    `evaluate_scorer_on_slice` (prior lines 473–498).
+  - `_compute_paired_diffs(slice_, scores_by_scorer, scorers, paired_diffs, *, n_resamples, seed)`
+    — per-slice paired bootstrap on `pr_auc(b) - pr_auc(a)`; returns
+    a dict keyed by `f"{b}_minus_{a}"`. Pure; no caches mutated.
+    Replaces the inline paired-diff block in `evaluate()` (prior lines
+    678–708).
+- Net line count: `evaluate_scorer_on_slice` 143 → ~115; `evaluate`
+  190 → ~150. Helpers were chosen for clean boundaries; other
+  decomposition candidates (`_build_run_config`, `_run_leakage_phase`,
+  `_score_slice`, `_merge_calibrated_metrics`) were deliberately
+  skipped per STYLE.md §5 anti-overengineering (no second use site).
+
+### Fixed
+
+- `evaluate_scorer_on_slice(on_scorer_error="record")` no longer
+  swallows `MemoryError` or `AssertionError`. Both now propagate even
+  in `record` mode:
+  - `MemoryError` signals an environment failure (OOM, resource
+    exhaustion), not a scorer bug.
+  - `AssertionError` signals an internal-invariant violation that
+    should surface loudly.
+  - Other exceptions (`RuntimeError`, `ValueError`, etc.) continue to
+    be recorded under `record` mode as before. `KeyboardInterrupt`
+    and `SystemExit` already propagated (they inherit from
+    `BaseException`, not `Exception`).
+- Docstring updated to document the new carve-outs.
+
+### Added — tests
+
+- `tests/test_harness_internals.py` (NEW): 5 invariant-focused tests
+  (per /exploring-options Option 3: minimal coverage):
+  - 2 parametrized skip-condition cases for `_compute_paired_diffs`
+    (scorer skipped this slice; single-class slice).
+  - 1 dedicated test for the n<30 skip-condition.
+  - 2 regression-guards for the v0.27.0 exception carve-outs
+    (`MemoryError` and `AssertionError` propagate in record mode).
+  Happy paths for both helpers remain covered by existing public-API
+  tests (`test_harness_v22.py`, `test_harness_v07.py`,
+  `test_harness_smoke.py`).
+
 ## [0.26.0] — 2026-05-14 — test completeness
 
 Builds on v0.25.1 (`Raises:` sweep). Test additions only; no behavior
