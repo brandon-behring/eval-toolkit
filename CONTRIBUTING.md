@@ -147,6 +147,12 @@ workflow publishes `X.Y.Zrc1` to TestPyPI; install it in a clean venv with
 (the `--extra-index-url` lets pip resolve numpy/scipy from real PyPI). Once
 verified, tag the stable `vX.Y.Z` for the real publish.
 
+Prerelease tags do **not** require editing `_version.py` — the workflow
+validates that the tag's base release (`X.Y.Z`) matches `_version.py`'s
+current version, then overrides `_version.py` with the tag-derived
+prerelease version for the build only. `_version.py` on `main` always
+carries the next planned *stable* release.
+
 **Rollback**: PyPI does not allow re-uploading the same filename. If a
 release is broken, yank it on PyPI (this hides it from new `pip install`
 resolution while preserving pinned installs) and ship `0.X.Y+1` with the

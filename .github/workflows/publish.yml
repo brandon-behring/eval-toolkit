@@ -34,16 +34,37 @@ jobs:
       - name: Set up Python 3.13
         run: uv python install 3.13
 
-      - name: Verify tag matches package __version__
+      - name: Resolve and set build version from tag
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME#v}"
           PKG="$(uv run --with hatchling python -c 'from eval_toolkit._version import __version__; print(__version__)')"
-          if [ "$TAG" != "$PKG" ]; then
-            echo "::error::Tag '${GITHUB_REF_NAME}' (stripped: '$TAG') does not match package __version__ '$PKG'" >&2
+
+          # _version.py on main always carries the next planned stable version
+          # (X.Y.Z). Tags may add a PEP 440 prerelease suffix (rcN, aN, bN,
+          # .devN). The base release must match — otherwise the tag is for a
+          # different version than the source intends.
+          BASE_TAG="$(echo "$TAG" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+          BASE_PKG="$(echo "$PKG" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+          if [ "$BASE_TAG" != "$BASE_PKG" ]; then
+            echo "::error::Tag base '${BASE_TAG}' (from '${GITHUB_REF_NAME}') does not match _version.py base '${BASE_PKG}' (from '${PKG}')" >&2
             exit 1
           fi
-          echo "Version match: $TAG"
+
+          # For prerelease tags, override _version.py for this build only so the
+          # wheel filename and metadata carry the prerelease version. For stable
+          # tags (TAG == PKG), no override is needed.
+          if [ "$TAG" != "$PKG" ]; then
+            echo "Prerelease build: overriding _version.py from '$PKG' to '$TAG'"
+            sed -i.bak "s/^__version__ = \".*\"/__version__ = \"$TAG\"/" src/eval_toolkit/_version.py
+            rm -f src/eval_toolkit/_version.py.bak
+            VERIFY="$(uv run --with hatchling python -c 'from eval_toolkit._version import __version__; print(__version__)')"
+            if [ "$VERIFY" != "$TAG" ]; then
+              echo "::error::Version override failed: _version.py is '$VERIFY', expected '$TAG'" >&2
+              exit 1
+            fi
+          fi
+          echo "Build version: $TAG"
 
       - name: Build sdist + wheel
         run: uv build
