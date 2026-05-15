@@ -30,7 +30,7 @@ here.
 | Test runner | `pytest` with markers `unit`, `property`, `smoke`, `golden`; coverage floor `90%` |
 | Build backend | `hatchling` |
 | Env manager | `uv` (`uv venv` → `.venv/`; `uv pip install -e .[dev]`) |
-| Python | `>=3.11` |
+| Python | `>=3.13` (RunPod parity floor; py313 tool targets in pyproject.toml) |
 
 Run via `make lint` (= `ruff check + black --check + mypy`) and `make test`.
 
