@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-05-15 — temporalcv cross-pollination bundle
+
+Six-section bundle adopting the highest-value patterns from the
+sibling `temporalcv` project plus public-repo polish + hosted docs.
+Major additions: `PurgedKFoldSplitter` for label-overlap-protected
+cross-validation, nightly Monte Carlo bootstrap CI calibration
+testing, 6-example documentation gallery, a hosted mkdocs-material
+docs site with MathJax + tikzjax for full LaTeX + TikZ rendering,
+SECURITY.md + CITATION.cff for public-repo polish, and a
+documentary mutmut audit cataloguing math-kernel test strength.
+
 ### Added
 
 - Section F (mutmut audit, from temporalcv-cross-pollination bundle):
