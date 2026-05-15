@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Section E.1 (hosted documentation site, from
+  temporalcv-cross-pollination bundle): new mkdocs-material site at
+  `https://brandon-behring.github.io/eval-toolkit/`, auto-generated
+  from existing Markdown docs + `mkdocstrings`-rendered API reference.
+  - `mkdocs.yml` configures the material theme (auto light/dark,
+    tabs nav, code-copy buttons, full-text search) with MathJax v3 +
+    tikzjax loaded from CDN for full LaTeX + TikZ rendering
+    (per Q12=B).
+  - `docs/index.md` — site landing page
+  - `docs/api/index.md` — curated API landing organized by README's
+    three-tier architecture (Tier 1 functional core, Tier 2 protocol
+    orchestration, Tier 3 reproducibility scaffolding); per Q8=C.
+  - `docs/api/<module>.md` — 22 per-module auto-gen stubs invoking
+    `::: eval_toolkit.<module>` mkdocstrings directives.
+  - `docs/javascripts/mathjax-config.js` — MathJax v3 init script
+    matching mkdocs-material's pymdownx.arithmatex (generic: true).
+  - `.github/workflows/docs.yml` deploys to GitHub Pages on every
+    push to main + every tag push. Single-version site (no `mike`,
+    per Q11=A).
+  - `[docs]` optional extra added to `pyproject.toml` listing
+    mkdocs-material, mkdocstrings[python], pymdown-extensions.
+  - `pyproject.urls.Documentation` repointed at the hosted-docs URL.
+  - README badge added: `Docs` linking to the GitHub Pages site.
+  - `.gitignore` extended to exclude the mkdocs build output (`/site/`).
+  - **Known follow-up**: 30+ relative-link warnings in
+    `docs/methodology/*.md` files (links to `../../src/...` and
+    `../../CHANGELOG.md`). Workflow temporarily runs without
+    `--strict`; Section E.2 will fix these and re-enable strict mode.
+
 - Section D (public-repo polish from temporalcv-cross-pollination bundle):
   added `SECURITY.md` (security disclosure policy with response SLAs,
   scope, and reporter-credit policy); added `CITATION.cff` (machine-

@@ -1,0 +1,65 @@
+name: Deploy docs
+
+# Builds + deploys the mkdocs-material site to GitHub Pages on every
+# push to main and on tag pushes. Single-version (no mike) per
+# v0.28.0 design Q11=A.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch: # manual trigger for ad-hoc rebuilds
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent docs deployment, but queue subsequent runs so
+# the latest push always wins.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: latest
+
+      - name: Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: Create venv + install with docs extra
+        run: |
+          uv venv --python 3.13 .venv
+          uv pip install -e ".[docs]"
+
+      - name: Build site
+        # NOTE: --strict is not enabled until Section E.2 (content enrichment)
+        # fixes the relative-link warnings in docs/methodology/*.md (these
+        # link to ../../src/... and ../../CHANGELOG.md which mkdocs treats
+        # as broken in strict mode). E.2 will either rewrite the links or
+        # add a doc-path mapping; then strict mode flips back on.
+        run: uv run mkdocs build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

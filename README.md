@@ -1,6 +1,7 @@
 # eval-toolkit
 
 [![CI](https://github.com/brandon-behring/eval-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/brandon-behring/eval-toolkit/actions/workflows/ci.yml)
+[![Docs](https://github.com/brandon-behring/eval-toolkit/actions/workflows/docs.yml/badge.svg)](https://brandon-behring.github.io/eval-toolkit/)
 [![PyPI version](https://img.shields.io/pypi/v/eval-toolkit.svg)](https://pypi.org/project/eval-toolkit/)
 [![Python ≥3.13](https://img.shields.io/badge/python-%E2%89%A53.13-blue.svg)](https://pypi.org/project/eval-toolkit/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)

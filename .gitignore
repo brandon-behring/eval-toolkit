@@ -40,3 +40,6 @@ coverage.xml
 
 # Claude Code project settings (machine-local)
 .claude/
+
+# mkdocs build output (Section E.1 v0.28.0)
+/site/
