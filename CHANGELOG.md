@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.1] — 2026-05-15 — first PyPI release (Trusted Publishing)
+
+Functionally identical to v0.27.0; bumped to 0.27.1 because the `v0.27.0`
+git tag was already used as an internal milestone tag before PyPI publishing
+infrastructure existed. The PyPI debut version is 0.27.1.
+
+### Added
+
+- `.github/workflows/publish.yml`: automated PyPI / TestPyPI publishing via
+  OIDC Trusted Publishing (`pypa/gh-action-pypi-publish@release/v1`). Tag
+  push trigger (`v*`), with PEP 440 prerelease tags (`v*rc*`, `v*a*`,
+  `v*b*`, `v*dev*`) routing to TestPyPI and stable `vX.Y.Z` tags routing
+  to PyPI. Sigstore attestations enabled. Workflow validates that the
+  tag's base release matches `_version.py` and overrides the source
+  version with the tag-derived prerelease version for prerelease builds.
+
+### Changed
+
+- `pyproject.toml`: switched from static `version = "X.Y.Z"` to
+  `dynamic = ["version"]` with `[tool.hatch.version]` reading from
+  `src/eval_toolkit/_version.py`. Eliminates the version-drift class by
+  making `_version.py` the single source of truth — distribution
+  metadata, `importlib.metadata.version('eval-toolkit')`, and the runtime
+  `eval_toolkit.__version__` now agree by construction.
+- `CONTRIBUTING.md` "Release flow" section rewritten to describe the
+  tag-driven automation, the TestPyPI rehearsal step for prereleases,
+  and the PyPI no-reupload rollback semantics (yank-and-bump).
+
 ## [0.27.0] — 2026-05-14 — harness decomposition + exception carve-outs
 
 Internal refactor + small behavior change in error-recording. No public
