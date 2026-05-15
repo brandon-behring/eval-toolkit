@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Section F (mutmut audit, from temporalcv-cross-pollination bundle):
+  added `docs/internals/mutmut_audit.md` — documentary code-analysis
+  audit of the 5 math kernel modules (`metrics`, `bootstrap`,
+  `calibration`, `operating_points`, `thresholds`). Per Q10=A
+  acceptance (audit-only, no kill-rate target), the deliverable is
+  a catalog of likely surviving mutant patterns per module + an
+  assessment of whether the existing test suite would catch them.
+  Identifies 3 specific high-leverage gaps for future work:
+  (a) calibration fit-vs-eval data isolation, (b) BCa degenerate-
+  jackknife fallback assertion strengthening, (c) `empty_strategy`
+  default lock-in tests. Programmatic mutmut run deferred: mutmut
+  3.5.0 has a config-parsing bug in our env where `tests_dir =
+  "tests/"` is splat character-by-character — revisit with mutmut
+  v4 or cosmic-ray. Re-run instructions captured in the audit doc.
+
 - Section E.2 (mkdocs link cleanup, from temporalcv-cross-pollination
   bundle): fixed 30+ broken relative links across 18 documentation
   files. Pattern: docs that link to `../src/eval_toolkit/<X>.py`
