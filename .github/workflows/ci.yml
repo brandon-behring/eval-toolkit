@@ -44,8 +44,9 @@ jobs:
         run: uv run python -m mypy src
 
       - name: Run tests with coverage
-        # Excludes the monte_carlo suite (~14 min); see .github/workflows/nightly-mc.yml
-        run: uv run python -m pytest --cov=eval_toolkit --cov-fail-under=92 -m "not monte_carlo"
+        # Excludes the monte_carlo suite (~14 min) — see nightly-mc.yml
+        # Excludes the benchmark suite — see nightly-benchmarks.yml
+        run: uv run python -m pytest --cov=eval_toolkit --cov-fail-under=92 -m "not monte_carlo and not benchmark"
 
       - name: Run doctests on math kernels + utility modules
         # Reads .doctest-modules (canonical list, shared with Makefile /

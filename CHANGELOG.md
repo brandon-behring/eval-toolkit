@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Tier γ #1 (pytest-benchmark, from v0.29.0 audit): perf-regression
+  detection on math kernels. New `tests/benchmarks/` directory with 6
+  benchmarks: `pr_auc`, `roc_auc`, `brier_score`,
+  `expected_calibration_error`, `bootstrap_ci(pr_auc)`,
+  `paired_bootstrap_diff(pr_auc)`. New `benchmark` pytest marker;
+  excluded from PR CI alongside `monte_carlo`. New
+  `.github/workflows/nightly-benchmarks.yml` runs weekly on Saturdays
+  at 02:00 UTC. Benchmark JSON uploaded as artifacts; comparison to
+  baseline is manual via `pytest-benchmark compare` for now. Added
+  `pytest-benchmark>=4.0` to `[dev]` extras.
+
 - Tier β #4 (structured logging, from v0.29.0 audit): standard
   library-friendly logging discipline per Q4=A.
   `src/eval_toolkit/__init__.py` attaches a `NullHandler` to the

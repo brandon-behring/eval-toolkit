@@ -72,6 +72,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-mpl>=0.16",
+    "pytest-benchmark>=4.0",  # v0.29.0 (Tier γ #1): perf regression detection on math kernels
     "sybil>=10.0",
     "ruff>=0.5",
     "black>=24.0",
@@ -159,6 +160,7 @@ markers = [
     "golden: Snapshot tests for deterministic outputs (docs renderer, bootstrap CI numerical pins, public API surface).",
     "slow: Tests > 2s (bootstrap-t studentized, multi-seed K-fold). Opt out with `pytest -m 'not slow'`.",
     "monte_carlo: Monte Carlo calibration suite (~14 min). Skipped in PR CI; runs only in the nightly-mc workflow via `-m monte_carlo`.",
+    "benchmark: pytest-benchmark perf-regression tests on math kernels. Skipped in PR CI; runs in the nightly-benchmarks workflow via `-m benchmark`. Per v0.29.0 plan Tier γ #1.",
 ]
 
 [tool.coverage.run]
