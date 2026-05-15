@@ -3,6 +3,10 @@
 PYTHON := .venv/bin/python
 VENV := .venv
 
+# Canonical doctest module list. Shared with noxfile.py, tox.ini, and
+# .github/workflows/ci.yml — all four read .doctest-modules to stay in sync.
+DOCTEST_MODULES := $(shell tr '\n' ' ' < .doctest-modules)
+
 help:
 	@echo "Targets:"
 	@echo "  install       Create .venv via uv and install dev dependencies"
@@ -53,13 +57,7 @@ format:
 	$(PYTHON) -m ruff check --fix src tests
 
 test:
-	$(PYTHON) -m pytest tests \
-		--doctest-modules src/eval_toolkit/metrics.py src/eval_toolkit/bootstrap.py \
-		src/eval_toolkit/calibration.py src/eval_toolkit/text_dedup.py \
-		src/eval_toolkit/thresholds.py src/eval_toolkit/leakage.py \
-		src/eval_toolkit/manifest.py src/eval_toolkit/paths.py \
-		src/eval_toolkit/provenance.py src/eval_toolkit/seeds.py \
-		src/eval_toolkit/docs.py
+	$(PYTHON) -m pytest tests --doctest-modules $(DOCTEST_MODULES)
 
 test-fast:
 	$(PYTHON) -m pytest -m "not slow" -q
@@ -74,13 +72,7 @@ test-smoke:
 	$(PYTHON) -m pytest -m smoke
 
 test-doctest:
-	$(PYTHON) -m pytest --doctest-modules \
-		src/eval_toolkit/metrics.py src/eval_toolkit/bootstrap.py \
-		src/eval_toolkit/calibration.py src/eval_toolkit/text_dedup.py \
-		src/eval_toolkit/thresholds.py src/eval_toolkit/leakage.py \
-		src/eval_toolkit/manifest.py src/eval_toolkit/paths.py \
-		src/eval_toolkit/provenance.py src/eval_toolkit/seeds.py \
-		src/eval_toolkit/docs.py
+	$(PYTHON) -m pytest --doctest-modules $(DOCTEST_MODULES)
 
 type:
 	$(PYTHON) -m mypy src

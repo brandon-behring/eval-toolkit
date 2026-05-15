@@ -15,12 +15,17 @@ Sessions
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import nox
 
 nox.options.sessions = ["tests", "lint", "type", "doctest"]
 nox.options.reuse_existing_virtualenvs = True
 
 PY_VERSIONS = ["3.11", "3.12", "3.13"]
+
+# Canonical doctest module list shared with Makefile, tox.ini, and ci.yml.
+DOCTEST_MODULES = Path(".doctest-modules").read_text().strip().split("\n")
 
 
 @nox.session(python=PY_VERSIONS)
@@ -58,21 +63,7 @@ def type(session: nox.Session) -> None:
 def doctest(session: nox.Session) -> None:
     """Run doctests on the math-kernel + utility modules."""
     session.install("-e", ".[dev]")
-    session.run(
-        "pytest",
-        "--doctest-modules",
-        "src/eval_toolkit/metrics.py",
-        "src/eval_toolkit/bootstrap.py",
-        "src/eval_toolkit/calibration.py",
-        "src/eval_toolkit/text_dedup.py",
-        "src/eval_toolkit/thresholds.py",
-        "src/eval_toolkit/leakage.py",
-        "src/eval_toolkit/manifest.py",
-        "src/eval_toolkit/paths.py",
-        "src/eval_toolkit/provenance.py",
-        "src/eval_toolkit/seeds.py",
-        "src/eval_toolkit/docs.py",
-    )
+    session.run("pytest", "--doctest-modules", *DOCTEST_MODULES)
 
 
 @nox.session
