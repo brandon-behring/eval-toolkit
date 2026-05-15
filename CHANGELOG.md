@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-05-15 — code-organization refactors (SRP / DRY / maintainability)
+
+Internal restructuring driven by the post-v0.29.0 code-organization
+audit (SRP / DRY / maintainability). Five of seven audited refactors
+shipped; two deferred with documented rationale. No public API
+change — every existing import, kwarg, and return shape is preserved.
+1252 fast tests passing; v0.29.0-tagged snapshot drift on `__version__`
+only.
+
+### Changed
+
+- Refactor #1 — decomposed the 175-line `evaluate()` orchestrator into
+  three named phases. `evaluate()` itself drops to 35 lines reading as
+  a top-level workflow: validate → config → leakage gate → score → ops
+  → assemble `RunResult`. Two new private helpers:
+  `_run_leakage_phase(checks, slices, on_leakage, config)` owns the
+  conditional leakage import + report aggregation + raise-policy;
+  `_score_all_slices(scorers, slices, *, ...)` owns the slice/scorer
+  nested loop + score cache + paired-diffs and returns
+  `(by_slice, score_cache)`. No behavioral change; verified against
+  the full fast-test suite.
+
+- Refactor #2 — extracted `_check_required_columns(df, required, *,
+  context)` in `loaders.py` to dedupe the three identical
+  column-presence checks in `DataFrameLoader`, `ParquetGlobLoader`,
+  and `HFDatasetsLoader`. The strata-column check in `DataFrameLoader`
+  keeps its existing error format (test-contract preservation).
+
+- Refactor #3 — extracted `_validate_bin_count(n_bins)` in `metrics.py`
+  to dedupe the six identical `if n_bins < 2: raise ValueError` checks
+  across `expected_calibration_error` (and the equal-mass / quantile /
+  adaptive variants). Same error message; helper raises so the
+  call-site reads as a single line.
+
+- Refactor #4 — hoisted three shared scorer test doubles into
+  `tests/conftest.py`: `StubScorer` (precomputed array),
+  `UniformScorer(seed)` (uniform random per call), and
+  `ErrorScorer(exc_type, message)` (always raises). Migrated
+  `test_harness_smoke.py` and `test_harness_v07.py` to import via
+  aliases so the existing local names (`_StubScorer`,
+  `_UniformScorer`, `_BrokenScorer`) keep working with minimal diff
+  churn. Specialized stubs (slice-aware, deterministic-text-score)
+  remain co-located with their test files because their behavior is
+  the test's point.
+
+- Refactor #6 — extracted `_pr_curve_result_at(prec, rec, thresh, idx,
+  criterion)` in `thresholds.py` as the PR-curve sibling of the
+  existing `_result_at`. The three PR-curve selectors
+  (`MaxF1Selector`, `TargetRecallSelector`, `TargetPrecisionSelector`)
+  each had an identical 6-line `ThresholdResult` assembly reading
+  prec/recall from the curve at a chosen idx; replaced with a single
+  helper call. The ROC selectors and `CostSensitive` already use
+  `_result_at`; `CISafeThreshold` keeps its custom Wilson-interval
+  flow.
+
+### Documentation
+
+- Refactor #7 — reframed `harness.py`'s late `eval_toolkit.leakage`
+  import as the canonical "conditional in-function import gated on
+  optional feature" Python idiom (not a circular-dep workaround).
+  Added the same comment block to the new `_run_leakage_phase` helper
+  introduced by refactor #1. The audit had flagged this as TYPE_CHECKING
+  candidate; TYPE_CHECKING applies to type annotations, not runtime calls.
+
+### Deferred (documented in v0.30.0 plan)
+
+- Refactor #5 — `ScorerEvalOptions` dataclass for the 13-param
+  `evaluate_scorer_on_slice()` signature. Skipped: most callers pass
+  only 2-5 kwargs (subsets) and adding a dataclass alongside kwargs
+  would double the API surface without reducing it. Full replacement
+  requires deprecation across 2-3 minor versions; the current surface
+  is documented and orthogonal flags from v0.22.0 are individually
+  justified. Reconsider on external signal that the surface hurts users.
+
 ## [0.29.0] — 2026-05-15 — best-practice infrastructure bundle (β + γ)
 
 Forward-compatibility, observability, perf-regression detection, and
