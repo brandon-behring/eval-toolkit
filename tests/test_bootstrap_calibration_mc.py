@@ -215,6 +215,7 @@ COVERAGE_UPPER = 0.99
 BIAS_THRESHOLD = 0.05
 
 
+@pytest.mark.monte_carlo
 @pytest.mark.slow
 @pytest.mark.parametrize("case", MC_CASES, ids=[c["id"] for c in MC_CASES])  # type: ignore[index]
 def test_bootstrap_ci_coverage_mc(case: dict[str, object]) -> None:
@@ -262,6 +263,7 @@ def test_bootstrap_ci_coverage_mc(case: dict[str, object]) -> None:
     )
 
 
+@pytest.mark.monte_carlo
 @pytest.mark.slow
 def test_bootstrap_ci_width_scales_with_n() -> None:
     """CI width should shrink as O(1/√n) — verify on two sample sizes.

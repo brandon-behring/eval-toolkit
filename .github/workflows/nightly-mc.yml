@@ -42,7 +42,7 @@ jobs:
       - name: Run Monte Carlo bootstrap calibration tests
         run: |
           uv run python -m pytest tests/test_bootstrap_calibration_mc.py \
-            -v -m slow --tb=short 2>&1 | tee mc-results.txt
+            -v -m monte_carlo --tb=short 2>&1 | tee mc-results.txt
 
       - name: Upload test results
         if: always()
