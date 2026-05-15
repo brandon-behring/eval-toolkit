@@ -220,6 +220,23 @@ tests with large `max_examples` and a few bootstrap tests with
 `n_resamples >= 200`). `make fast` keeps the developer iteration loop
 under ~30 seconds.
 
+## Downstream contract testing (v4 sibling-smoke)
+
+A separate CI workflow (`.github/workflows/v4-smoke.yml`) checks out
+the downstream consumer `prompt-injection-v4` at `main`, installs it
+with this branch's eval-toolkit as an editable sibling dep (via v4's
+`[tool.uv.sources]`), and runs v4's fast `-m smoke` suite. This catches
+contract regressions at PR time rather than in v4's own CI post-merge.
+
+The workflow requires a `HF_TOKEN` repo secret (gated HuggingFace
+datasets used by v4's smoke fixtures). Set it at:
+`https://github.com/brandon-behring/eval-toolkit/settings/secrets/actions`
+
+The workflow runs with `continue-on-error: true` during a 2-3 week
+trial period; it'll be promoted to a required gate once the false-
+positive rate (from independent v4 main breakage or HF rate-limits)
+is characterized.
+
 ## Standards
 
 See [`STYLE.md`](STYLE.md) for the full reconciled coding standards (formatting,

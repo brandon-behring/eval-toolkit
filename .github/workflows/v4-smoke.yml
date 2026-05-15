@@ -1,0 +1,65 @@
+name: v4 sibling smoke
+
+# Mirror of the inverse sibling-CI pattern in prompt-injection-v4 (which
+# pins eval-toolkit at a release tag and runs its CI against that). Here
+# we run v4's fast `-m smoke` suite against the *current eval-toolkit
+# PR head* — the contract-regression catch that v4's own CI cannot give
+# us pre-merge.
+#
+# Phase 1 (Advisory): `continue-on-error: true` for the first 2-3 weeks.
+# First failures get diagnosed and either fixed or documented as
+# excludable causes. After the trial, flip `continue-on-error` to `false`
+# to make the gate required. TODO(2026-06-04 ± ~3wk after merge): flip.
+#
+# Secrets:
+#   HF_TOKEN — required for v4's smoke suite (loads gated HF datasets).
+#              Set at:
+#                https://github.com/brandon-behring/eval-toolkit/settings/secrets/actions
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    tags: ['v*']
+
+jobs:
+  v4-smoke:
+    runs-on: ubuntu-latest
+    continue-on-error: true  # advisory; flip to false after 2-3wk trial
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout eval-toolkit (this PR head)
+        uses: actions/checkout@v6
+        with:
+          path: eval-toolkit
+
+      - name: Checkout prompt-injection-v4 (main)
+        uses: actions/checkout@v6
+        with:
+          repository: brandon-behring/prompt-injection-v4
+          ref: main
+          path: prompt-injection-v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: latest
+
+      - name: Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: Install v4 with editable eval-toolkit from this PR
+        working-directory: prompt-injection-v4
+        run: |
+          uv venv --python 3.13 .venv
+          # v4's [tool.uv.sources] resolves eval-toolkit = { path = "../eval-toolkit", editable = true }
+          # — sibling-dir layout from the checkout paths above.
+          uv pip install -e ".[dev]"
+
+      - name: Run v4 smoke suite (fast, fixture-based; -m smoke)
+        working-directory: prompt-injection-v4
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: uv run python -m pytest -m smoke -q
