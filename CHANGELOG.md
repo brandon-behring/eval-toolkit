@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 
+- Section A (Monte Carlo bootstrap CI calibration, from temporalcv-cross-pollination
+  bundle): added `tests/test_bootstrap_calibration_mc.py` (slow-marker) that runs
+  500-replicate MC validation of `bootstrap_ci` coverage + bias across 5 cases
+  (pr_auc / roc_auc × balanced / imbalanced × n=200 / n=1000 × BCa / percentile
+  method). Asserts empirical coverage ∈ [0.90, 0.99] for nominal 95% CIs and
+  |bias| < 0.05. Complements Tier 1's golden tests: goldens pin exact numerical
+  output (drift detection), MC tests validate that the math is correct (a buggy
+  implementation producing self-consistent wrong values fails MC but passes
+  goldens). Also added CI width-scaling test (width should shrink as ~1/√n).
+  New workflow `.github/workflows/nightly-mc.yml` triggers this suite weekly
+  on Sundays at 03:00 UTC (plus `workflow_dispatch` for manual runs). Harness
+  pattern adapted from temporalcv's `tests/conftest.py` Monte Carlo helpers.
+
 - Test coverage (Tier 1 — math kernel correctness + integration backbone):
   added end-to-end pipeline tests (`tests/test_pipeline_e2e.py`) that
   exercise loader → `evaluate` → `write_run_result` → JSON schema
