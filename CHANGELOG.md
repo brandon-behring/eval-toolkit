@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.2] — 2026-05-15 — fix base-install pandas import
+
+Base install of `eval-toolkit` (no extras) was broken in 0.27.1: every
+attempt to `from eval_toolkit import evaluate` raised
+`ModuleNotFoundError: No module named 'pandas'` because four modules
+imported pandas at top level despite pandas being declared in the
+`[dataframe]` optional extra. This patch restores the documented
+contract: base install gives pure-numpy primitives; pandas is only
+needed for the `[dataframe]` / `[parquet]` capabilities.
+
+### Fixed
+
+- `src/eval_toolkit/harness.py`: moved `import pandas as pd` under
+  `if TYPE_CHECKING:` (annotation-only use at `EvalSlice.df`).
+- `src/eval_toolkit/loaders.py`: moved top-level pandas import under
+  `if TYPE_CHECKING:` for the `DataFrameLoader.df` annotation; added a
+  function-local `import pandas as pd` inside
+  `ParquetGlobLoader.load_splits` where `pd.read_parquet` / `pd.concat`
+  are actually called. Calling the parquet path still requires pandas
+  (via the `[parquet]` extra) — that's documented behavior, not a
+  regression.
+- `src/eval_toolkit/leakage.py`: removed dead top-level pandas import.
+  Doctest examples already `>>> import pandas as pd` themselves.
+- `src/eval_toolkit/splits.py`: removed dead top-level pandas import
+  and unused `Sequence` import. Doctest example imports pandas itself.
+
+### Added
+
+- `.github/workflows/ci.yml`: new `test-base-install` job. Creates a
+  fresh Py3.13 venv, `pip install .` with no extras, then exercises
+  every public top-level import. Sanity check fails if pandas leaks
+  into the base venv. Regression guard against this entire class of
+  bug. Closes #13.
+
 ## [0.27.1] — 2026-05-15 — first PyPI release (Trusted Publishing)
 
 Functionally identical to v0.27.0; bumped to 0.27.1 because the `v0.27.0`

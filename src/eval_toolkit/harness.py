@@ -40,7 +40,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, cast
 
 import numpy as np
-import pandas as pd
 
 from eval_toolkit.artifacts import (
     error_metric,
@@ -66,6 +65,8 @@ from eval_toolkit.protocols import Scorer, SliceAwareScorer
 from eval_toolkit.thresholds import TargetFPRSelector
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from eval_toolkit.leakage import LeakageCheck
     from eval_toolkit.splits import Splitter
 

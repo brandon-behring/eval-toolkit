@@ -42,7 +42,6 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol, runtime_checkable
 
 import numpy as np
-import pandas as pd
 
 from eval_toolkit.harness import EvalSlice
 from eval_toolkit.text_dedup import (
@@ -1048,5 +1047,6 @@ def run_leakage_checks(
     return LeakageReport(findings=findings)
 
 
-# Suppress unused-import warnings: pd / np are referenced in Examples blocks.
-_ = (pd, np)
+# Suppress unused-import warning: np is referenced in Examples blocks.
+# pandas is imported lazily inside the doctest itself (see Examples above).
+_ = (np,)

@@ -60,3 +60,47 @@ jobs:
       - name: Visual regression (pytest-mpl)
         if: matrix.os != 'windows-latest'
         run: uv run python -m pytest --mpl tests/test_plotting_visual.py
+
+  test-base-install:
+    # Verifies `pip install eval-toolkit` (no extras) actually works:
+    # every public top-level import must succeed without the [dataframe],
+    # [parquet], [plotting] extras installed. Regression guard for the
+    # 0.27.1-era bug where unconditional `import pandas as pd` at module
+    # top level broke `from eval_toolkit import evaluate` on base install.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: latest
+
+      - name: Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: Create base venv and install without extras
+        run: |
+          uv venv --python 3.13 .venv-base
+          source .venv-base/bin/activate
+          uv pip install .
+
+      - name: Smoke import every public module (no extras installed)
+        run: |
+          source .venv-base/bin/activate
+          python -c "import eval_toolkit; print('version:', eval_toolkit.__version__)"
+          python -c "from eval_toolkit import evaluate, RunResult, EvalSlice"
+          python -c "from eval_toolkit import pr_auc, bootstrap_ci, BootstrapCI"
+          python -c "import eval_toolkit.harness"
+          python -c "import eval_toolkit.loaders"
+          python -c "import eval_toolkit.leakage"
+          python -c "import eval_toolkit.splits"
+
+      - name: Confirm pandas is NOT installed (sanity check on the gate)
+        run: |
+          source .venv-base/bin/activate
+          if python -c "import pandas" 2>/dev/null; then
+            echo "::error::pandas is installed in the base venv — the gate is not actually testing base install"
+            exit 1
+          fi
+          echo "Confirmed: pandas not in base venv"

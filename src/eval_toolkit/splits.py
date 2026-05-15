@@ -18,12 +18,11 @@ can be fed into the harness directly.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 import numpy as np
-import pandas as pd
 from sklearn.model_selection import (
     GroupKFold,
     StratifiedKFold,
@@ -514,7 +513,3 @@ def iter_folds_with_pool(
         # PoolBuilder's keys (train, val, possibly more) take precedence;
         # test is reattached from the Splitter.
         yield {**built, "test": test}
-
-
-# Suppress unused-import warnings: pd / Sequence are referenced indirectly.
-_ = (pd, Sequence)

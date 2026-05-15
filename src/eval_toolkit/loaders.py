@@ -32,12 +32,13 @@ import glob as _glob
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, cast, runtime_checkable
-
-import pandas as pd
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 from eval_toolkit.harness import EvalSlice
 from eval_toolkit.provenance import file_sha256
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 __all__ = [
     "DataFrameLoader",
@@ -269,6 +270,8 @@ class ParquetGlobLoader:
             If any split's loaded DataFrame is missing ``feature_col`` or
             ``label_col``.
         """
+        import pandas as pd  # function-local: pandas is in the [parquet]/[dataframe] extra
+
         files_by_split = self._resolve_files()
         out: dict[str, EvalSlice] = {}
         for split_name, files in files_by_split.items():
