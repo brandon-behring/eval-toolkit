@@ -652,6 +652,125 @@ def evaluate_scorer_on_slice(
     return metrics
 
 
+def _run_leakage_phase(
+    leakage_checks: Sequence[LeakageCheck],
+    slices: Sequence[EvalSlice],
+    on_leakage: Literal["raise", "record", "skip"],
+    config: dict[str, object],
+) -> None:
+    """Run pre-scoring leakage checks; mutate ``config`` with results; raise on error.
+
+    Extracted from :func:`evaluate` (v0.30.0 refactor #1). Mutating ``config``
+    keeps the helper signature small at the cost of an obvious side-effect —
+    the alternative (return a new mapping the caller merges) would just push
+    the same merge into the caller for no clarity win.
+
+    Raises
+    ------
+    RuntimeError
+        If ``on_leakage="raise"`` and the report has error-severity findings.
+    """
+    # Conditional in-function import — NOT a circular-dep workaround
+    # (well, *also* avoids the EvalSlice cycle with leakage.py, but
+    # primarily this is gated on `leakage_checks` being non-empty).
+    # Keeps `import eval_toolkit.harness` snappy when leakage isn't
+    # used. Don't "fix" by moving to module level — see
+    # docs/internals/mutmut_audit.md / v0.30.0 refactor #7 notes.
+    from eval_toolkit.leakage import run_leakage_checks  # noqa: PLC0415
+
+    slices_dict = {s.name: s for s in slices}
+    report = run_leakage_checks(list(leakage_checks), slices_dict)
+    config["on_leakage"] = on_leakage
+    if on_leakage != "skip":
+        config["leakage_report"] = report.to_dict()
+    if on_leakage == "raise" and report.has_errors():
+        errors_summary = "; ".join(f"{f.check_name}: {f.message}" for f in report.errors())
+        raise RuntimeError(
+            f"Leakage checks produced {len(report.errors())} error finding(s): "
+            f"{errors_summary}. Pass on_leakage='record' to continue with the "
+            "report captured in RunResult.config, or 'skip' to drop the report."
+        )
+
+
+def _score_all_slices(
+    scorers: dict[str, Scorer],
+    slices: Sequence[EvalSlice],
+    *,
+    n_resamples: int,
+    seed: int,
+    paired_diffs: list[tuple[str, str]] | None,
+    on_scorer_error: Literal["raise", "record"],
+) -> tuple[dict[str, dict[str, object]], dict[tuple[str, str], np.ndarray]]:
+    """Score every ``(slice, scorer)`` pair; return ``(by_slice, score_cache)``.
+
+    Extracted from :func:`evaluate` (v0.30.0 refactor #1). Side-effect-free
+    apart from progress logging — the per-scorer skip / error paths still
+    flow through :func:`evaluate_scorer_on_slice`.
+
+    ``score_cache`` is keyed ``(slice.name, scorer.name)`` and carries the
+    raw score arrays so :func:`_attach_transferred_operating_points` can
+    re-use them without re-calling scorers.
+    """
+    by_slice: dict[str, dict[str, object]] = {}
+    score_cache: dict[tuple[str, str], np.ndarray] = {}
+
+    for slice_ in slices:
+        _logger.info(
+            "[slice %s] n=%d, positives=%d",
+            slice_.name,
+            len(slice_.df),
+            int(slice_.y_true.sum()),
+        )
+        slice_data: dict[str, dict[str, object]] = {}
+        scores_by_scorer: dict[str, np.ndarray] = {}
+        for sname, scorer in scorers.items():
+            if not _should_score_slice(scorer, slice_.name):
+                reason = f"slice {slice_.name!r} not in scorer allow-list"
+                slice_data[sname] = _skipped_scorer_result(slice_, reason)
+                _logger.info("    skipped %s: %s", sname, reason)
+                continue
+            t0 = time.time()
+            slice_data[sname] = evaluate_scorer_on_slice(
+                scorer,
+                slice_,
+                n_resamples=n_resamples,
+                seed=seed,
+                on_scorer_error=on_scorer_error,
+            )
+            # If the scorer raised under on_scorer_error="record", scores is [].
+            # Subsequent paired-diff machinery sees the empty array and will
+            # short-circuit on the same len-check it already does for skipped
+            # scorers; no special-case needed.
+            scores_by_scorer[sname] = np.asarray(slice_data[sname]["scores"], dtype=np.float64)
+            score_cache[(slice_.name, sname)] = scores_by_scorer[sname]
+            elapsed = time.time() - t0
+            pr = slice_data[sname].get("pr_auc")
+            pr_display = f"{pr:.4f}" if isinstance(pr, float) else "N/A"
+            _logger.info("    %s: PR-AUC=%s (%.1fs)", sname, pr_display, elapsed)
+
+        diffs = (
+            _compute_paired_diffs(
+                slice_,
+                scores_by_scorer,
+                scorers,
+                paired_diffs,
+                n_resamples=n_resamples,
+                seed=seed,
+            )
+            if paired_diffs
+            else {}
+        )
+
+        by_slice[slice_.name] = {
+            "n": int(len(slice_.df)),
+            "n_positive": int(slice_.y_true.sum()),
+            "by_scorer": slice_data,
+            "paired_diffs": diffs,
+        }
+
+    return by_slice, score_cache
+
+
 def evaluate(
     scorers: dict[str, Scorer],
     slices: Sequence[EvalSlice],
@@ -738,88 +857,21 @@ def evaluate(
     if extra_config:
         config.update(dict(extra_config))
 
-    # Run leakage checks before any scoring (per Q2 decision).
     if leakage_checks:
-        # Conditional in-function import — NOT a circular-dep workaround
-        # (well, *also* avoids the EvalSlice cycle with leakage.py, but
-        # primarily this is gated on `leakage_checks` being non-empty).
-        # Keeps `import eval_toolkit.harness` snappy when leakage isn't
-        # used. Don't "fix" by moving to module level — see
-        # docs/internals/mutmut_audit.md / v0.30.0 refactor #7 notes.
-        from eval_toolkit.leakage import run_leakage_checks  # noqa: PLC0415
+        # Pre-scoring leakage gate (per Q2 decision). Mutates config; may raise.
+        _run_leakage_phase(leakage_checks, slices, on_leakage, config)
 
-        slices_dict = {s.name: s for s in slices}
-        report = run_leakage_checks(list(leakage_checks), slices_dict)
-        config["on_leakage"] = on_leakage
-        if on_leakage != "skip":
-            config["leakage_report"] = report.to_dict()
-        if on_leakage == "raise" and report.has_errors():
-            errors_summary = "; ".join(f"{f.check_name}: {f.message}" for f in report.errors())
-            raise RuntimeError(
-                f"Leakage checks produced {len(report.errors())} error finding(s): "
-                f"{errors_summary}. Pass on_leakage='record' to continue with the "
-                "report captured in RunResult.config, or 'skip' to drop the report."
-            )
-
-    by_slice: dict[str, dict[str, object]] = {}
-    score_cache: dict[tuple[str, str], np.ndarray] = {}
-    slices_by_name = {s.name: s for s in slices}
-
-    for slice_ in slices:
-        _logger.info(
-            "[slice %s] n=%d, positives=%d",
-            slice_.name,
-            len(slice_.df),
-            int(slice_.y_true.sum()),
-        )
-        slice_data: dict[str, dict[str, object]] = {}
-        scores_by_scorer: dict[str, np.ndarray] = {}
-        for sname, scorer in scorers.items():
-            if not _should_score_slice(scorer, slice_.name):
-                reason = f"slice {slice_.name!r} not in scorer allow-list"
-                slice_data[sname] = _skipped_scorer_result(slice_, reason)
-                _logger.info("    skipped %s: %s", sname, reason)
-                continue
-            t0 = time.time()
-            slice_data[sname] = evaluate_scorer_on_slice(
-                scorer,
-                slice_,
-                n_resamples=n_resamples,
-                seed=seed,
-                on_scorer_error=on_scorer_error,
-            )
-            # If the scorer raised under on_scorer_error="record", scores is [].
-            # Subsequent paired-diff machinery sees the empty array and will
-            # short-circuit on the same len-check it already does for skipped
-            # scorers; no special-case needed.
-            scores_by_scorer[sname] = np.asarray(slice_data[sname]["scores"], dtype=np.float64)
-            score_cache[(slice_.name, sname)] = scores_by_scorer[sname]
-            elapsed = time.time() - t0
-            pr = slice_data[sname].get("pr_auc")
-            pr_display = f"{pr:.4f}" if isinstance(pr, float) else "N/A"
-            _logger.info("    %s: PR-AUC=%s (%.1fs)", sname, pr_display, elapsed)
-
-        diffs = (
-            _compute_paired_diffs(
-                slice_,
-                scores_by_scorer,
-                scorers,
-                paired_diffs,
-                n_resamples=n_resamples,
-                seed=seed,
-            )
-            if paired_diffs
-            else {}
-        )
-
-        by_slice[slice_.name] = {
-            "n": int(len(slice_.df)),
-            "n_positive": int(slice_.y_true.sum()),
-            "by_scorer": slice_data,
-            "paired_diffs": diffs,
-        }
+    by_slice, score_cache = _score_all_slices(
+        scorers,
+        slices,
+        n_resamples=n_resamples,
+        seed=seed,
+        paired_diffs=paired_diffs,
+        on_scorer_error=on_scorer_error,
+    )
 
     if operating_point_specs:
+        slices_by_name = {s.name: s for s in slices}
         _attach_transferred_operating_points(
             by_slice=by_slice,
             slices_by_name=slices_by_name,
