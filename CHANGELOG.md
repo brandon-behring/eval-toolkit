@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] — 2026-05-15 — best-practice infrastructure bundle (β + γ)
+
+Forward-compatibility, observability, perf-regression detection, and
+docs/repo polish. No new user-facing API surface; better support for
+the existing one. Ships everything from the v0.29.0 plan's Tier β
+(developer experience + governance) and Tier γ (perf-benchmark +
+Binder + What's New). Tier α (security: CodeQL + pip-audit) shipped
+earlier in v0.28.1.
+
 ### Added
 
 - Tier γ #3 (Binder integration, from v0.29.0 audit): added
