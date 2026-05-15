@@ -105,3 +105,15 @@ jobs:
             exit 1
           fi
           echo "Confirmed: pandas not in base venv"
+
+      - name: Audit runtime deps for known CVEs (pip-audit)
+        # Tier α #2 of the v0.28.1 security-patch bundle.
+        # Runtime-only gate per the v0.28.1 plan Q3=C: fails PR CI on
+        # known CVE in numpy/scipy/scikit-learn/jsonschema (the actual
+        # install surface for `pip install eval-toolkit`). Dev-extras
+        # vulns (pytest/hypothesis/etc.) do NOT block PRs — they're
+        # contributor-side only, surfaced through Dependabot.
+        run: |
+          source .venv-base/bin/activate
+          uv pip install pip-audit
+          pip-audit --desc --strict
