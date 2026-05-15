@@ -48,8 +48,11 @@ jobs:
 
       - name: Run doctests on math kernels + utility modules
         # Reads .doctest-modules (canonical list, shared with Makefile /
-        # noxfile.py / tox.ini). xargs expands the file as pytest args.
-        run: xargs uv run python -m pytest --doctest-modules < .doctest-modules
+        # noxfile.py / tox.ini). `tr -d '\r'` strips any CR injected by
+        # Git's autocrlf on Windows runners (belt-and-suspenders alongside
+        # the .gitattributes `eol=lf` enforcement). xargs then expands the
+        # cleaned list as pytest args.
+        run: tr -d '\r' < .doctest-modules | xargs uv run python -m pytest --doctest-modules
 
       - name: Validate JSON Schemas (Draft 2020-12 meta-validation)
         run: uv run eval-toolkit schemas check
