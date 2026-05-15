@@ -143,6 +143,29 @@ def _result_at(
     )
 
 
+def _pr_curve_result_at(
+    precisions: np.ndarray,
+    recalls: np.ndarray,
+    thresholds: np.ndarray,
+    idx: int,
+    criterion: str,
+) -> ThresholdResult:
+    """Build a :class:`ThresholdResult` by reading the PR curve at ``idx``.
+
+    Companion to :func:`_result_at` for PR-curve-based selectors that already
+    have ``(precisions, recalls)`` in hand and want to avoid re-computing them
+    via :func:`metrics_at_threshold`. Used by :class:`MaxF1Selector`,
+    :class:`TargetRecallSelector`, :class:`TargetPrecisionSelector`.
+    """
+    return ThresholdResult(
+        threshold=float(thresholds[idx]),
+        f1=_f1(float(precisions[idx]), float(recalls[idx])),
+        precision=float(precisions[idx]),
+        recall=float(recalls[idx]),
+        criterion=criterion,
+    )
+
+
 def _record_float(row: Mapping[str, object], key: str) -> float:
     """Read a numeric candidate-record field as float."""
     value = row[key]
@@ -485,13 +508,7 @@ class MaxF1Selector:
         precisions, recalls, thresholds = _pr_curve_trim(y_true, y_score)
         f1s = 2 * precisions * recalls / np.clip(precisions + recalls, 1e-12, None)
         idx = int(np.argmax(f1s))
-        return ThresholdResult(
-            threshold=float(thresholds[idx]),
-            f1=_f1(float(precisions[idx]), float(recalls[idx])),
-            precision=float(precisions[idx]),
-            recall=float(recalls[idx]),
-            criterion=self.criterion,
-        )
+        return _pr_curve_result_at(precisions, recalls, thresholds, idx, self.criterion)
 
 
 @dataclass(frozen=True, slots=True)
@@ -547,13 +564,7 @@ class TargetRecallSelector:
                 f"max recall = {recalls.max():.3f}"
             )
         idx = int(eligible[-1])
-        return ThresholdResult(
-            threshold=float(thresholds[idx]),
-            f1=_f1(float(precisions[idx]), float(recalls[idx])),
-            precision=float(precisions[idx]),
-            recall=float(recalls[idx]),
-            criterion=self.criterion,
-        )
+        return _pr_curve_result_at(precisions, recalls, thresholds, idx, self.criterion)
 
 
 @dataclass(frozen=True, slots=True)
@@ -614,13 +625,7 @@ class TargetPrecisionSelector:
         # Smallest-threshold-meeting-target = first eligible index.
         # PR-curve thresholds are sorted ascending.
         idx = int(eligible[0])
-        return ThresholdResult(
-            threshold=float(thresholds[idx]),
-            f1=_f1(float(precisions[idx]), float(recalls[idx])),
-            precision=float(precisions[idx]),
-            recall=float(recalls[idx]),
-            criterion=self.criterion,
-        )
+        return _pr_curve_result_at(precisions, recalls, thresholds, idx, self.criterion)
 
 
 @dataclass(frozen=True, slots=True)
