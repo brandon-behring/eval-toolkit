@@ -72,6 +72,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/brandon-behring/eval-toolkit"
+Documentation = "https://github.com/brandon-behring/eval-toolkit/blob/main/docs/getting-started.md"
 Repository = "https://github.com/brandon-behring/eval-toolkit.git"
 Issues = "https://github.com/brandon-behring/eval-toolkit/issues"
 Changelog = "https://github.com/brandon-behring/eval-toolkit/blob/main/CHANGELOG.md"

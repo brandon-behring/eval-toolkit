@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Section D (public-repo polish from temporalcv-cross-pollination bundle):
+  added `SECURITY.md` (security disclosure policy with response SLAs,
+  scope, and reporter-credit policy); added `CITATION.cff` (machine-
+  readable academic citation metadata, exposing the GitHub web UI
+  "Cite this repository" button — methodology-relevant primary
+  references listed for `bootstrap_ci`, `brier_score`,
+  `fit_platt_calibrator`, `delong_roc_variance`, `PurgedKFoldSplitter`).
+  Added four trust-set badges to README (CI status, PyPI version,
+  Python ≥3.13, License MIT). Extended `pyproject.urls` with a
+  `Documentation` key pointing at `docs/getting-started.md` (the
+  hosted-docs URL replaces this in Section E.1). Module-docstring
+  audit across all 22 `src/eval_toolkit/*.py` modules — all already
+  carry adequate module-level docstrings; no patches needed.
+
 - Section C (example gallery from temporalcv-cross-pollination bundle):
   six new minimal worked examples in `docs/examples/`, each one
   concept per file, Sybil-validated end-to-end in CI:

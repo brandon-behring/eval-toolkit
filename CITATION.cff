@@ -1,0 +1,98 @@
+cff-version: 1.2.0
+message: "If you use eval-toolkit in research, please cite it as below."
+type: software
+title: "eval-toolkit"
+abstract: >
+  Reusable evaluation contracts for binary classification: metrics,
+  bootstrap CIs, calibration, leakage detection, splitting, threshold
+  selection, dataset loading, reproducibility manifests, and a
+  slice-aware orchestrator. Library-grade, methodology-aware, with
+  versioned JSON schemas and NeurIPS-aligned reproducibility scaffolding.
+authors:
+  - family-names: Behring
+    given-names: Brandon
+    email: brandon.m.behring@gmail.com
+repository-code: "https://github.com/brandon-behring/eval-toolkit"
+url: "https://github.com/brandon-behring/eval-toolkit"
+license: MIT
+keywords:
+  - machine-learning
+  - evaluation
+  - metrics
+  - bootstrap
+  - calibration
+  - binary-classification
+  - reproducibility
+  - leakage-detection
+  - threshold-selection
+  - methodology
+references:
+  - type: book
+    authors:
+      - family-names: Efron
+        given-names: Bradley
+      - family-names: Tibshirani
+        given-names: Robert J.
+    title: "An Introduction to the Bootstrap"
+    publisher:
+      name: "Chapman & Hall"
+    year: 1993
+    notes: "Underlies bootstrap_ci, paired_bootstrap_diff, MDE estimation."
+  - type: article
+    authors:
+      - family-names: Efron
+        given-names: Bradley
+    title: "Better bootstrap confidence intervals"
+    journal: "Journal of the American Statistical Association"
+    volume: 82
+    issue: 397
+    year: 1987
+    pages: "171-185"
+    doi: "10.2307/2289144"
+    notes: "BCa confidence interval method used by bootstrap_ci."
+  - type: article
+    authors:
+      - family-names: Brier
+        given-names: Glenn W.
+    title: "Verification of forecasts expressed in terms of probability"
+    journal: "Monthly Weather Review"
+    volume: 78
+    issue: 1
+    year: 1950
+    pages: "1-3"
+    notes: "Brier score; the strictly-proper scoring rule used by brier_score."
+  - type: conference-paper
+    authors:
+      - family-names: Platt
+        given-names: John C.
+    title: "Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods"
+    conference:
+      name: "Advances in Large Margin Classifiers"
+    year: 1999
+    pages: "61-74"
+    notes: "Sigmoid calibration; underlies fit_platt_calibrator."
+  - type: article
+    authors:
+      - family-names: DeLong
+        given-names: Elizabeth R.
+      - family-names: DeLong
+        given-names: David M.
+      - family-names: Clarke-Pearson
+        given-names: Daniel L.
+    title: "Comparing the areas under two or more correlated receiver operating characteristic curves: a nonparametric approach"
+    journal: "Biometrics"
+    volume: 44
+    issue: 3
+    year: 1988
+    pages: "837-845"
+    doi: "10.2307/2531595"
+    notes: "DeLong test; underlies delong_roc_variance + paired_bootstrap_diff."
+  - type: book
+    authors:
+      - family-names: López de Prado
+        given-names: Marcos
+    title: "Advances in Financial Machine Learning"
+    publisher:
+      name: "Wiley"
+    year: 2018
+    notes: "Chapter 7 — Cross-Validation in Finance. Underlies PurgedKFoldSplitter + compute_label_overlap."
