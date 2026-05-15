@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Section C (example gallery from temporalcv-cross-pollination bundle):
+  six new minimal worked examples in `docs/examples/`, each one
+  concept per file, Sybil-validated end-to-end in CI:
+  - `metrics_and_bootstrap.md` — `pr_auc` / `roc_auc` / `brier_score`
+    + `bootstrap_ci` (BCa vs percentile)
+  - `evaluate_harness.md` — slice-aware `evaluate(...)` with two
+    scorers, `write_run_result(...)`, JSON schema validation
+  - `calibration.md` — Platt + isotonic recalibration, ECE before/after
+  - `leakage_detection.md` — `ExactDuplicateCheck` +
+    `NormalizedFormLeakageCheck` + `LabelConflictCheck` on a
+    contaminated train/test pair
+  - `claims_and_gates.md` — `EvidenceGate` composition (metric
+    threshold + minimum slice size) for release-decision gating
+  - `paired_comparison.md` — `paired_bootstrap_diff` for two-scorer
+    significance + `mde_from_ci` for power analysis
+  - `index.md` — examples landing page mapping each example to the
+    capability it demonstrates + the minimum extras required
+  Total: 28 sybil-validated code blocks. Each is the headline-import
+  → usable-output minimum surface; together they cover the public API
+  surface a new user needs to be productive.
+
 - Section B (PurgedKFold splitter from temporalcv-cross-pollination bundle):
   `PurgedKFoldSplitter(n_splits, purge_gap, embargo_pct, time_col)` and a
   standalone `compute_label_overlap(t_train, t_test, horizon)` helper, both
