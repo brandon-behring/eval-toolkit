@@ -95,6 +95,7 @@ extra_css:
 
 nav:
   - Home: index.md
+  - What's new: whats-new.md
   - Getting started: getting-started.md
   - Examples:
       - Overview: examples/index.md

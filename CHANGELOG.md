@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Tier γ #2 (What's New page, from v0.29.0 audit): added
+  `docs/whats-new.md` — a more-digestible CHANGELOG-derived
+  landing covering the v0.27.1 through v0.29.0 progression. Each
+  release gets a one-paragraph theme summary + bullet highlights.
+  For full per-line detail, the in-tree `CHANGELOG.md` remains
+  authoritative. Added to `mkdocs.yml` nav between "Home" and
+  "Getting started".
+
 - Tier γ #1 (pytest-benchmark, from v0.29.0 audit): perf-regression
   detection on math kernels. New `tests/benchmarks/` directory with 6
   benchmarks: `pr_auc`, `roc_auc`, `brier_score`,
