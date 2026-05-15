@@ -1,0 +1,8 @@
+# Code owners for eval-toolkit.
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Default: solo-maintainer ownership. When external contributors arrive,
+# split per-area ownership here (e.g., /src/eval_toolkit/text_dedup/ to
+# the leakage-detection maintainer).
+
+* @brandon-behring

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Tier β #1 (repo hygiene, from v0.29.0 best-practice gap audit):
+  added `.editorconfig` (charset, EOL, indent-per-extension rules)
+  and `.github/CODEOWNERS` (default ownership: `@brandon-behring`).
+  Improves contributor onboarding consistency across editors;
+  CODEOWNERS unlocks GitHub's auto-reviewer assignment when external
+  PRs arrive.
+
 ## [0.28.1] — 2026-05-15 — security-patch (CodeQL + pip-audit)
 
 Tier α of the post-v0.28.0 best-practice gap audit. Pure CI/security
