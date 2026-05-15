@@ -113,7 +113,13 @@ jobs:
         # install surface for `pip install eval-toolkit`). Dev-extras
         # vulns (pytest/hypothesis/etc.) do NOT block PRs — they're
         # contributor-side only, surfaced through Dependabot.
+        #
+        # --ignore-vuln PYSEC-LOCAL-PROJECT-NOT-ON-PYPI is conceptual:
+        # pip-audit can't look up `eval-toolkit==X.Y.Z` itself when
+        # the version under test isn't on PyPI yet (e.g., during a
+        # pre-release CI run). We drop --strict so "package not found"
+        # is a warning; actual CVE findings still fail the build.
         run: |
           source .venv-base/bin/activate
           uv pip install pip-audit
-          pip-audit --desc --strict
+          pip-audit --desc
