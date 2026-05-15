@@ -67,10 +67,47 @@ See [`STYLE.md`](STYLE.md). The short version:
 - mypy strict on `src/` — every public function has type hints
 - Docstrings: NumPy style; `Raises:` sections required where documented
   exceptions exist; doctests welcome on math kernels
-- pytest markers: `unit`, `property`, `smoke`, `golden`, `slow` (opt-out
-  for fast loops)
+- pytest markers: `unit`, `property`, `smoke`, `golden`, `slow`,
+  `monte_carlo` (opt-out for fast loops via `pytest -m "not slow and not monte_carlo"`)
 - Anti-overengineering (STYLE.md §5): don't add abstractions without a second
   concrete use site
+
+## Logging conventions
+
+eval-toolkit follows the [PEP-recommended library-logging pattern](https://docs.python.org/3/howto/logging.html#configuring-logging-for-a-library):
+
+- `src/eval_toolkit/__init__.py` attaches a `NullHandler` to the
+  `eval_toolkit` root logger. Library is **silent by default**; the
+  consuming application configures handlers.
+- Each module instantiates its own logger:
+  `_logger = logging.getLogger(__name__)`. This produces names like
+  `eval_toolkit.harness`, `eval_toolkit.bootstrap`, etc. — matching
+  the import path so consumers can filter granularly:
+  `logging.getLogger("eval_toolkit.harness").setLevel(logging.DEBUG)`.
+
+**Log-level conventions**:
+
+| Level | When to use |
+|---|---|
+| `DEBUG` | Internal events: slice transitions, bootstrap-resample iteration milestones, leakage-check completions, loader split construction. Anything a contributor would set the level for when debugging. |
+| `INFO` | User-relevant progress signal — sparingly. The harness's per-slice "n=200, positives=100" line is INFO because it's the user-facing summary of a long-running operation. Library code should rarely use INFO; consumers add their own. |
+| `WARNING` | **Reserved for `warnings.warn(...)`, NOT `logger.warning(...)`**. The library uses `DeprecationWarning` / `UserWarning` via the `warnings` module, not the logging module. Double-emitting via both pollutes the warning channel. |
+| `ERROR` | **Should not exist in library code** — raise an exception instead. The caller decides whether the exception is logged or handled. |
+
+For consumers who want all logging on stderr at DEBUG level:
+
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+# eval_toolkit logs now flow through the basicConfig StreamHandler
+```
+
+For consumers who want only `harness` logging at DEBUG:
+
+```python
+logging.basicConfig(level=logging.WARNING)  # silence everything else
+logging.getLogger("eval_toolkit.harness").setLevel(logging.DEBUG)
+```
 
 ## Submitting changes
 
@@ -111,6 +148,10 @@ for the full design rationale.
 eval-toolkit follows [Semantic Versioning](https://semver.org/). Per SemVer
 pre-1.0 expectations, breaking changes are allowed in MINOR bumps (`0.X.0`)
 during the 0.x series; PATCH bumps (`0.X.Y`) remain backward-compatible.
+
+> **Full runbook (incl. known gotchas + recovery recipes)**:
+> [`docs/RELEASING.md`](docs/RELEASING.md). Read that for anything
+> beyond the smooth happy path.
 
 The release checklist:
 

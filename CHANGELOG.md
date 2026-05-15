@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Tier β #2 (RELEASING.md runbook, from v0.29.0 audit): extracted +
+  expanded the release flow from CONTRIBUTING.md into a standalone
+  `docs/RELEASING.md`. Documents the public-API snapshot regen
+  gotcha (which bit v0.28.0), the PyPI CDN propagation delay we saw
+  on v0.28.0 install verification, the GitHub Pages first-time-enable
+  requirement, the v0.27.0 internal-milestone-tag conflict lesson,
+  the pip-audit chicken-and-egg fix we just shipped in v0.28.1, and
+  rollback policy. CONTRIBUTING.md gains a one-line pointer at the
+  top of its release-flow section.
+
 - Tier β #1 (repo hygiene, from v0.29.0 best-practice gap audit):
   added `.editorconfig` (charset, EOL, indent-per-extension rules)
   and `.github/CODEOWNERS` (default ownership: `@brandon-behring`).
