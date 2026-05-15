@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Tier β #3 (deprecation infrastructure, from v0.29.0 audit): per
+  Q2=A, string-deadline `@deprecated` decorator at
+  `src/eval_toolkit/_deprecated.py`. Signature:
+  `@deprecated("0.30.0", reason="...", use_instead="...")`. Deadline
+  validated at decoration (import) time via regex; typos fail at
+  module load, not at call. Emits `DeprecationWarning` with a
+  structured message on every call. Preserves `functools.wraps`
+  metadata (`__name__`, `__doc__`, `__wrapped__`); also stashes
+  `__deprecated_deadline__` / `__deprecated_reason__` /
+  `__deprecated_use_instead__` for test introspection. Policy
+  document at `docs/DEPRECATION.md` defines the minimum-two-minor-
+  versions deprecation window. Tests at `tests/test_deprecations.py`
+  (8 tests, all unit) cover the decorator + include a scanner that
+  walks `eval_toolkit.__all__` and fails if any callable carries
+  an expired deadline ≤ current `__version__`. No actual deprecations
+  introduced — pure policy + tooling infrastructure for future use.
+
 - Tier β #2 (RELEASING.md runbook, from v0.29.0 audit): extracted +
   expanded the release flow from CONTRIBUTING.md into a standalone
   `docs/RELEASING.md`. Documents the public-API snapshot regen
