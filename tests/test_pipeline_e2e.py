@@ -21,7 +21,7 @@ import pytest
 
 from eval_toolkit.artifacts import validate_results
 from eval_toolkit.harness import EvalSlice, evaluate, write_run_result
-from eval_toolkit.loaders import DataFrameLoader, SingleSliceLoader
+from eval_toolkit.loaders import DataFrameLoader, ParquetGlobLoader, SingleSliceLoader
 
 
 class _DiscriminativeScorer:
@@ -155,6 +155,70 @@ def test_e2e_singleslice_loader_to_schema_validated_json(tmp_path: Path) -> None
     validate_results(payload)
     assert payload["schema_version"] == "v1"
     assert "all" in payload["by_slice"]
+
+
+@pytest.mark.smoke
+def test_e2e_parquet_glob_loader_to_schema_validated_json(tmp_path: Path) -> None:
+    """ParquetGlobLoader path: write synthetic parquet → glob → load → evaluate → schema-validate.
+
+    Exercises the loader's actual filesystem path (pd.read_parquet + pd.concat
+    inside the function body) along with the full harness round-trip. Gated
+    on pyarrow availability — parquet I/O is in the [parquet] / [dataframe]
+    extras, not core deps.
+    """
+    pytest.importorskip("jsonschema")
+    pytest.importorskip("pyarrow")
+
+    # Write two parquet files per split to also exercise the concat path
+    rng = np.random.default_rng(42)
+    for split in ("train", "test"):
+        for shard in (0, 1):
+            n = 50
+            df_shard = pd.DataFrame(
+                {
+                    "text": [f"{split}_s{shard}_row{i}" for i in range(n)],
+                    "label": rng.integers(0, 2, size=n),
+                }
+            )
+            df_shard.to_parquet(tmp_path / f"{split}_shard{shard}.parquet")
+
+    loader = ParquetGlobLoader(
+        splits={
+            "train": str(tmp_path / "train_*.parquet"),
+            "test": str(tmp_path / "test_*.parquet"),
+        },
+        feature_col="text",
+        label_col="label",
+    )
+    splits = loader.load_splits()
+
+    assert set(splits.keys()) == {"train", "test"}
+    test_slice = splits["test"]
+    # Both shards concatenated: 50 + 50 = 100 rows
+    assert len(test_slice.df) == 100
+    # Sanity: both classes present (rng with seed=42 + n=100 ≈ balanced)
+    assert 0 in test_slice.y_true and 1 in test_slice.y_true
+
+    n = len(test_slice.df)
+    scores = np.clip(0.5 + 0.3 * (test_slice.y_true - 0.5) + rng.normal(0, 0.1, size=n), 0.0, 1.0)
+    scorer = _DiscriminativeScorer(scores=scores)
+
+    result = evaluate(
+        scorers={"stub": scorer},
+        slices=[test_slice],
+        run_id="e2e-parquet",
+        n_resamples=50,
+        seed=42,
+    )
+
+    run_dir = tmp_path / "e2e_parquet_run"
+    compact_path, _ = write_run_result(result, run_dir)
+    payload = json.loads(compact_path.read_text())
+
+    validate_results(payload)
+    assert payload["schema_version"] == "v1"
+    assert "test" in payload["by_slice"]
+    assert payload["by_slice"]["test"]["n"] == 100
 
 
 @pytest.mark.smoke

@@ -1,0 +1,1498 @@
+{
+  "__all__": [
+    "ANCHOR_RE",
+    "AggregateEvidence",
+    "BootstrapCI",
+    "CISafeThresholdSelector",
+    "ClaimReport",
+    "ClaimSpec",
+    "CostMatrix",
+    "CostSensitiveSelector",
+    "CrossSplitLeakageCheck",
+    "CsvPredictionReader",
+    "DEFAULT_ASSUMED_PRIORS",
+    "DEFAULT_BOOTSTRAP_RESAMPLES",
+    "DEFAULT_CONFIDENCE",
+    "DEFAULT_DEDUP_THRESHOLD",
+    "DEFAULT_FIGSIZE",
+    "DEFAULT_FN_COST",
+    "DEFAULT_FORMATTERS",
+    "DEFAULT_FP_COST",
+    "DEFAULT_METHOD",
+    "DEFAULT_N_BINS",
+    "DEFAULT_N_RESAMPLES",
+    "DEFAULT_PRIOR",
+    "DEFAULT_SEED",
+    "DEFAULT_STRATEGY",
+    "DataFrameLoader",
+    "DatasetLoader",
+    "DeLongResult",
+    "DedupReport",
+    "EmbeddingCosineStrategy",
+    "EvalSlice",
+    "EvalSliceLike",
+    "EvidenceAxis",
+    "EvidenceGate",
+    "ExactDuplicateCheck",
+    "ExactNormalizedHashStrategy",
+    "FileHash",
+    "FileHashMissing",
+    "FittedOperatingPoint",
+    "GateResult",
+    "GroupKFoldSplitter",
+    "GroupLeakageCheck",
+    "HFDatasetsLoader",
+    "HoldoutSplitter",
+    "JaccardNgramStrategy",
+    "JsonlPredictionReader",
+    "LabelConflictCheck",
+    "LeakageCheck",
+    "LeakageFinding",
+    "LeakageReport",
+    "MANIFEST_SCHEMA_VERSION",
+    "MDEEstimate",
+    "MaxF1Selector",
+    "MetricFn",
+    "MetricState",
+    "MinHashLSHStrategy",
+    "NearDuplicateCheck",
+    "NormalizedFormLeakageCheck",
+    "OperatingPointSpec",
+    "PALETTE",
+    "PLOT_STYLE",
+    "PairedBootstrapCI",
+    "PairingMetadata",
+    "ParquetGlobLoader",
+    "PoolBuilder",
+    "PredictionArrays",
+    "PredictionArtifactRef",
+    "PredictionColumns",
+    "PredictionReader",
+    "RECOMMENDED_SOURCE_ROLES",
+    "RUN_RESULT_SCHEMA_VERSION",
+    "RunManifest",
+    "RunResult",
+    "Scorer",
+    "SimilarityAuditFinding",
+    "SimilarityAuditReport",
+    "SimilarityStrategy",
+    "SingleSliceLoader",
+    "SliceAwareScorer",
+    "SourceDisjointKFoldSplitter",
+    "SourceRoleRecord",
+    "Splitter",
+    "StratifiedKFoldSplitter",
+    "TargetFPRSelector",
+    "TargetPrecisionSelector",
+    "TargetRecallSelector",
+    "TemporalLeakageCheck",
+    "TfidfCosineStrategy",
+    "ThresholdFn",
+    "ThresholdPolicyMetadata",
+    "ThresholdResult",
+    "ThresholdSelector",
+    "ThresholdedMetricFn",
+    "TimeSeriesSplitter",
+    "Versioned",
+    "WilsonInterval",
+    "YoudenJSelector",
+    "__version__",
+    "apply_operating_points",
+    "audit_source_label_similarity",
+    "bayes_optimal_threshold",
+    "bootstrap_ci",
+    "bootstrap_metric_from_predictions",
+    "brier_decomposition",
+    "brier_score",
+    "build_manifest",
+    "capture_git_sha",
+    "compute_file_hash",
+    "cross_dedup",
+    "cross_validate_metric",
+    "cv_clt_ci",
+    "delong_roc_variance",
+    "error_metric",
+    "evaluate",
+    "evaluate_claims",
+    "evaluate_folded",
+    "evaluate_scorer_on_slice",
+    "expected_calibration_error",
+    "expected_calibration_error_debiased",
+    "expected_calibration_error_equal_mass",
+    "expected_calibration_error_l2",
+    "expected_calibration_error_l2_debiased",
+    "external_diagnostic_gate",
+    "figure_metadata",
+    "file_sha256",
+    "fit_beta_calibrator",
+    "fit_isotonic_calibrator",
+    "fit_operating_points",
+    "fit_platt_calibrator",
+    "fit_temperature",
+    "fit_temperature_oracle",
+    "from_yaml",
+    "frozen_config",
+    "headline_metrics",
+    "headline_present_gate",
+    "iter_folds_with_pool",
+    "load_prediction_arrays",
+    "low_fpr_feasibility_gate",
+    "make_palette",
+    "make_run_dir",
+    "mde_from_ci",
+    "metric_threshold_gate",
+    "metrics_at_threshold",
+    "minimum_slice_size_gate",
+    "near_dedup",
+    "no_leakage_errors_gate",
+    "no_scorer_errors_gate",
+    "normalize_text_for_dedup",
+    "paired_bootstrap_diff",
+    "paired_bootstrap_ece_diff",
+    "paired_bootstrap_op_point_diff",
+    "paired_diff_from_prediction_refs",
+    "paired_diff_present_gate",
+    "paired_mde",
+    "path_for_config",
+    "plot_bootstrap_distribution",
+    "plot_confusion_matrix_grid",
+    "plot_lift_ci",
+    "plot_metric_bars",
+    "plot_pr_curve",
+    "plot_reliability_diagram",
+    "plot_score_histograms",
+    "pr_auc",
+    "precision_at_prior",
+    "quantile_stratified_pr_auc",
+    "quantile_stratified_report",
+    "reliability_curve",
+    "reliability_diagram_data",
+    "render_files",
+    "render_text",
+    "required_metric_gate",
+    "required_scorer_gate",
+    "required_slice_gate",
+    "resolve_repo_path",
+    "roc_auc",
+    "run_leakage_checks",
+    "sanitize_for_json",
+    "save_figure",
+    "score_distribution_summary",
+    "select_threshold",
+    "set_global_seeds",
+    "set_plot_style",
+    "sha256_text",
+    "single_class_threshold_metrics",
+    "skipped_metric",
+    "source_role_gate",
+    "split_provenance_config",
+    "stratified_recall",
+    "strict_artifact_gate",
+    "validate_manifest",
+    "validate_payload",
+    "validate_prediction_artifact_ref",
+    "validate_results",
+    "validate_source_roles",
+    "walk_path",
+    "wilson_interval",
+    "with_claim_report",
+    "write_json_strict",
+    "write_manifest",
+    "write_run_result"
+  ],
+  "entries": {
+    "ANCHOR_RE": {
+      "doc_first_line": "Compiled regular expression object.",
+      "kind": "value",
+      "type": "re.Pattern"
+    },
+    "AggregateEvidence": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Typed status for aggregate rows or summaries.",
+      "kind": "class",
+      "signature": "(status: 'AggregateStatus', method: 'str', axes: 'tuple[EvidenceAxis, ...]' = (), notes: 'str' = '', metadata: 'dict[str, object]' = <factory>) -> None"
+    },
+    "BootstrapCI": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "95% CI for a metric on a single condition.",
+      "kind": "class",
+      "signature": "(point_estimate: 'float', ci_low: 'float', ci_high: 'float', confidence: 'float', n_resamples: 'int', method: 'str') -> None"
+    },
+    "CISafeThresholdSelector": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Select a threshold whose rate confidence bounds satisfy constraints.",
+      "kind": "class",
+      "signature": "(max_fpr: 'float | None' = None, max_fpr_ci_upper: 'float | None' = None, min_recall: 'float | None' = None, min_recall_ci_lower: 'float | None' = None, confidence: 'float' = 0.95, criterion: 'str' = 'ci_safe', metadata: 'Mapping[str, object]' = <factory>) -> None"
+    },
+    "ClaimReport": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Machine-readable result of evaluating claim specs.",
+      "kind": "class",
+      "signature": "(claims: 'dict[str, list[GateResult]]') -> None"
+    },
+    "ClaimSpec": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "A claim plus the gates required before it can be treated as supported.",
+      "kind": "class",
+      "signature": "(name: 'str', gates: 'tuple[EvidenceGate, ...]', mode: 'str' = 'claim', description: 'str' = '') -> None"
+    },
+    "CostMatrix": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Frozen scaffolding for FP/FN/abstain costs at an assumed prior.",
+      "kind": "class",
+      "signature": "(prior: 'float' = 0.01, fp_cost: 'float' = 1.0, fn_cost: 'float' = 10.0, abstain_cost: 'float | None' = None, notes: 'str' = '') -> None"
+    },
+    "CostSensitiveSelector": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Bayes-optimal threshold from a :class:`~eval_toolkit.calibration.CostMatrix`.",
+      "kind": "class",
+      "signature": "(cost_matrix: 'CostMatrix') -> None"
+    },
+    "CrossSplitLeakageCheck": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Train\u2194eval near-duplicate leakage (the genuinely dangerous one).",
+      "kind": "class",
+      "signature": "(train_split: 'str' = 'train', eval_splits: 'Sequence[str] | None' = None, threshold: 'float' = 0.9, strategy: 'SimilarityStrategy | None' = None, severity: 'Severity' = 'error', label_aware: 'bool' = False, severity_same_label: 'Severity' = 'warning', severity_cross_label: 'Severity' = 'error') -> None"
+    },
+    "CsvPredictionReader": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Read CSV prediction files into a column-oriented mapping.",
+      "kind": "class",
+      "signature": "()"
+    },
+    "DEFAULT_ASSUMED_PRIORS": {
+      "doc_first_line": "Built-in immutable sequence.",
+      "kind": "value",
+      "type": "tuple",
+      "value": "(0.001, 0.01, 0.05)"
+    },
+    "DEFAULT_BOOTSTRAP_RESAMPLES": {
+      "doc_first_line": "int([x]) -> integer",
+      "kind": "value",
+      "type": "int",
+      "value": "1000"
+    },
+    "DEFAULT_CONFIDENCE": {
+      "doc_first_line": "Convert a string or number to a floating-point number, if possible.",
+      "kind": "value",
+      "type": "float",
+      "value": "0.95"
+    },
+    "DEFAULT_DEDUP_THRESHOLD": {
+      "doc_first_line": "Convert a string or number to a floating-point number, if possible.",
+      "kind": "value",
+      "type": "float",
+      "value": "0.9"
+    },
+    "DEFAULT_FIGSIZE": {
+      "doc_first_line": "Built-in immutable sequence.",
+      "kind": "value",
+      "type": "tuple",
+      "value": "(6.0, 4.0)"
+    },
+    "DEFAULT_FN_COST": {
+      "doc_first_line": "Convert a string or number to a floating-point number, if possible.",
+      "kind": "value",
+      "type": "float",
+      "value": "10.0"
+    },
+    "DEFAULT_FORMATTERS": {
+      "doc_first_line": "dict() -> new empty dictionary",
+      "keys": [
+        "ci_high",
+        "ci_low",
+        "delta",
+        "ece",
+        "ece_equal_mass",
+        "ece_equal_width",
+        "f1",
+        "improvement",
+        "lift",
+        "max",
+        "mean",
+        "min",
+        "n",
+        "n_negative",
+        "n_positive",
+        "nll_post",
+        "nll_pre",
+        "pr_auc",
+        "precision",
+        "recall",
+        "roc_auc",
+        "std",
+        "temperature",
+        "threshold"
+      ],
+      "kind": "value",
+      "type": "dict"
+    },
+    "DEFAULT_FP_COST": {
+      "doc_first_line": "Convert a string or number to a floating-point number, if possible.",
+      "kind": "value",
+      "type": "float",
+      "value": "1.0"
+    },
+    "DEFAULT_METHOD": {
+      "doc_first_line": "str(object='') -> str",
+      "kind": "value",
+      "type": "str",
+      "value": "'BCa'"
+    },
+    "DEFAULT_N_BINS": {
+      "doc_first_line": "int([x]) -> integer",
+      "kind": "value",
+      "type": "int",
+      "value": "10"
+    },
+    "DEFAULT_N_RESAMPLES": {
+      "doc_first_line": "int([x]) -> integer",
+      "kind": "value",
+      "type": "int",
+      "value": "1000"
+    },
+    "DEFAULT_PRIOR": {
+      "doc_first_line": "Convert a string or number to a floating-point number, if possible.",
+      "kind": "value",
+      "type": "float",
+      "value": "0.01"
+    },
+    "DEFAULT_SEED": {
+      "doc_first_line": "int([x]) -> integer",
+      "kind": "value",
+      "type": "int",
+      "value": "42"
+    },
+    "DEFAULT_STRATEGY": {
+      "doc_first_line": "str(object='') -> str",
+      "kind": "value",
+      "type": "str",
+      "value": "'quantile'"
+    },
+    "DataFrameLoader": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Wraps a single in-memory dataframe + a split column.",
+      "kind": "class",
+      "signature": "(df: 'pd.DataFrame', split_col: 'str', feature_col: 'str' = 'text', label_col: 'str' = 'label', strata_col: 'str | None' = None, name: 'str' = '', description: 'str' = '', cite_as: 'str' = '', license: 'str' = '', url: 'str' = '') -> None"
+    },
+    "DatasetLoader": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Yields one or more :class:`EvalSlice` keyed by split name.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "DeLongResult": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Result of a DeLong paired ROC-AUC comparison.",
+      "kind": "class",
+      "signature": "(auc_a: 'float', auc_b: 'float', delta_auc: 'float', var: 'float', z: 'float', p_value: 'float', ci_low: 'float', ci_high: 'float') -> None"
+    },
+    "DedupReport": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Outcome of a near-dedup pass.",
+      "kind": "class",
+      "signature": "(kept_indices: 'list[int]', dropped_pairs: 'list[tuple[int, int, float]]', threshold: 'float', n_input: 'int') -> None"
+    },
+    "EmbeddingCosineStrategy": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Cosine similarity on caller-supplied embeddings.",
+      "kind": "class",
+      "signature": "(embedder: 'Callable[[Sequence[str]], np.ndarray]') -> None"
+    },
+    "EvalSlice": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "A single eval slice (dev test, OOD slice, ablation slice, etc.).",
+      "kind": "class",
+      "signature": "(name: 'str', df: 'pd.DataFrame', description: 'str' = '', feature_col: 'str' = 'text', label_col: 'str' = 'label', strata_col: 'str | None' = None) -> None"
+    },
+    "EvalSliceLike": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Pandas-free slice surface needed by evaluation contracts.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "EvidenceAxis": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Named evidence axis such as fold, seed, source_out, view, or slice.",
+      "kind": "class",
+      "signature": "(name: 'str', value: 'str') -> None"
+    },
+    "EvidenceGate": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Named callable gate used inside a :class:`ClaimSpec`.",
+      "kind": "class",
+      "signature": "(name: 'str', check: 'GateCheck', description: 'str' = '', severity: 'GateSeverity' = 'error') -> None"
+    },
+    "ExactDuplicateCheck": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Within-split exact-duplicate detection.",
+      "kind": "class",
+      "signature": "(target_splits: 'Sequence[str] | None' = None, severity: 'Severity' = 'warning') -> None"
+    },
+    "ExactNormalizedHashStrategy": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "SHA-256 hash-bucket dedup; similarities are exactly ``{0.0, 1.0}``.",
+      "kind": "class",
+      "signature": "(normalize: 'bool' = True) -> None"
+    },
+    "FileHash": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Sentinel-style hit for a successful file hash.",
+      "kind": "class",
+      "signature": "(sha256: 'str') -> None"
+    },
+    "FileHashMissing": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Sentinel-style miss for a file hash that could not be computed.",
+      "kind": "class",
+      "signature": "(reason: 'str', path: 'str') -> None"
+    },
+    "FittedOperatingPoint": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "A threshold selected on one scorer/slice pair.",
+      "kind": "class",
+      "signature": "(criterion: 'str', threshold: 'float', fitted_on_slice: 'str', scorer_name: 'str', n_fit: 'int', n_positive_fit: 'int', n_negative_fit: 'int', fit_metrics: 'dict[str, float | int]') -> None"
+    },
+    "GateResult": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Result of one evidence gate.",
+      "kind": "class",
+      "signature": "(name: 'str', passed: 'bool', severity: 'GateSeverity' = 'error', message: 'str' = '', evidence: 'dict[str, object]' = <factory>) -> None"
+    },
+    "GroupKFoldSplitter": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "K-fold CV with group-disjoint test partitions.",
+      "kind": "class",
+      "signature": "(k: 'int' = 5, group_col: 'str | None' = None) -> None"
+    },
+    "GroupLeakageCheck": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Group-id leakage: a single group spans multiple splits.",
+      "kind": "class",
+      "signature": "(group_col: 'str', target_splits: 'Sequence[str] | None' = None, severity: 'Severity' = 'error') -> None"
+    },
+    "HFDatasetsLoader": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Load a HuggingFace ``datasets`` repo as ``{split: EvalSlice}``.",
+      "kind": "class",
+      "signature": "(repo_id: 'str', splits: 'Sequence[str] | None' = None, feature_col: 'str' = 'text', label_col: 'str' = 'label', strata_col: 'str | None' = None, config_name: 'str | None' = None, name: 'str' = '', description: 'str' = '', cite_as: 'str' = '', license: 'str' = '', url: 'str' = '') -> None"
+    },
+    "HoldoutSplitter": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Single-iteration (k=1) holdout split via sklearn ``train_test_split``.",
+      "kind": "class",
+      "signature": "(test_size: 'float' = 0.2, stratify: 'bool' = True, seed: 'int' = 42) -> None"
+    },
+    "JaccardNgramStrategy": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Set-based n-gram Jaccard similarity \u2014 **diagnostic / small-corpus only**.",
+      "kind": "class",
+      "signature": "(n: 'int' = 3, analyzer: \"Literal['char', 'word']\" = 'char') -> None"
+    },
+    "JsonlPredictionReader": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Read JSON Lines prediction files into a column-oriented mapping.",
+      "kind": "class",
+      "signature": "()"
+    },
+    "LabelConflictCheck": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Cross-source label conflicts: same text, different labels across splits.",
+      "kind": "class",
+      "signature": "(target_splits: 'Sequence[str] | None' = None, severity: 'Severity' = 'error') -> None"
+    },
+    "LeakageCheck": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "A pluggable validator over a dict of splits.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "LeakageFinding": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "A single :class:`LeakageCheck`'s finding.",
+      "kind": "class",
+      "signature": "(check_name: 'str', severity: 'Severity', drop_indices: 'dict[str, list[int]] | None', evidence: 'dict[str, object]', message: 'str', n_affected: 'int') -> None"
+    },
+    "LeakageReport": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Aggregate of one or more :class:`LeakageCheck` results.",
+      "kind": "class",
+      "signature": "(findings: 'list[LeakageFinding]' = <factory>) -> None"
+    },
+    "MANIFEST_SCHEMA_VERSION": {
+      "doc_first_line": "str(object='') -> str",
+      "kind": "value",
+      "type": "str",
+      "value": "'v3'"
+    },
+    "MDEEstimate": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Minimum detectable \u0394 at the requested (\u03b1, 1-\u03b2).",
+      "kind": "class",
+      "signature": "(mde: 'float', sigma_delta: 'float', delta_observed: 'float', alpha: 'float', power: 'float', n_resamples: 'int', n: 'int') -> None"
+    },
+    "MaxF1Selector": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Argmax F1 over the PR curve. Replaces the v0.6 ``criterion=\"max_f1\"``.",
+      "kind": "class",
+      "signature": "(criterion: 'str' = 'max_f1') -> None"
+    },
+    "MetricFn": {
+      "doc_first_line": "",
+      "kind": "function",
+      "signature": "(*args, **kwargs)"
+    },
+    "MetricState": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Structured state for metrics that may be unavailable or invalid.",
+      "kind": "class",
+      "signature": "(value: 'object | None', status: 'MetricStatus', reason: 'str' = '', details: 'dict[str, object]' = <factory>) -> None"
+    },
+    "MinHashLSHStrategy": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Approximate Jaccard via MinHash + LSH banding (Broder 1997, Indyk-Motwani 1998).",
+      "kind": "class",
+      "signature": "(n: 'int' = 3, num_perm: 'int' = 128, bands: 'int' = 16, seed: 'int' = 42) -> None"
+    },
+    "NearDuplicateCheck": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Within-split near-duplicate detection via a pluggable similarity strategy.",
+      "kind": "class",
+      "signature": "(threshold: 'float' = 0.9, strategy: 'SimilarityStrategy | None' = None, target_splits: 'Sequence[str] | None' = None, severity: 'Severity' = 'warning', label_aware: 'bool' = False, severity_same_label: 'Severity' = 'warning', severity_cross_label: 'Severity' = 'error') -> None"
+    },
+    "NormalizedFormLeakageCheck": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Encoding-obfuscated duplicate detection.",
+      "kind": "class",
+      "signature": "(target_splits: 'Sequence[str] | None' = None, severity: 'Severity' = 'error') -> None"
+    },
+    "OperatingPointSpec": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Harness instruction for cross-slice operating-point transfer.",
+      "kind": "class",
+      "signature": "(fit_slice: 'str', apply_slices: 'tuple[str, ...]', selectors: 'tuple[ThresholdSelector, ...]', name: 'str' = 'transferred', scorer_names: 'tuple[str, ...]' = ()) -> None"
+    },
+    "PALETTE": {
+      "doc_first_line": "Read-only proxy of a mapping.",
+      "kind": "value",
+      "type": "mappingproxy"
+    },
+    "PLOT_STYLE": {
+      "doc_first_line": "dict() -> new empty dictionary",
+      "keys": [
+        "axes.axisbelow",
+        "axes.edgecolor",
+        "axes.grid",
+        "axes.labelsize",
+        "axes.linewidth",
+        "axes.prop_cycle",
+        "axes.spines.right",
+        "axes.spines.top",
+        "axes.titlesize",
+        "figure.dpi",
+        "figure.facecolor",
+        "figure.figsize",
+        "font.family",
+        "font.sans-serif",
+        "font.size",
+        "grid.alpha",
+        "grid.linestyle",
+        "grid.linewidth",
+        "legend.fontsize",
+        "legend.frameon",
+        "legend.handlelength",
+        "savefig.bbox",
+        "savefig.dpi",
+        "savefig.facecolor",
+        "savefig.pad_inches",
+        "xtick.direction",
+        "xtick.labelsize",
+        "xtick.major.size",
+        "xtick.major.width",
+        "ytick.direction",
+        "ytick.labelsize",
+        "ytick.major.size",
+        "ytick.major.width"
+      ],
+      "kind": "value",
+      "type": "dict"
+    },
+    "PairedBootstrapCI": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "95% CI for ``metric(B) \u2212 metric(A)`` on shared resample indices.",
+      "kind": "class",
+      "signature": "(delta: 'float', ci_low: 'float', ci_high: 'float', overlaps_zero: 'bool', confidence: 'float', n_resamples: 'int') -> None"
+    },
+    "PairingMetadata": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Machine-readable description of comparison pairedness.",
+      "kind": "class",
+      "signature": "(paired: 'bool', unit: 'str' = 'row', valid_scope: 'str' = '', notes: 'str' = '') -> None"
+    },
+    "ParquetGlobLoader": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Load + concat parquet files matched by a glob; hash each for the manifest.",
+      "kind": "class",
+      "signature": "(splits: 'dict[str, str]', feature_col: 'str' = 'text', label_col: 'str' = 'label', strata_col: 'str | None' = None, name: 'str' = '', description: 'str' = '', cite_as: 'str' = '', license: 'str' = '', url: 'str' = '') -> None"
+    },
+    "PoolBuilder": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Augment a fold's train slice with an external pool and split off val.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "PredictionArrays": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Numeric arrays loaded from a prediction artifact.",
+      "kind": "class",
+      "signature": "(labels: 'np.ndarray', scores: 'np.ndarray', row_ids: 'tuple[str, ...]' = (), content_hashes: 'tuple[str, ...]' = ()) -> None"
+    },
+    "PredictionArtifactRef": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Manifest reference to a retained prediction artifact.",
+      "kind": "class",
+      "signature": "(uri: 'str', media_type: 'str', columns: 'PredictionColumns | Mapping[str, object]', sha256: 'str' = '', n_rows: 'int | None' = None, role: 'str | list[str]' = 'predictions', metadata: 'dict[str, object]' = <factory>) -> None"
+    },
+    "PredictionColumns": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Column mapping for a retained prediction artifact.",
+      "kind": "class",
+      "signature": "(label: 'str', score: 'str', row_id: 'str | None' = None, content_hash: 'str | None' = None, scorer: 'str | None' = None, slice: 'str | None' = None, text: 'str | None' = None, provenance: 'dict[str, str]' = <factory>) -> None"
+    },
+    "PredictionReader": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Reads manifest-referenced prediction artifacts into column arrays.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "RECOMMENDED_SOURCE_ROLES": {
+      "doc_first_line": "Built-in immutable sequence.",
+      "kind": "value",
+      "type": "tuple",
+      "value": "('train', 'calibration', 'locked_eval', 'external_diagnostic', 'excluded')"
+    },
+    "RUN_RESULT_SCHEMA_VERSION": {
+      "doc_first_line": "str(object='') -> str",
+      "kind": "value",
+      "type": "str",
+      "value": "'v1'"
+    },
+    "RunManifest": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Reproducibility metadata sidecar for a single run.",
+      "kind": "class",
+      "signature": "(run_id: 'str', captured_at: 'str' = '', git_sha: 'str | None' = None, dirty_flag: 'bool' = False, code_versions: 'dict[str, str]' = <factory>, data_revisions: 'dict[str, str]' = <factory>, metadata: 'dict[str, str]' = <factory>, seeds: 'dict[str, int]' = <factory>, data_hashes: 'dict[str, str]' = <factory>, config_hash: 'str' = '', env: 'dict[str, str]' = <factory>, gpu_info: 'dict[str, object]' = <factory>, cuda_version: 'str | None' = None, wall_clock_seconds: 'float | None' = None, versioned_objects: 'dict[str, str]' = <factory>, leakage_report: 'dict[str, object] | None' = None, source_roles: 'list[dict[str, object]]' = <factory>, guardrails: 'list[object]' = <factory>, prediction_artifacts: 'list[dict[str, object]]' = <factory>, contamination_flags: 'dict[str, str]' = <factory>, schema_version: 'str' = 'v3') -> None"
+    },
+    "RunResult": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Outcome of a full evaluation run.",
+      "kind": "class",
+      "signature": "(run_id: 'str', git_sha: 'str | None', config: 'dict[str, object]', by_slice: 'dict[str, dict[str, object]]' = <factory>, by_fold: 'dict[str, RunResult]' = <factory>, fold_summary: 'dict[str, dict[str, object]]' = <factory>, claim_report: 'dict[str, object]' = <factory>, prediction_artifacts: 'list[dict[str, object]]' = <factory>, evidence_axes: 'list[dict[str, object]]' = <factory>, pairing_metadata: 'dict[str, object]' = <factory>, aggregate_evidence: 'dict[str, object]' = <factory>, threshold_policy: 'dict[str, object]' = <factory>, schema_version: 'str' = 'v1') -> None"
+    },
+    "Scorer": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Anything exposing ``predict_proba(X) -> np.ndarray of P(positive)``.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "SimilarityAuditFinding": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "One high-similarity pair found during a non-dropping audit.",
+      "kind": "class",
+      "signature": "(left_index: 'int', right_index: 'int', similarity: 'float', relation: 'SimilarityRelation' = 'unspecified', left_source: 'str | None' = None, right_source: 'str | None' = None, left_label: 'object | None' = None, right_label: 'object | None' = None) -> None"
+    },
+    "SimilarityAuditReport": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Non-dropping source/label-aware similarity audit report.",
+      "kind": "class",
+      "signature": "(findings: 'list[SimilarityAuditFinding]', threshold: 'float', n_input: 'int', strategy: 'str', k_neighbors: 'int') -> None"
+    },
+    "SimilarityStrategy": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Pluggable similarity backend for :func:`near_dedup` / :func:`cross_dedup`.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "SingleSliceLoader": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Wraps a single pre-built :class:`EvalSlice` as ``{\"all\": slice}``.",
+      "kind": "class",
+      "signature": "(slice_: 'EvalSlice', name: 'str' = '', description: 'str' = '') -> None"
+    },
+    "SliceAwareScorer": {
+      "bases": [
+        "Scorer",
+        "Protocol"
+      ],
+      "doc_first_line": "Optional scorer contract for cost-controlled slice skipping.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "SourceDisjointKFoldSplitter": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "K-fold CV partitioning sources into disjoint groups (round-robin).",
+      "kind": "class",
+      "signature": "(source_col: 'str', k: 'int' = 3, seed: 'int' = 42) -> None"
+    },
+    "SourceRoleRecord": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Generic source-role metadata for data-quality and evidence audits.",
+      "kind": "class",
+      "signature": "(source: 'str', role: 'str', n_rows: 'int | None' = None, notes: 'str' = '', metadata: 'dict[str, object]' = <factory>) -> None"
+    },
+    "Splitter": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Iterates folds, each as a named-splits dict ready for ``evaluate(...)``.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "StratifiedKFoldSplitter": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "K-fold cross-validation with class-stratification.",
+      "kind": "class",
+      "signature": "(k: 'int' = 5, shuffle: 'bool' = True, seed: 'int' = 42) -> None"
+    },
+    "TargetFPRSelector": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Smallest threshold meeting FPR \u2264 target \u2014 highest-TPR feasible ROC point.",
+      "kind": "class",
+      "signature": "(fpr: 'float') -> None"
+    },
+    "TargetPrecisionSelector": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Smallest threshold meeting precision \u2265 target \u2014 highest-recall feasible point.",
+      "kind": "class",
+      "signature": "(precision: 'float') -> None"
+    },
+    "TargetRecallSelector": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Highest threshold meeting recall \u2265 target \u2014 most-precise feasible point.",
+      "kind": "class",
+      "signature": "(recall: 'float') -> None"
+    },
+    "TemporalLeakageCheck": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Temporal ordering invariant: every earlier split's max(time) \u2264 next's min(time).",
+      "kind": "class",
+      "signature": "(time_col: 'str', split_order: 'Sequence[str]', severity: 'Severity' = 'error') -> None"
+    },
+    "TfidfCosineStrategy": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "TF-IDF (n-gram) cosine similarity \u2014 the default lexical near-dedup.",
+      "kind": "class",
+      "signature": "(ngram_range: 'tuple[int, int]' = (1, 3), min_df: 'int' = 1, lowercase: 'bool' = True) -> None"
+    },
+    "ThresholdFn": {
+      "doc_first_line": "",
+      "kind": "function",
+      "signature": "(*args, **kwargs)"
+    },
+    "ThresholdPolicyMetadata": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Pre-registration metadata for thresholded operating claims.",
+      "kind": "class",
+      "signature": "(calibration_slice: 'str', score_column: 'str', selector: 'str', constraints: 'dict[str, float]', claim_enabled: 'bool' = False, notes: 'str' = '') -> None"
+    },
+    "ThresholdResult": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Outcome of operating-point selection at a given criterion.",
+      "kind": "class",
+      "signature": "(threshold: 'float', f1: 'float', precision: 'float', recall: 'float', criterion: 'str') -> None"
+    },
+    "ThresholdSelector": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Selects a decision threshold from ``(y_true, y_score)``.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "ThresholdedMetricFn": {
+      "doc_first_line": "",
+      "kind": "function",
+      "signature": "(*args, **kwargs)"
+    },
+    "TimeSeriesSplitter": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Time-aware K-fold via :class:`sklearn.model_selection.TimeSeriesSplit`.",
+      "kind": "class",
+      "signature": "(k: 'int' = 5, time_col: 'str | None' = None) -> None"
+    },
+    "Versioned": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Anything exposing a stable version string.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "WilsonInterval": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Wilson score interval for a binomial rate.",
+      "kind": "class",
+      "signature": "(low: 'float | None', high: 'float | None', confidence: 'float', successes: 'int', n: 'int') -> None"
+    },
+    "YoudenJSelector": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Argmax of Youden's J statistic ``J = TPR \u2212 FPR`` over the ROC curve.",
+      "kind": "class",
+      "signature": "(criterion: 'str' = 'youden_j') -> None"
+    },
+    "__version__": {
+      "doc_first_line": "str(object='') -> str",
+      "kind": "value",
+      "type": "str",
+      "value": "'0.27.2'"
+    },
+    "apply_operating_points": {
+      "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', fitted: 'Mapping[str, FittedOperatingPoint]', *, applied_to_slice: 'str' = '', scorer_name: 'str' = '') -> 'dict[str, dict[str, object]]'"
+    },
+    "audit_source_label_similarity": {
+      "doc_first_line": "Report high-similarity pairs without dropping rows.",
+      "kind": "function",
+      "signature": "(texts: 'Sequence[str]', *, sources: 'Sequence[str] | None' = None, labels: 'Sequence[object] | None' = None, threshold: 'float' = 0.9, k_neighbors: 'int' = 20, strategy: 'SimilarityStrategy | None' = None, include_within_source: 'bool' = True, include_cross_source: 'bool' = True, include_same_label: 'bool' = True, include_cross_label: 'bool' = True) -> 'SimilarityAuditReport'"
+    },
+    "bayes_optimal_threshold": {
+      "doc_first_line": "Bayes-optimal threshold per Elkan 2001 [#elkan]_ cost-sensitive derivation.",
+      "kind": "function",
+      "signature": "(\u03c0: 'float', c_fp: 'float', c_fn: 'float') -> 'float'"
+    },
+    "bootstrap_ci": {
+      "doc_first_line": "Per-condition CI via :func:`scipy.stats.bootstrap`.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', metric: 'MetricFn', *, n_resamples: 'int' = 1000, confidence: 'float' = 0.95, method: \"Literal['BCa', 'percentile', 'studentized']\" = 'BCa', seed: 'int' = 42) -> 'BootstrapCI'"
+    },
+    "bootstrap_metric_from_predictions": {
+      "doc_first_line": "Compute a PR-AUC bootstrap CI from one prediction ref.",
+      "kind": "function",
+      "signature": "(ref: 'Mapping[str, Any]', *, reader: 'PredictionReader | None' = None, n_resamples: 'int' = 1000, seed: 'int' = 42) -> 'dict[str, object]'"
+    },
+    "brier_decomposition": {
+      "doc_first_line": "Murphy 1973 [#murphy]_ decomposition of the Brier score.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'dict[str, float]'"
+    },
+    "brier_score": {
+      "doc_first_line": "Brier score (mean squared error between predicted probabilities and labels).",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, empty_strategy: 'EmptyStrategy' = 'raise') -> 'float | None | dict[str, object]'"
+    },
+    "build_manifest": {
+      "doc_first_line": "Pure builder: assemble a :class:`RunManifest` from components.",
+      "kind": "function",
+      "signature": "(*, run_id: 'str', config: 'Mapping[str, Any]', data_files: 'Mapping[str, Path | str] | None' = None, seeds: 'Mapping[str, int] | None' = None, extra_code_versions: 'Mapping[str, str] | None' = None, data_revisions: 'Mapping[str, str] | None' = None, metadata: 'Mapping[str, str] | None' = None, versioned: 'Sequence[object] | Mapping[str, object] | None' = None, leakage_report: 'object | None' = None, source_roles: 'Sequence[SourceRoleRecord | Mapping[str, object]] | None' = None, required_source_roles: 'Sequence[str]' = (), guardrails: 'Sequence[str | Mapping[str, object]] | None' = None, prediction_artifacts: 'Sequence[PredictionArtifactRef | Mapping[str, object]] | None' = None, contamination_flags: 'Mapping[str, str] | None' = None, wall_clock_seconds: 'float | None' = None, repo_root: 'Path | str | None' = None, git_sha: 'str | None' = None) -> 'RunManifest'"
+    },
+    "capture_git_sha": {
+      "doc_first_line": "Current HEAD full SHA, or ``None`` if not in a git repo.",
+      "kind": "function",
+      "signature": "(repo_root: 'Path | str | None' = None) -> 'str | None'"
+    },
+    "compute_file_hash": {
+      "doc_first_line": "SHA-256 hex digest of an existing file (sentinel-typed).",
+      "kind": "function",
+      "signature": "(path: 'Path | str') -> 'FileHash | FileHashMissing'"
+    },
+    "cross_dedup": {
+      "doc_first_line": "Return eval indices to KEEP (drop those near-duplicate to any train text).",
+      "kind": "function",
+      "signature": "(train_texts: 'list[str]', eval_texts: 'list[str]', threshold: 'float' = 0.9, k_neighbors: 'int' = 20, *, strategy: 'SimilarityStrategy | None' = None) -> 'list[int]'"
+    },
+    "cross_validate_metric": {
+      "doc_first_line": "K-fold cross-validation of a metric on caller-supplied scores.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, metric: 'MetricFn', k: 'int' = 5, stratified: 'bool' = True, seed: 'int' = 42) -> 'np.ndarray'"
+    },
+    "cv_clt_ci": {
+      "doc_first_line": "CV-corrected confidence interval per Bayle et al. 2020 [#bayle]_ Theorem 3.1.",
+      "kind": "function",
+      "signature": "(fold_metrics: 'np.ndarray', *, confidence: 'float' = 0.95) -> 'BootstrapCI'"
+    },
+    "delong_roc_variance": {
+      "doc_first_line": "DeLong's variance of the paired ROC-AUC difference.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray') -> 'DeLongResult'"
+    },
+    "error_metric": {
+      "doc_first_line": "Return a structured errored-metric payload.",
+      "kind": "function",
+      "signature": "(reason: 'str', **details: 'object') -> 'dict[str, object]'"
+    },
+    "evaluate": {
+      "doc_first_line": "Run every scorer on every slice; return a pure :class:`RunResult` (no IO).",
+      "kind": "function",
+      "signature": "(scorers: 'dict[str, Scorer]', slices: 'Sequence[EvalSlice]', *, run_id: 'str', git_sha: 'str | None' = None, n_resamples: 'int' = 1000, paired_diffs: 'list[tuple[str, str]] | None' = None, seed: 'int' = 42, extra_config: 'Mapping[str, object] | None' = None, leakage_checks: 'Sequence[LeakageCheck]' = (), on_leakage: \"Literal['raise', 'record', 'skip']\" = 'raise', on_scorer_error: \"Literal['raise', 'record']\" = 'raise', operating_point_specs: 'Sequence[OperatingPointSpec]' = ()) -> 'RunResult'"
+    },
+    "evaluate_claims": {
+      "doc_first_line": "Evaluate claim specs against a result payload and optional manifest.",
+      "kind": "function",
+      "signature": "(result: 'object', claim_specs: 'Sequence[ClaimSpec]', *, manifest: 'object | None' = None) -> 'ClaimReport'"
+    },
+    "evaluate_folded": {
+      "doc_first_line": "Run a fold aggregator: ``Splitter \u00d7 seeds \u2192 RunResult`` with CV-CI summary.",
+      "kind": "function",
+      "signature": "(scorers: 'dict[str, Scorer]', splitter: 'Splitter', slice_: 'EvalSlice', *, run_id: 'str', git_sha: 'str | None' = None, seeds: 'Sequence[int]' = (42,), n_resamples: 'int' = 1000, paired_diffs: 'list[tuple[str, str]] | None' = None, leakage_checks: 'Sequence[LeakageCheck]' = (), on_leakage: \"Literal['raise', 'record', 'skip']\" = 'raise', on_scorer_error: \"Literal['raise', 'record']\" = 'raise', eval_split_names: 'Sequence[str]' = ('test',), summary_metrics: 'Sequence[str]' = ('pr_auc', 'roc_auc')) -> 'RunResult'"
+    },
+    "evaluate_scorer_on_slice": {
+      "doc_first_line": "Score one scorer on one slice; return headline + bootstrap CI on PR-AUC.",
+      "kind": "function",
+      "signature": "(scorer: 'Scorer', slice_: 'EvalSlice', *, n_resamples: 'int' = 1000, seed: 'int' = 42, on_scorer_error: \"Literal['raise', 'record']\" = 'raise', precomputed_scores: 'np.ndarray | None' = None, attack_style: 'str | None' = None, fpr_ladder: 'list[float] | None' = None, compute_mce: 'bool' = False, compute_brier: 'bool' = False, calibrator: 'PlattFit | None' = None, bootstrap_roc_auc: 'bool' = False) -> 'dict[str, object]'"
+    },
+    "expected_calibration_error": {
+      "doc_first_line": "Expected calibration error on equal-width probability bins.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'float'"
+    },
+    "expected_calibration_error_debiased": {
+      "doc_first_line": "Bias-corrected L1 ECE via simulated-H0 Monte-Carlo (Roelofs 2022 spirit).",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10, *, n_sweep: 'int' = 200, seed: 'int' = 42) -> 'float'"
+    },
+    "expected_calibration_error_equal_mass": {
+      "doc_first_line": "ECE on equal-mass (quantile) bins.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'float'"
+    },
+    "expected_calibration_error_l2": {
+      "doc_first_line": "Equal-mass L2 ECE \u2014 root mean squared bin-level miscalibration.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'float'"
+    },
+    "expected_calibration_error_l2_debiased": {
+      "doc_first_line": "Bias-corrected L2 ECE per Kumar 2019 [#kumar]_ \u00a73.3.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'float'"
+    },
+    "external_diagnostic_gate": {
+      "doc_first_line": "Require an external diagnostic payload, optionally thresholded.",
+      "kind": "function",
+      "signature": "(path: 'str', *, op: \"Literal['<', '<=', '>', '>=', '=='] | None\" = None, threshold: 'float | None' = None, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "figure_metadata": {
+      "doc_first_line": "Build a JSON-serializable provenance dict for ``save_figure``.",
+      "kind": "function",
+      "signature": "(provenance: 'dict[str, str]', dpi: 'int' = 300) -> 'dict[str, str]'"
+    },
+    "file_sha256": {
+      "doc_first_line": "SHA-256 hex digest of an existing file.",
+      "kind": "function",
+      "signature": "(path: 'Path | str', *, strict: 'bool' = False) -> 'str | None'"
+    },
+    "fit_beta_calibrator": {
+      "doc_first_line": "Beta calibration per Kull et al. 2017 [#kull]_.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray') -> 'Callable[[np.ndarray], np.ndarray]'"
+    },
+    "fit_isotonic_calibrator": {
+      "doc_first_line": "Niculescu-Mizil & Caruana 2005 [#nm05]_ isotonic regression.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray') -> 'Callable[[np.ndarray], np.ndarray]'"
+    },
+    "fit_operating_points": {
+      "doc_first_line": "Fit selectors on a mixed-class slice and record threshold provenance.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', selectors: 'Sequence[ThresholdSelector]', *, fitted_on_slice: 'str' = '', scorer_name: 'str' = '') -> 'dict[str, FittedOperatingPoint]'"
+    },
+    "fit_platt_calibrator": {
+      "doc_first_line": "Platt 1999 [#platt]_ sigmoid scaling with Lin 2007 [#lin]_ Laplace-smoothed targets.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray') -> 'PlattFit'"
+    },
+    "fit_temperature": {
+      "doc_first_line": "Single-parameter temperature scaling per Guo et al. 2017 [#guo]_.",
+      "kind": "function",
+      "signature": "(val_logits: 'np.ndarray', val_labels: 'np.ndarray', bounds: 'tuple[float, float]' = (0.05, 20.0)) -> 'dict[str, float]'"
+    },
+    "fit_temperature_oracle": {
+      "doc_first_line": "**DIAGNOSTIC ONLY** \u2014 fit-on-test oracle T-scaling per Guo et al. 2017 [#guo]_.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray') -> 'tuple[float, Callable[[np.ndarray], np.ndarray]]'"
+    },
+    "from_yaml": {
+      "doc_first_line": "Load a YAML file into an instance of ``cls`` (a frozen dataclass).",
+      "kind": "function",
+      "signature": "(path: 'Path | str', cls: 'type[T]') -> 'T'"
+    },
+    "frozen_config": {
+      "doc_first_line": "Decorator: apply ``@dataclass(frozen=True, slots=True)`` and validate.",
+      "kind": "function",
+      "signature": "(cls: 'type[T]') -> 'type[T]'"
+    },
+    "headline_metrics": {
+      "doc_first_line": "Bundle PR-AUC + ROC-AUC + 3 operating-point F1s + per-stratum recall (if provided).",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', strata: 'np.ndarray | None' = None, assumed_priors: 'tuple[float, ...]' = (0.001, 0.01, 0.05)) -> 'dict[str, object]'"
+    },
+    "headline_present_gate": {
+      "doc_first_line": "Require a non-null headline/comparison block at an arbitrary path.",
+      "kind": "function",
+      "signature": "(path: 'str' = 'headline', *, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "iter_folds_with_pool": {
+      "doc_first_line": "Compose a :class:`Splitter` with a :class:`PoolBuilder`.",
+      "kind": "function",
+      "signature": "(splitter: 'Splitter', slice_: 'EvalSlice', *, pool_builder: 'PoolBuilder', groups: 'np.ndarray | None' = None) -> 'Iterator[dict[str, EvalSlice]]'"
+    },
+    "load_prediction_arrays": {
+      "doc_first_line": "Load labels and scores from a prediction artifact reference.",
+      "kind": "function",
+      "signature": "(ref: 'Mapping[str, Any]', *, reader: 'PredictionReader | None' = None) -> 'PredictionArrays'"
+    },
+    "low_fpr_feasibility_gate": {
+      "doc_first_line": "Require enough negatives for a low-FPR claim to be statistically feasible.",
+      "kind": "function",
+      "signature": "(slice_name: 'str', *, max_fpr: 'float', confidence: 'float' = 0.95, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "make_palette": {
+      "doc_first_line": "Construct a semantic-role color palette for downstream projects.",
+      "kind": "function",
+      "signature": "(*, negative: 'str' = '#004488', positive: 'str' = '#BB5566', accent: 'str' = '#DDAA33', baseline: 'str' = '#999999', **extras: 'str') -> 'Mapping[str, str]'"
+    },
+    "make_run_dir": {
+      "doc_first_line": "Create and return a timestamped run directory.",
+      "kind": "function",
+      "signature": "(base: 'Path | str', prefix: 'str' = 'run') -> 'Path'"
+    },
+    "mde_from_ci": {
+      "doc_first_line": "Derive MDE from an existing ``PairedBootstrapCI`` (no second bootstrap).",
+      "kind": "function",
+      "signature": "(paired: 'PairedBootstrapCI', *, alpha: 'float' = 0.05, power: 'float' = 0.8) -> 'MDEEstimate'"
+    },
+    "metric_threshold_gate": {
+      "doc_first_line": "Require a numeric metric to satisfy a threshold comparison.",
+      "kind": "function",
+      "signature": "(slice_name: 'str', scorer_name: 'str', metric_path: 'str', *, op: \"Literal['<', '<=', '>', '>=', '==']\", threshold: 'float', severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "metrics_at_threshold": {
+      "doc_first_line": "Precision / recall / F1 / accuracy / TN/FP/FN/TP at a fixed threshold.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', threshold: 'float') -> 'dict[str, float | int]'"
+    },
+    "minimum_slice_size_gate": {
+      "doc_first_line": "Require minimum total/positive/negative counts for a slice.",
+      "kind": "function",
+      "signature": "(slice_name: 'str', *, min_n: 'int' = 0, min_positive: 'int' = 0, min_negative: 'int' = 0, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "near_dedup": {
+      "doc_first_line": "Greedy near-deduplication via a pluggable similarity strategy.",
+      "kind": "function",
+      "signature": "(texts: 'list[str]', threshold: 'float' = 0.9, k_neighbors: 'int' = 20, *, strategy: 'SimilarityStrategy | None' = None) -> 'DedupReport'"
+    },
+    "no_leakage_errors_gate": {
+      "doc_first_line": "Fail if result config or manifest leakage report has error-severity findings.",
+      "kind": "function",
+      "signature": "(*, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "no_scorer_errors_gate": {
+      "doc_first_line": "Fail if any scorer block contains an ``error`` field.",
+      "kind": "function",
+      "signature": "(*, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "normalize_text_for_dedup": {
+      "doc_first_line": "Canonical text normalization for hashing and deduplication.",
+      "kind": "function",
+      "signature": "(text: 'str') -> 'str'"
+    },
+    "paired_bootstrap_diff": {
+      "doc_first_line": "Paired-bootstrap CI on ``metric(B) \u2212 metric(A)`` using the same resample indices.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray', metric: 'MetricFn', *, n_resamples: 'int' = 1000, confidence: 'float' = 0.95, seed: 'int' = 42) -> 'PairedBootstrapCI'"
+    },
+    "paired_bootstrap_ece_diff": {
+      "doc_first_line": "Paired-bootstrap CI on ``ECE(B) \u2212 ECE(A)`` for two calibrated outputs.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray', *, ece_fn: 'Callable[[np.ndarray, np.ndarray, int], float]', n_resamples: 'int' = 1000, confidence: 'float' = 0.95, seed: 'int' = 42, n_bins: 'int' = 10) -> 'PairedBootstrapCI'"
+    },
+    "paired_bootstrap_op_point_diff": {
+      "doc_first_line": "Two-level paired bootstrap for operating-point lifts.",
+      "kind": "function",
+      "signature": "(val_y: 'np.ndarray', val_score_a: 'np.ndarray', val_score_b: 'np.ndarray', test_y: 'np.ndarray', test_score_a: 'np.ndarray', test_score_b: 'np.ndarray', threshold_fn: 'ThresholdFn', metric_fn: 'ThresholdedMetricFn', *, n_resamples: 'int' = 1000, confidence: 'float' = 0.95, seed: 'int' = 42) -> 'PairedBootstrapCI'"
+    },
+    "paired_diff_from_prediction_refs": {
+      "doc_first_line": "Compute paired PR-AUC delta from two prediction refs.",
+      "kind": "function",
+      "signature": "(baseline_ref: 'Mapping[str, Any]', candidate_ref: 'Mapping[str, Any]', *, baseline_reader: 'PredictionReader | None' = None, candidate_reader: 'PredictionReader | None' = None, n_resamples: 'int' = 1000, seed: 'int' = 42) -> 'dict[str, object]'"
+    },
+    "paired_diff_present_gate": {
+      "doc_first_line": "Require a paired-difference comparison under a slice.",
+      "kind": "function",
+      "signature": "(slice_name: 'str', diff_key: 'str', *, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "paired_mde": {
+      "doc_first_line": "Minimum detectable paired \u0394 at (\u03b1, power).",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray', metric: 'MetricFn', *, alpha: 'float' = 0.05, power: 'float' = 0.8, n_resamples: 'int' = 1000, seed: 'int' = 42) -> 'MDEEstimate'"
+    },
+    "path_for_config": {
+      "doc_first_line": "Return a stable repo-relative path string when possible, otherwise absolute.",
+      "kind": "function",
+      "signature": "(path: 'Path | str | None', repo_root: 'Path | str | None' = None) -> 'str | None'"
+    },
+    "plot_bootstrap_distribution": {
+      "doc_first_line": "Histogram of bootstrap-sampled deltas with optional CI overlay.",
+      "kind": "function",
+      "signature": "(deltas: 'np.ndarray', *, ci_low: 'float | None' = None, ci_high: 'float | None' = None, bins: 'int' = 30, title: 'str | None' = None, xlabel: 'str' = '\u0394 (bootstrap-sampled)', figsize: 'tuple[float, float] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
+    },
+    "plot_confusion_matrix_grid": {
+      "doc_first_line": "N-panel confusion-matrix grid (one per scorer).",
+      "kind": "function",
+      "signature": "(matrices: 'dict[str, np.ndarray]', *, class_names: 'tuple[str, str]' = ('negative', 'positive'), title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None) -> 'Figure'"
+    },
+    "plot_lift_ci": {
+      "doc_first_line": "Forest-plot-style CIs over comparisons.",
+      "kind": "function",
+      "signature": "(estimates: 'dict[str, BootstrapCI]', *, zero_line: 'bool' = True, xlabel: 'str' = '\u0394 (lift over reference)', title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
+    },
+    "plot_metric_bars": {
+      "doc_first_line": "Bar chart for a ``{label: metric}`` mapping.",
+      "kind": "function",
+      "signature": "(values: 'dict[str, float]', *, color: 'str | None' = None, ylabel: 'str | None' = None, title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, label_formatter: 'Callable[[str], str] | None' = None, sort_key: 'Callable[[str], Any] | None' = None) -> 'Figure'"
+    },
+    "plot_pr_curve": {
+      "doc_first_line": "Precision-recall curve.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, label: 'str | None' = None, threshold: 'float | None' = None, prevalence: 'float | None' = None, baseline_curve: 'tuple[np.ndarray, np.ndarray] | None' = None, baseline_label: 'str' = 'baseline', title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
+    },
+    "plot_reliability_diagram": {
+      "doc_first_line": "Equal-width-binned reliability diagram with diagonal reference.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_prob: 'np.ndarray', *, n_bins: 'int' = 10, bin_counts: 'np.ndarray | None' = None, xlabel: 'str' = 'Mean Predicted Probability', ylabel: 'str' = 'Observed Fraction of Positives', title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
+    },
+    "plot_score_histograms": {
+      "doc_first_line": "Overlaid score-distribution histograms, one per slice.",
+      "kind": "function",
+      "signature": "(scores_by_slice: 'dict[str, np.ndarray]', *, scorer_name: 'str | None' = None, bins: 'int' = 30, title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, label_formatter: 'Callable[[str], str] | None' = None, sort_key: 'Callable[[str], Any] | None' = None) -> 'Figure'"
+    },
+    "pr_auc": {
+      "doc_first_line": "Average precision (PR-AUC).",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, empty_strategy: 'EmptyStrategy' = 'raise') -> 'float | None | dict[str, object]'"
+    },
+    "precision_at_prior": {
+      "doc_first_line": "Project precision under a different positive-class prior.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', threshold: 'float', assumed_prior: 'float') -> 'dict[str, float]'"
+    },
+    "quantile_stratified_pr_auc": {
+      "doc_first_line": "PR-AUC on the central [q_low, q_high] range of any 1-D stratifier.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', stratifier: 'np.ndarray', q_low: 'float' = 0.25, q_high: 'float' = 0.75) -> 'dict[str, float]'"
+    },
+    "quantile_stratified_report": {
+      "doc_first_line": "Full vs trimmed PR-AUC report with a gap-flag (SDD reporting convention).",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', stratifier: 'np.ndarray', *, q_low: 'float' = 0.25, q_high: 'float' = 0.75, gap_threshold: 'float' = 0.05) -> 'dict[str, float | bool]'"
+    },
+    "reliability_curve": {
+      "doc_first_line": "Bin-level calibration data wrapping :func:`sklearn.calibration.calibration_curve`.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, n_bins: 'int' = 10, strategy: \"Literal['uniform', 'quantile']\" = 'quantile') -> 'dict[str, object]'"
+    },
+    "reliability_diagram_data": {
+      "doc_first_line": "Structured per-bin reliability rows for serialization or plotting.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, n_bins: 'int' = 10, strategy: \"Literal['uniform', 'quantile']\" = 'quantile') -> 'list[dict[str, float | int]]'"
+    },
+    "render_files": {
+      "doc_first_line": "IO wrapper: read each target file, render anchors, optionally write.",
+      "kind": "function",
+      "signature": "(targets: 'list[Path]', metrics: 'dict[str, Any]', *, mode: 'str' = 'apply', formatters: 'dict[str, Callable[[Any], str]] | None' = None, compound_keys: 'frozenset[str]' = frozenset({'lift'})) -> 'dict[str, Any]'"
+    },
+    "render_text": {
+      "doc_first_line": "Replace anchored bodies in ``text`` with values looked up in ``metrics``.",
+      "kind": "function",
+      "signature": "(text: 'str', metrics: 'dict[str, Any]', formatters: 'dict[str, Callable[[Any], str]] | None' = None, *, compound_keys: 'frozenset[str]' = frozenset({'lift'})) -> 'tuple[str, list[str]]'"
+    },
+    "required_metric_gate": {
+      "doc_first_line": "Require a metric path under one scorer result.",
+      "kind": "function",
+      "signature": "(slice_name: 'str', scorer_name: 'str', metric_path: 'str', *, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "required_scorer_gate": {
+      "doc_first_line": "Require a scorer result under a slice.",
+      "kind": "function",
+      "signature": "(slice_name: 'str', scorer_name: 'str', *, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "required_slice_gate": {
+      "doc_first_line": "Require ``by_slice.<slice_name>`` to exist.",
+      "kind": "function",
+      "signature": "(slice_name: 'str', *, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "resolve_repo_path": {
+      "doc_first_line": "Resolve a possibly repo-relative path without requiring it to exist.",
+      "kind": "function",
+      "signature": "(path: 'Path | str', repo_root: 'Path | str | None' = None) -> 'Path'"
+    },
+    "roc_auc": {
+      "doc_first_line": "ROC-AUC.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, empty_strategy: 'EmptyStrategy' = 'raise') -> 'float | None | dict[str, object]'"
+    },
+    "run_leakage_checks": {
+      "doc_first_line": "Run a sequence of :class:`LeakageCheck` over ``splits`` and aggregate.",
+      "kind": "function",
+      "signature": "(checks: 'Sequence[LeakageCheck]', splits: 'Mapping[str, EvalSlice]') -> 'LeakageReport'"
+    },
+    "sanitize_for_json": {
+      "doc_first_line": "Return a strict-JSON-safe copy of ``payload``.",
+      "kind": "function",
+      "signature": "(payload: 'object', *, nan_strategy: 'NanStrategy' = 'skipped') -> 'object'"
+    },
+    "save_figure": {
+      "doc_first_line": "Save figure to disk with optional provenance metadata.",
+      "kind": "function",
+      "signature": "(fig: 'Figure', path: 'Path', *, dpi: 'int' = 300, provenance: 'dict[str, str] | None' = None, permitted_suffixes: 'Container[str]' = frozenset({'.pdf', '.png', '.svg'}), skip_env_var: 'str' = 'EVAL_TOOLKIT_SKIP_SAVEFIG') -> 'Path'"
+    },
+    "score_distribution_summary": {
+      "doc_first_line": "Threshold-free score-distribution summary.",
+      "kind": "function",
+      "signature": "(scores: 'np.ndarray') -> 'dict[str, float | int]'"
+    },
+    "select_threshold": {
+      "doc_first_line": "Dispatch to a :class:`ThresholdSelector` instance.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', criterion: 'ThresholdSelector') -> 'ThresholdResult'"
+    },
+    "set_global_seeds": {
+      "doc_first_line": "Pin random / numpy / torch seeds + enable deterministic CUDA where possible.",
+      "kind": "function",
+      "signature": "(seed: 'int', *, strict_torch_determinism: 'bool' = False) -> 'None'"
+    },
+    "set_plot_style": {
+      "doc_first_line": "Apply ``PLOT_STYLE`` rcParams + ``PALETTE`` color cycle.",
+      "kind": "function",
+      "signature": "() -> 'None'"
+    },
+    "sha256_text": {
+      "doc_first_line": "SHA-256 hex digest of (optionally normalized) text.",
+      "kind": "function",
+      "signature": "(text: 'str', *, normalize: 'bool' = True) -> 'str'"
+    },
+    "single_class_threshold_metrics": {
+      "doc_first_line": "Operating metrics for all-positive or all-negative slices.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', threshold: 'float') -> 'dict[str, float | int | str]'"
+    },
+    "skipped_metric": {
+      "doc_first_line": "Return a structured skipped-metric payload.",
+      "kind": "function",
+      "signature": "(reason: 'str', **details: 'object') -> 'dict[str, object]'"
+    },
+    "source_role_gate": {
+      "doc_first_line": "Require source-role metadata with the requested roles in the manifest.",
+      "kind": "function",
+      "signature": "(required_roles: 'Sequence[str]', *, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "split_provenance_config": {
+      "doc_first_line": "Walk a config dict and normalize Path-typed values to repo-relative strings.",
+      "kind": "function",
+      "signature": "(config: 'Mapping[str, Any]', repo_root: 'Path | str | None' = None, *, path_keys: 'tuple[str, ...]' = ('path', 'dir', 'file', 'splits_dir', 'model_path')) -> 'dict[str, Any]'"
+    },
+    "stratified_recall": {
+      "doc_first_line": "Recall (TPR) per categorical stratum.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', threshold: 'float', strata: 'np.ndarray', *, with_ci: 'bool' = False, confidence: 'float' = 0.95) -> 'dict[str, dict[str, float | int]]'"
+    },
+    "strict_artifact_gate": {
+      "doc_first_line": "Fail if result or manifest contains non-finite numeric values.",
+      "kind": "function",
+      "signature": "(*, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "validate_manifest": {
+      "doc_first_line": "Validate a serialized ``RunManifest`` payload.",
+      "kind": "function",
+      "signature": "(payload: 'Mapping[str, object]') -> 'None'"
+    },
+    "validate_payload": {
+      "doc_first_line": "Validate a payload against a bundled schema.",
+      "kind": "function",
+      "signature": "(payload: 'object', schema_name: 'str') -> 'None'"
+    },
+    "validate_prediction_artifact_ref": {
+      "doc_first_line": "Validate a single serialized :class:`PredictionArtifactRef` payload.",
+      "kind": "function",
+      "signature": "(payload: 'Mapping[str, object]') -> 'None'"
+    },
+    "validate_results": {
+      "doc_first_line": "Validate a serialized ``RunResult`` payload against ``results.v1.json``.",
+      "kind": "function",
+      "signature": "(payload: 'Mapping[str, object]') -> 'None'"
+    },
+    "validate_source_roles": {
+      "doc_first_line": "Return validation errors for generic source-role records.",
+      "kind": "function",
+      "signature": "(source_roles: 'Sequence[SourceRoleRecord | Mapping[str, object]]', *, required_roles: 'Sequence[str]' = ()) -> 'list[str]'"
+    },
+    "walk_path": {
+      "doc_first_line": "Walk a dot-path into nested dicts/lists.",
+      "kind": "function",
+      "signature": "(data: 'Any', dotted_path: 'str') -> 'Any'"
+    },
+    "wilson_interval": {
+      "doc_first_line": "Wilson score interval for a binomial rate.",
+      "kind": "function",
+      "signature": "(successes: 'int', n: 'int', *, confidence: 'float' = 0.95) -> 'WilsonInterval'"
+    },
+    "with_claim_report": {
+      "doc_first_line": "Return a copy of ``result`` with a serialized claim report attached.",
+      "kind": "function",
+      "signature": "(result: 'RunResult', report: 'object') -> 'RunResult'"
+    },
+    "write_json_strict": {
+      "doc_first_line": "Write strict RFC 8259 JSON after sanitizing non-finite values.",
+      "kind": "function",
+      "signature": "(payload: 'object', path: 'Path | str', *, indent: 'int' = 2, sort_keys: 'bool' = False) -> 'Path'"
+    },
+    "write_manifest": {
+      "doc_first_line": "Write ``manifest.json`` to ``run_dir``. Sole IO sink.",
+      "kind": "function",
+      "signature": "(manifest: 'RunManifest', run_dir: 'Path | str') -> 'Path'"
+    },
+    "write_run_result": {
+      "doc_first_line": "Write a :class:`RunResult` to ``run_dir`` as two JSON files (compact + full).",
+      "kind": "function",
+      "signature": "(result: 'RunResult', run_dir: 'Path') -> 'tuple[Path, Path]'"
+    }
+  }
+}

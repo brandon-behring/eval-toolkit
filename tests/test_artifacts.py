@@ -341,6 +341,97 @@ def test_validate_manifest_defaults_to_current_when_field_missing() -> None:
 
 
 @pytest.mark.unit
+def test_validate_manifest_v3_accepts_well_formed_payload() -> None:
+    """v3 manifest validates cleanly when all v3-required fields are present.
+
+    v3 (v0.23.0+) added the required ``contamination_flags`` object. The
+    dispatcher must route ``schema_version: v3`` to the v3 schema, NOT
+    fall back to v2 — otherwise the new required field would be silently
+    unchecked.
+    """
+    pytest.importorskip("jsonschema")
+    payload = {
+        "schema_version": "v3",
+        "run_id": "demo-v3",
+        "captured_at": "2026-05-15T12:00:00Z",
+        "code_versions": {"eval_toolkit": "0.27.2"},
+        "env": {"python": "3.13"},
+        "contamination_flags": {
+            "vendor_model": "vendor_black_box",
+            "in_house_scorer": "verified_disjoint",
+        },
+    }
+    validate_manifest(payload)
+
+
+@pytest.mark.unit
+def test_validate_manifest_v3_rejects_missing_contamination_flags() -> None:
+    """v3 manifest missing ``contamination_flags`` is rejected.
+
+    This is the load-bearing distinction between v2 and v3: a v3 manifest
+    without ``contamination_flags`` should fail validation rather than
+    silently passing. Catches dispatcher misrouting (e.g., a v3 payload
+    being validated against v2 schema by accident).
+    """
+    pytest.importorskip("jsonschema")
+    jsonschema = pytest.importorskip("jsonschema")
+    payload = {
+        "schema_version": "v3",
+        "run_id": "demo-v3-bad",
+        "captured_at": "2026-05-15T12:00:00Z",
+        "code_versions": {"eval_toolkit": "0.27.2"},
+        "env": {"python": "3.13"},
+        # Missing the required `contamination_flags` field
+    }
+    with pytest.raises(jsonschema.ValidationError, match="contamination_flags"):
+        validate_manifest(payload)
+
+
+@pytest.mark.unit
+def test_validate_manifest_v3_rejects_unknown_contamination_flag_value() -> None:
+    """v3 manifest rejects contamination-flag values outside the enum.
+
+    The schema enumerates the allowed values; an unrecognized value
+    (e.g., typo) must be caught. Catches contract drift where someone
+    adds a new flag value to the producer without updating the schema.
+    """
+    pytest.importorskip("jsonschema")
+    jsonschema = pytest.importorskip("jsonschema")
+    payload = {
+        "schema_version": "v3",
+        "run_id": "demo-v3-bad-enum",
+        "captured_at": "2026-05-15T12:00:00Z",
+        "code_versions": {"eval_toolkit": "0.27.2"},
+        "env": {"python": "3.13"},
+        "contamination_flags": {
+            "vendor_model": "totally_made_up_value",
+        },
+    }
+    with pytest.raises(jsonschema.ValidationError):
+        validate_manifest(payload)
+
+
+@pytest.mark.unit
+def test_validate_manifest_v2_payload_validated_under_v2_schema_not_v3() -> None:
+    """A v2 payload (no ``contamination_flags``) validates cleanly under v2.
+
+    Asserts that the dispatcher does NOT eagerly route v2 payloads through
+    v3 (which would reject them for missing ``contamination_flags``). Reads
+    legacy v0.22-era manifests must keep working.
+    """
+    pytest.importorskip("jsonschema")
+    payload = {
+        "schema_version": "v2",
+        "run_id": "legacy-v2",
+        "captured_at": "2026-05-10T12:00:00Z",
+        "code_versions": {"eval_toolkit": "0.22.0"},
+        "env": {"python": "3.13"},
+        # No contamination_flags — that's v3-only.
+    }
+    validate_manifest(payload)  # should NOT raise
+
+
+@pytest.mark.unit
 def test_validate_results_passes_for_well_formed_payload() -> None:
     """validate_results wraps validate_payload with the results.v1 schema name."""
     pytest.importorskip("jsonschema")

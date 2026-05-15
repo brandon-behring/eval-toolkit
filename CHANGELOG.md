@@ -9,20 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 
-- Test coverage: added end-to-end pipeline tests
-  (`tests/test_pipeline_e2e.py`) that exercise loader → `evaluate` →
-  `write_run_result` → JSON schema validation for `DataFrameLoader` and
-  `SingleSliceLoader` (incl. paired-diffs path). Extended
-  `tests/test_metrics_props.py` with Brier-score bounds + label/score
-  inversion symmetry properties. Added bootstrap CI golden tests
-  (`tests/test_bootstrap_golden.py`, fixture at
+- Test coverage (Tier 1 — math kernel correctness + integration backbone):
+  added end-to-end pipeline tests (`tests/test_pipeline_e2e.py`) that
+  exercise loader → `evaluate` → `write_run_result` → JSON schema
+  validation for `DataFrameLoader` and `SingleSliceLoader` (incl.
+  paired-diffs path). Extended `tests/test_metrics_props.py` with
+  Brier-score bounds + label/score inversion symmetry properties. Added
+  bootstrap CI golden tests (`tests/test_bootstrap_golden.py`, fixture at
   `tests/golden/bootstrap_ci/cases.json`) pinning BCa/percentile output
   on 6 canonical stress points (balanced, imbalanced 5%, small-n=10,
-  tied scores) to ±1e-9. These guard against silent numerical drift
-  from scipy/numpy version bumps and contract drift between the loader,
-  harness, and artifacts layers — the bug class the 0.27.2 base-install
-  fix exposed. Expanded the `golden` pytest marker doc to reflect its
-  broader applicability.
+  tied scores) to ±1e-9. Expanded the `golden` pytest marker doc.
+
+- Test coverage (Tier 2 — public-contract + integration breadth):
+  added public-API drift guard (`tests/test_public_api.py`, fixture at
+  `tests/golden/public_api/snapshot.json`) that snapshots all 199 names
+  in `eval_toolkit.__all__` with signatures, class bases, first
+  docstring lines, and primitive-value summaries. Drift now requires an
+  explicit golden-regeneration commit. Extended
+  `tests/test_pipeline_e2e.py` with `ParquetGlobLoader` round-trip
+  (synthetic parquet → glob → load → evaluate → schema-validate; gated
+  on `pyarrow`). Extended `tests/test_artifacts.py` with four manifest
+  v2↔v3 dispatcher tests: v3 well-formed accepted; v3 missing
+  `contamination_flags` rejected; v3 with unknown enum value rejected;
+  v2 payloads still routed to v2 schema (no eager v3 demotion).
 
 ## [0.27.2] — 2026-05-15 — fix base-install pandas import
 
