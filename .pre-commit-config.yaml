@@ -1,0 +1,36 @@
+# Pre-commit hooks for eval-toolkit.
+#
+# Install both stages locally with `make hooks` (one-time):
+#   pre-commit install                       # ruff + black at commit
+#   pre-commit install --hook-type pre-push  # mypy at push
+#
+# Pin policy: exact revs aligned with the *currently installed* dev-tool
+# versions (which sit well above the pyproject `>=` floors). Bump quarterly
+# or whenever `uv pip install -e ".[dev]"` pulls a newer tool that flags
+# something pre-commit misses. CI's own `ruff check` / `black --check` /
+# `mypy` steps remain the source of truth, so drift surfaces as a CI
+# failure rather than a silent skew.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff-check
+        args: [--fix, --exit-non-zero-on-fix]
+
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+        language_version: python3.13
+        args: [--line-length=100]
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (strict, src/ only)
+        entry: uv run python -m mypy src
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-push]

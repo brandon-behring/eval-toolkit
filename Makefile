@@ -1,4 +1,4 @@
-.PHONY: help install lint format test test-fast test-unit test-property test-smoke test-doctest type ci coverage clean
+.PHONY: help install hooks lint format test test-fast test-unit test-property test-smoke test-doctest type ci coverage clean
 
 PYTHON := .venv/bin/python
 VENV := .venv
@@ -6,6 +6,7 @@ VENV := .venv
 help:
 	@echo "Targets:"
 	@echo "  install       Create .venv via uv and install dev dependencies"
+	@echo "  hooks         Install pre-commit hooks (ruff+black at commit, mypy at push)"
 	@echo "  lint          ruff check + black --check + mypy"
 	@echo "  format        black + ruff --fix"
 	@echo "  test          pytest (all markers + doctests)"
@@ -23,6 +24,24 @@ install:
 	uv venv
 	uv pip install -e ".[dev]"
 	@echo "Activate: source $(VENV)/bin/activate"
+
+hooks:
+	@if git config --get core.hooksPath >/dev/null 2>&1; then \
+		echo "core.hooksPath is set to '$$(git config --get core.hooksPath)'."; \
+		echo "pre-commit refuses to install over a custom hooks path."; \
+		echo ""; \
+		echo "Choose one:"; \
+		echo "  1) Disable for this repo only:"; \
+		echo "       git config --local --unset-all core.hooksPath"; \
+		echo "       make hooks"; \
+		echo "  2) Run hooks manually without installing:"; \
+		echo "       uv run pre-commit run --all-files"; \
+		echo "  3) Chain pre-commit into your global hooks dir manually."; \
+		exit 1; \
+	fi
+	uv run pre-commit install
+	uv run pre-commit install --hook-type pre-push
+	@echo "Hooks installed: ruff+black at commit, mypy at push."
 
 lint:
 	$(PYTHON) -m ruff check src tests
