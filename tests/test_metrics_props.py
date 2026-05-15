@@ -118,6 +118,67 @@ def test_brier_score_inversion_symmetry(y: np.ndarray, s: np.ndarray) -> None:
     assert flipped == pytest.approx(forward, abs=1e-12)
 
 
+# ---------------------------------------------------------------------------
+# NaN/Inf rejection in ranking + scoring metrics (Tier 3 #8).
+#
+# All three metrics document that they raise ValueError on NaN/Inf in
+# y_score. Explicit pytest.raises tests pin that contract so a refactor
+# that silently propagates NaN (e.g., switches to a sklearn version that
+# drops the input-validation check) fails immediately rather than
+# producing silent garbage downstream.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "metric_fn,metric_name",
+    [(pr_auc, "pr_auc"), (roc_auc, "roc_auc"), (brier_score, "brier_score")],
+)
+def test_metric_rejects_nan_in_score(metric_fn: object, metric_name: str) -> None:
+    """{metric} raises ValueError when y_score contains a NaN value.
+
+    Catches: silent NaN propagation from a refactor or a sklearn version
+    bump that drops input validation.
+    """
+    y = np.array([0, 0, 1, 1])
+    s = np.array([0.1, np.nan, 0.5, 0.9])
+    with pytest.raises(ValueError, match="NaN|nan"):
+        metric_fn(y, s)  # type: ignore[operator]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "metric_fn,metric_name",
+    [(pr_auc, "pr_auc"), (roc_auc, "roc_auc"), (brier_score, "brier_score")],
+)
+def test_metric_rejects_inf_in_score(metric_fn: object, metric_name: str) -> None:
+    """{metric} raises ValueError when y_score contains +inf.
+
+    Catches: silent infinity propagation that would otherwise yield a NaN
+    metric value downstream after divide-by-inf in the rank computation.
+    """
+    y = np.array([0, 0, 1, 1])
+    s = np.array([0.1, np.inf, 0.5, 0.9])
+    with pytest.raises(ValueError, match="inf|Inf"):
+        metric_fn(y, s)  # type: ignore[operator]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "metric_fn,metric_name",
+    [(pr_auc, "pr_auc"), (roc_auc, "roc_auc"), (brier_score, "brier_score")],
+)
+def test_metric_rejects_negative_inf_in_score(metric_fn: object, metric_name: str) -> None:
+    """{metric} raises ValueError when y_score contains -inf.
+
+    Symmetric guard with +inf. The error message uniformly mentions inf.
+    """
+    y = np.array([0, 0, 1, 1])
+    s = np.array([0.1, -np.inf, 0.5, 0.9])
+    with pytest.raises(ValueError, match="inf|Inf"):
+        metric_fn(y, s)  # type: ignore[operator]
+
+
 @pytest.mark.property
 @given(
     y=_balanced_binary_array(60),

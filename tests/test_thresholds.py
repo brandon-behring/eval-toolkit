@@ -153,3 +153,113 @@ def test_target_fpr_rejects_invalid_target() -> None:
         TargetFPRSelector(-0.1)
     with pytest.raises(ValueError, match="fpr must be in"):
         TargetFPRSelector(1.5)
+
+
+# ---------------------------------------------------------------------------
+# Exactness tests for TargetFPRSelector. Property tests in
+# test_thresholds_props.py cover the FPR≤cap contract; these pin the EXACT
+# chosen threshold for canonical inputs, catching the kind of off-by-one or
+# wrong-tie-break bugs an invariant test doesn't.
+#
+# Note: sklearn's roc_curve uses `drop_intermediate=True`, which collapses
+# collinear ROC segments. On perfectly-separable data, the trimmed curve has
+# only the boundary point — the selector picks the highest-pos / lowest-pos
+# threshold, never one "inside" the (FPR=0, TPR=1) plateau. These tests
+# verify that exact analytical behavior.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_target_fpr_separable_picks_min_positive_threshold() -> None:
+    """On perfectly-separable data, TargetFPRSelector picks the min-positive score for any small target.
+
+    Setup: 100 negs at scores [0.00..0.99], 100 pos at [1.00..1.99]. The
+    only achievable operating points are FPR=0 (any threshold > 0.99) and
+    FPR=1 (any threshold ≤ 0.99). For target ≤ 1.0 the selector picks
+    the smallest threshold meeting FPR ≤ target, which is exactly the
+    min positive score (1.00). Below that, FPR jumps to 1.0.
+
+    Confirms the trimmed-ROC handling: the selector does NOT try to
+    extrapolate to the "missing" thresholds between 1.0 and 0.99.
+    """
+    neg_scores = np.linspace(0.00, 0.99, 100)
+    pos_scores = np.linspace(1.00, 1.99, 100)
+    y_true = np.concatenate([np.zeros(100), np.ones(100)]).astype(int)
+    y_score = np.concatenate([neg_scores, pos_scores])
+
+    for target_fpr in (0.01, 0.05, 0.10, 0.20):
+        result = TargetFPRSelector(target_fpr).select(y_true, y_score)
+        # On separable data, the analytical answer is the min positive score:
+        # the boundary between FPR=0 and FPR=1.
+        assert result.threshold == pytest.approx(1.0, abs=1e-9), (
+            f"target_fpr={target_fpr}: expected threshold=1.0 (min pos score), "
+            f"got {result.threshold}"
+        )
+        # Realized FPR is exactly 0 (no negatives ≥ 1.0) — well below target
+        flagged_negs = int(np.sum(neg_scores >= result.threshold))
+        assert flagged_negs == 0
+        # Realized TPR is exactly 1.0 (all positives ≥ 1.0)
+        flagged_pos = int(np.sum(pos_scores >= result.threshold))
+        assert flagged_pos == 100
+
+
+@pytest.mark.unit
+def test_target_fpr_threshold_pinned_on_overlapping_canonical_input() -> None:
+    """Golden-style pin of the exact chosen threshold for canonical (y, score) data.
+
+    Property tests confirm FPR ≤ target for any input; this test pins the
+    EXACT threshold the selector picks on a deterministic, overlapping
+    distribution. If the selector's tie-breaking logic, eligibility rule,
+    or drop_intermediate handling regresses, this fails.
+
+    Data: balanced binary labels (n=500) with discriminative-but-overlapping
+    Gaussian-noise scores at seed=42.
+    """
+    rng = np.random.default_rng(42)
+    n = 500
+    y_true = rng.binomial(1, 0.3, size=n).astype(int)
+    y_score = np.clip(0.5 + 0.4 * (y_true - 0.5) + rng.normal(0, 0.2, size=n), 0.0, 1.0)
+
+    # Pinned values: computed once on this exact data + selector logic.
+    # Update only if the selector's algorithm intentionally changes (and
+    # add a CHANGELOG entry explaining the drift).
+    expected_thresholds = {
+        0.01: 0.7497574619602165,
+        0.05: 0.6276334925831316,
+        0.10: 0.5496488304373,
+        0.20: 0.45115882422782605,
+    }
+    # Run selector for each target; record actual + verify monotonic
+    # relationship: lower target → higher (more conservative) threshold.
+    actual: dict[float, float] = {}
+    for target in (0.01, 0.05, 0.10, 0.20):
+        result = TargetFPRSelector(target).select(y_true, y_score)
+        actual[target] = result.threshold
+
+        # Contract check: realized FPR ≤ target
+        neg_mask = y_true == 0
+        n_neg = int(neg_mask.sum())
+        flagged_negs = int(np.sum(y_score[neg_mask] >= result.threshold))
+        realized_fpr = flagged_negs / n_neg
+        assert (
+            realized_fpr <= target + 1e-9
+        ), f"target={target}: realized_fpr={realized_fpr} exceeds target"
+
+    # Monotonicity: looser target → equal or lower threshold
+    thresholds_in_order = [actual[t] for t in sorted(actual)]  # 0.01, 0.05, 0.10, 0.20
+    for i in range(len(thresholds_in_order) - 1):
+        assert thresholds_in_order[i] >= thresholds_in_order[i + 1], (
+            f"selector should pick lower threshold for higher target FPR, but "
+            f"target {sorted(actual)[i]} → threshold {thresholds_in_order[i]} and "
+            f"target {sorted(actual)[i + 1]} → threshold {thresholds_in_order[i + 1]} (non-monotone)"
+        )
+
+    # Hard pin: these values reproduce on numpy ≥2.0 + scikit-learn ≥1.5
+    # for the seed=42 / n=500 / Gaussian-noise(0.2) construction above.
+    # If sklearn changes drop_intermediate behavior or the selector's
+    # eligibility/tie-break logic, these regenerate (run + copy actuals).
+    for target, expected in expected_thresholds.items():
+        assert actual[target] == pytest.approx(expected, abs=1e-9), (
+            f"threshold at target_fpr={target} drifted: "
+            f"actual={actual[target]} vs pinned={expected}"
+        )

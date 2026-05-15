@@ -20,6 +20,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on 6 canonical stress points (balanced, imbalanced 5%, small-n=10,
   tied scores) to ±1e-9. Expanded the `golden` pytest marker doc.
 
+- Test coverage (Tier 3 — resilience moat): added multi-slice
+  fault-injection tests (`tests/test_harness_fault_injection.py`) that
+  exercise `on_scorer_error="record"` across three slices where the
+  scorer succeeds on the middle one and fails on the outer two —
+  asserts per-(slice, scorer) independence (no error-state bleed) plus
+  a healthy-vs-faulting scorer parity check against a no-fault control.
+  Added exactness tests for `TargetFPRSelector`
+  (`tests/test_thresholds.py`): analytical answer on
+  perfectly-separable data plus a golden-style pinned threshold value
+  for a canonical (n=500, seed=42) overlapping distribution across
+  target FPRs 0.01 / 0.05 / 0.10 / 0.20, with a monotonicity invariant.
+  Added calibration determinism tests
+  (`tests/test_calibration_determinism.py`): same `(y, score)` produces
+  bit-identical Platt fit `a`/`b` parameters and isotonic transform
+  output across runs, parametrized over 1% / 50% / 99% positive
+  prevalence. Added NaN/+inf/-inf rejection tests for `pr_auc`,
+  `roc_auc`, `brier_score` to `tests/test_metrics_props.py` —
+  parametrized; locks the input-validation contract.
+
 - Test coverage (Tier 2 — public-contract + integration breadth):
   added public-API drift guard (`tests/test_public_api.py`, fixture at
   `tests/golden/public_api/snapshot.json`) that snapshots all 199 names
