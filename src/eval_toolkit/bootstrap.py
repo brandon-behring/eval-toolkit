@@ -19,6 +19,7 @@ References
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -27,6 +28,8 @@ import numpy as np
 from scipy.stats import bootstrap as _scipy_bootstrap
 from scipy.stats import norm as _scipy_norm
 from scipy.stats import rankdata as _scipy_rankdata
+
+_logger = logging.getLogger(__name__)
 
 __all__ = [
     "DEFAULT_CONFIDENCE",
@@ -256,6 +259,16 @@ def bootstrap_ci(
         raise ValueError(f"n={n} too small for bootstrap; need ≥ 10")
     if not 0 < confidence < 1:
         raise ValueError(f"confidence must be in (0, 1), got {confidence}")
+
+    _logger.debug(
+        "bootstrap_ci: metric=%s n=%d n_resamples=%d method=%s confidence=%.3f seed=%d",
+        getattr(metric, "__name__", repr(metric)),
+        n,
+        n_resamples,
+        method,
+        confidence,
+        seed,
+    )
 
     point = float(metric(y_true_arr, y_score_arr))
 

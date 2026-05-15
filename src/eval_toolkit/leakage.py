@@ -35,6 +35,7 @@ References
 
 from __future__ import annotations
 
+import logging
 import unicodedata
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -54,6 +55,8 @@ from eval_toolkit.text_dedup import (
     near_dedup,
     sha256_text,
 )
+
+_logger = logging.getLogger(__name__)
 
 __all__ = [
     "CrossSplitLeakageCheck",
@@ -1043,7 +1046,20 @@ def run_leakage_checks(
     """
     findings: list[LeakageFinding] = []
     for check in checks:
-        findings.append(check.validate(splits))
+        finding = check.validate(splits)
+        findings.append(finding)
+        _logger.debug(
+            "leakage check %s: severity=%s n_affected=%d",
+            finding.check_name,
+            finding.severity,
+            finding.n_affected,
+        )
+    _logger.debug(
+        "run_leakage_checks completed: %d checks, %d findings (%d errors)",
+        len(checks),
+        len(findings),
+        sum(1 for f in findings if f.severity == "error"),
+    )
     return LeakageReport(findings=findings)
 
 

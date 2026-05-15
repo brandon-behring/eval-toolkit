@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Tier β #4 (structured logging, from v0.29.0 audit): standard
+  library-friendly logging discipline per Q4=A.
+  `src/eval_toolkit/__init__.py` attaches a `NullHandler` to the
+  `eval_toolkit` root logger — library is silent by default,
+  matching the numpy / scikit-learn / requests convention. Each
+  module owns its logger: `_logger = logging.getLogger(__name__)`
+  resolves to `eval_toolkit.harness` / `eval_toolkit.leakage` /
+  `eval_toolkit.bootstrap` / `eval_toolkit.loaders` — mirroring
+  the import path so consumers can filter granularly. New DEBUG
+  emissions at: leakage check completions
+  (`run_leakage_checks`), bootstrap_ci run parameters,
+  DataFrameLoader split construction. `harness.py` retains its
+  existing INFO-level slice-transition emissions. Log-level
+  conventions documented in `CONTRIBUTING.md`. Tests at
+  `tests/test_logging.py` (7 tests) verify NullHandler attachment,
+  per-module logger resolvability, DEBUG emission on the touched
+  code paths, and silent-by-default behavior (no handlers leak
+  output without consumer config).
+
 - Tier β #3 (deprecation infrastructure, from v0.29.0 audit): per
   Q2=A, string-deadline `@deprecated` decorator at
   `src/eval_toolkit/_deprecated.py`. Signature:

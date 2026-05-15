@@ -11,10 +11,18 @@ eagerly import optional-heavy modules such as plotting, loaders, or harnesses.
 
 from __future__ import annotations
 
+import logging as _logging
 from importlib import import_module
 from typing import Any
 
 from eval_toolkit._version import __version__
+
+# Library-friendly logging discipline (per v0.29.0 plan Q4=A): attach a
+# NullHandler to the package root so eval_toolkit is silent by default.
+# Consumers configure handlers explicitly; per-module loggers
+# (`logging.getLogger(__name__)`) inherit through this NullHandler.
+# Matches numpy / scikit-learn / requests convention.
+_logging.getLogger("eval_toolkit").addHandler(_logging.NullHandler())
 
 _EXPORTS: dict[str, str] = {
     "CsvPredictionReader": "eval_toolkit.analysis",

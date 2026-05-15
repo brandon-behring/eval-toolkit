@@ -29,6 +29,7 @@ References
 from __future__ import annotations
 
 import glob as _glob
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +37,8 @@ from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 from eval_toolkit.harness import EvalSlice
 from eval_toolkit.provenance import file_sha256
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -152,6 +155,11 @@ class DataFrameLoader:
                 label_col=self.label_col,
                 strata_col=self.strata_col,
             )
+        _logger.debug(
+            "DataFrameLoader.load_splits: %d splits constructed (%s)",
+            len(out),
+            ", ".join(f"{k}={len(v.df)}" for k, v in out.items()),
+        )
         return out
 
     def describe(self) -> dict[str, object]:
