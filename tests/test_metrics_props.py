@@ -13,6 +13,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from eval_toolkit.metrics import (
+    brier_score,
     expected_calibration_error,
     metrics_at_threshold,
     pr_auc,
@@ -78,6 +79,43 @@ def test_ece_bounded(y: np.ndarray, s: np.ndarray, n_bins: int) -> None:
     """0 ≤ ECE ≤ 1 always."""
     ece = expected_calibration_error(y, s, n_bins=n_bins)
     assert 0.0 <= ece <= 1.0
+
+
+@pytest.mark.property
+@given(
+    y=_balanced_binary_array(80),
+    s=_score_array(80),
+)
+@settings(deadline=None, max_examples=30, suppress_health_check=[HealthCheck.filter_too_much])
+def test_brier_score_in_unit_interval(y: np.ndarray, s: np.ndarray) -> None:
+    """0 ≤ brier_score ≤ 1 always.
+
+    Brier score is mean squared error between calibrated probabilities and
+    binary labels: BS = mean((p - y)^2). Since p ∈ [0, 1] and y ∈ {0, 1},
+    each (p - y)^2 ∈ [0, 1], so the mean is also in [0, 1]. 0 is perfect;
+    0.25 is the constant-prevalence baseline; 1 is maximally wrong.
+    """
+    score = brier_score(y, s)
+    assert 0.0 <= score <= 1.0
+
+
+@pytest.mark.property
+@given(
+    y=_balanced_binary_array(80),
+    s=_score_array(80),
+)
+@settings(deadline=None, max_examples=30, suppress_health_check=[HealthCheck.filter_too_much])
+def test_brier_score_inversion_symmetry(y: np.ndarray, s: np.ndarray) -> None:
+    """brier_score(1 - y, 1 - s) == brier_score(y, s).
+
+    Brier is invariant under joint label/score flipping because the squared
+    error term (p - y)^2 == ((1 - p) - (1 - y))^2. This catches any
+    asymmetric drift in implementation (e.g., a "positive class is special"
+    bug).
+    """
+    flipped = brier_score(1 - y, 1.0 - s)
+    forward = brier_score(y, s)
+    assert flipped == pytest.approx(forward, abs=1e-12)
 
 
 @pytest.mark.property

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Internal
+
+- Test coverage: added end-to-end pipeline tests
+  (`tests/test_pipeline_e2e.py`) that exercise loader → `evaluate` →
+  `write_run_result` → JSON schema validation for `DataFrameLoader` and
+  `SingleSliceLoader` (incl. paired-diffs path). Extended
+  `tests/test_metrics_props.py` with Brier-score bounds + label/score
+  inversion symmetry properties. Added bootstrap CI golden tests
+  (`tests/test_bootstrap_golden.py`, fixture at
+  `tests/golden/bootstrap_ci/cases.json`) pinning BCa/percentile output
+  on 6 canonical stress points (balanced, imbalanced 5%, small-n=10,
+  tied scores) to ±1e-9. These guard against silent numerical drift
+  from scipy/numpy version bumps and contract drift between the loader,
+  harness, and artifacts layers — the bug class the 0.27.2 base-install
+  fix exposed. Expanded the `golden` pytest marker doc to reflect its
+  broader applicability.
+
 ## [0.27.2] — 2026-05-15 — fix base-install pandas import
 
 Base install of `eval-toolkit` (no extras) was broken in 0.27.1: every

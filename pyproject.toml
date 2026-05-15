@@ -146,7 +146,7 @@ markers = [
     "unit: Sklearn-reference and analytical correctness tests",
     "property: Hypothesis property-based invariant tests",
     "smoke: End-to-end smoke tests",
-    "golden: Snapshot tests for deterministic outputs (docs.py)",
+    "golden: Snapshot tests for deterministic outputs (docs renderer, bootstrap CI numerical pins, public API surface).",
     "slow: Tests > 2s (bootstrap-t studentized, multi-seed K-fold). Opt out with `pytest -m 'not slow'`.",
 ]
 
