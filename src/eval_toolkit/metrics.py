@@ -1611,9 +1611,13 @@ def headline_metrics(
     else:
         out["pr_auc"] = pr_auc(y_true, y_score)
         out["roc_auc"] = roc_auc(y_true, y_score)
-    # Late import: thresholds.py imports ThresholdResult / metrics_at_threshold
-    # from this module, so module-level imports would be circular.
-    from eval_toolkit.thresholds import MaxF1Selector, TargetRecallSelector
+    # Conditional in-function import (lives in `headline_metrics`).
+    # thresholds.py imports ThresholdResult + metrics_at_threshold from
+    # THIS module at top-level; module-level import here would create a
+    # genuine cycle. Late import is the canonical Python idiom for this
+    # case. Don't "fix" by moving to module level — see v0.30.0
+    # refactor #7 notes.
+    from eval_toolkit.thresholds import MaxF1Selector, TargetRecallSelector  # noqa: PLC0415
 
     operating_points: dict[str, Mapping[str, object]] = {}
     selectors_for_headline: list[ThresholdSelector] = [

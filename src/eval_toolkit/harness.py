@@ -740,8 +740,13 @@ def evaluate(
 
     # Run leakage checks before any scoring (per Q2 decision).
     if leakage_checks:
-        # Late import to avoid circular dependency: leakage.py imports EvalSlice.
-        from eval_toolkit.leakage import run_leakage_checks
+        # Conditional in-function import — NOT a circular-dep workaround
+        # (well, *also* avoids the EvalSlice cycle with leakage.py, but
+        # primarily this is gated on `leakage_checks` being non-empty).
+        # Keeps `import eval_toolkit.harness` snappy when leakage isn't
+        # used. Don't "fix" by moving to module level — see
+        # docs/internals/mutmut_audit.md / v0.30.0 refactor #7 notes.
+        from eval_toolkit.leakage import run_leakage_checks  # noqa: PLC0415
 
         slices_dict = {s.name: s for s in slices}
         report = run_leakage_checks(list(leakage_checks), slices_dict)
