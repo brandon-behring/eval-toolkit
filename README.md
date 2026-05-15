@@ -5,6 +5,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/eval-toolkit.svg)](https://pypi.org/project/eval-toolkit/)
 [![Python ≥3.13](https://img.shields.io/badge/python-%E2%89%A53.13-blue.svg)](https://pypi.org/project/eval-toolkit/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/brandon-behring/eval-toolkit/main?labpath=docs%2Fexamples%2F)
 
 A **methodology-aware evaluation harness for binary classification**:
 metrics, bootstrap CIs, calibration, leakage detection, splitting,

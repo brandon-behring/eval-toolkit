@@ -1,0 +1,19 @@
+name: eval-toolkit-binder
+# Conda environment pinned for MyBinder reproducibility.
+# Built on each repo HEAD via mybinder.org; users get a notebook
+# server with eval-toolkit + all deps pre-installed for the
+# docs/examples/ walkthroughs.
+#
+# Python pin matches eval-toolkit's `requires-python = ">=3.13"`
+# from pyproject.toml. Updating that floor requires updating here.
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.13
+  - pip
+  - pip:
+      - "eval-toolkit[all]"
+      - "jupyterlab>=4.0"
+      - "ipywidgets>=8.0"

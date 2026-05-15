@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Tier γ #3 (Binder integration, from v0.29.0 audit): added
+  `binder/environment.yml` pinning Python 3.13 + `eval-toolkit[all]`
+  + JupyterLab so MyBinder can build a one-click "try it in your
+  browser" environment with all examples pre-installed. Binder
+  badge in README links to `docs/examples/` as the labpath. Empty
+  `binder/postBuild` reserved for future setup steps. No
+  ongoing maintenance burden — Binder builds on-demand from the
+  repo HEAD.
+
 - Tier γ #2 (What's New page, from v0.29.0 audit): added
   `docs/whats-new.md` — a more-digestible CHANGELOG-derived
   landing covering the v0.27.1 through v0.29.0 progression. Each
