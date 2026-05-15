@@ -61,19 +61,8 @@ jobs:
             src/eval_toolkit/seeds.py \
             src/eval_toolkit/docs.py
 
-      - name: Validate JSON Schemas (jsonschema)
-        run: |
-          uv run python -c "
-          import json
-          from pathlib import Path
-          from jsonschema import Draft202012Validator
-          import eval_toolkit
-          schemas_dir = Path(eval_toolkit.__file__).parent / 'schemas'
-          for schema_file in sorted(schemas_dir.glob('*.json')):
-              schema = json.loads(schema_file.read_text())
-              Draft202012Validator(schema)  # constructor validates against meta-schema
-              print(f'  {schema_file.name}: OK')
-          "
+      - name: Validate JSON Schemas (Draft 2020-12 meta-validation)
+        run: uv run eval-toolkit schemas check
 
       - name: Visual regression (pytest-mpl)
         if: matrix.os != 'windows-latest'

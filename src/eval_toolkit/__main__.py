@@ -3,13 +3,16 @@
 Subcommands:
   schemas list                       List bundled JSON schema names.
   schemas show <name>                Pretty-print a single schema.
+  schemas check                      Meta-validate every bundled schema against
+                                     Draft 2020-12. Used by CI to assert
+                                     schema integrity as a package invariant.
   validate <file> <schema-name>      Validate a JSON file against a bundled schema
                                      (requires [validation] extra).
 
 Exit codes:
   0 — ok
-  1 — validation failed
-  2 — bad arg (file or schema not found)
+  1 — validation failed (payload or schema meta-validation)
+  2 — bad arg (file or schema not found; empty schemas directory)
   3 — missing optional dependency (jsonschema for validate)
 """
 
@@ -48,9 +51,44 @@ def _cmd_schemas_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_schemas_check(_args: argparse.Namespace) -> int:
+    """Meta-validate every bundled schema against Draft 2020-12.
+
+    Exits non-zero on empty schemas directory, malformed JSON, or
+    schema-meta-validation failure. ``jsonschema`` is a hard dep
+    (see ``pyproject.toml``), so no optional-extra degrade path needed.
+    """
+    from jsonschema import (  # type: ignore[import-untyped]  # noqa: PLC0415
+        Draft202012Validator,
+    )
+    from jsonschema.exceptions import (  # type: ignore[import-untyped]  # noqa: PLC0415
+        SchemaError,
+    )
+
+    schemas_dir = _schemas_dir()
+    files = sorted(schemas_dir.glob("*.json"))
+    if not files:
+        print(f"ERROR: no schemas found in {schemas_dir}", file=sys.stderr)
+        return 2
+    failures: list[str] = []
+    for f in files:
+        try:
+            schema = json.loads(f.read_text())
+            Draft202012Validator.check_schema(schema)
+            print(f"  {f.name}: OK")
+        except (json.JSONDecodeError, SchemaError) as exc:
+            failures.append(f"{f.name}: {exc}")
+    if failures:
+        print("\nSchema validation failures:", file=sys.stderr)
+        for line in failures:
+            print(f"  {line}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _cmd_validate(args: argparse.Namespace) -> int:
     try:
-        import jsonschema  # type: ignore[import-untyped]  # noqa: F401
+        import jsonschema  # noqa: F401
     except ImportError:
         print(
             "validate requires the [validation] extra: " "pip install 'eval-toolkit[validation]'",
@@ -100,6 +138,10 @@ def main(argv: list[str] | None = None) -> int:
     schemas_show = schemas_sub.add_parser("show", help="pretty-print a single schema")
     schemas_show.add_argument("name", help="schema name (e.g., 'results.v1')")
     schemas_show.set_defaults(func=_cmd_schemas_show)
+    schemas_check = schemas_sub.add_parser(
+        "check", help="meta-validate every bundled schema against Draft 2020-12"
+    )
+    schemas_check.set_defaults(func=_cmd_schemas_check)
 
     validate = sub.add_parser("validate", help="validate a JSON file against a bundled schema")
     validate.add_argument("file", help="path to JSON file to validate")

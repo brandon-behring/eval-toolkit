@@ -1,10 +1,10 @@
 """Tests for the ``eval-toolkit`` CLI (``python -m eval_toolkit ...``).
 
-Covers all three subcommands (``schemas list``, ``schemas show``,
-``validate``) plus the missing-optional-dependency degrade path for
-``validate``. Mix of subprocess-based smoke tests (for the
-end-to-end happy paths) and in-process ``main([...])`` calls (for
-finer-grained error-mocking).
+Covers all four subcommands (``schemas list``, ``schemas show``,
+``schemas check``, ``validate``) plus the missing-optional-dependency
+degrade path for ``validate``. Mix of subprocess-based smoke tests
+(for end-to-end happy paths) and in-process ``main([...])`` calls
+(for finer-grained error-mocking).
 """
 
 from __future__ import annotations
@@ -82,6 +82,64 @@ def test_schemas_without_subcommand_prints_help_and_exits_nonzero() -> None:
     assert result.returncode != 0
     # argparse writes 'required' / 'invalid' messages to stderr.
     assert result.stderr  # non-empty
+
+
+# ---------------------------------------------------------------------------
+# schemas check
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_schemas_check_bundled_pass() -> None:
+    """All bundled schemas meta-validate against Draft 2020-12."""
+    result = _run_cli("schemas", "check")
+    assert result.returncode == 0
+    # One ``  <name>.json: OK`` line per bundled schema.
+    assert "results.v1.json: OK" in result.stdout
+    assert "manifest.v1.json: OK" in result.stdout
+
+
+@pytest.mark.unit
+def test_main_in_process_schemas_check_happy_path(capsys) -> None:
+    rc = main(["schemas", "check"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "results.v1.json: OK" in captured.out
+
+
+@pytest.mark.unit
+def test_schemas_check_empty_directory_exits_2(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+) -> None:
+    """Empty schemas directory is a sanity-failure (e.g., accidental deletion)."""
+    from eval_toolkit import __main__ as cli
+
+    monkeypatch.setattr(cli, "_schemas_dir", lambda: tmp_path)
+    rc = main(["schemas", "check"])
+    assert rc == 2
+    assert "no schemas found" in capsys.readouterr().err
+
+
+@pytest.mark.unit
+def test_schemas_check_malformed_schema_exits_1(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
+) -> None:
+    """A bundled schema that fails Draft 2020-12 meta-validation exits 1."""
+    from eval_toolkit import __main__ as cli
+
+    bad = tmp_path / "broken.v1.json"
+    # ``type: "notARealType"`` is rejected by the Draft 2020-12 meta-schema.
+    bad.write_text(
+        json.dumps(
+            {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "notARealType"}
+        )
+    )
+    monkeypatch.setattr(cli, "_schemas_dir", lambda: tmp_path)
+    rc = main(["schemas", "check"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "Schema validation failures" in err
+    assert "broken.v1.json" in err
 
 
 # ---------------------------------------------------------------------------
