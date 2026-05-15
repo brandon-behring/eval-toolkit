@@ -52,6 +52,40 @@ __all__ = [
 ]
 
 
+def _check_required_columns(
+    df: pd.DataFrame,
+    required_cols: tuple[str, ...] | list[str],
+    *,
+    context: str,
+) -> None:
+    """Raise ``KeyError`` if any required column is missing from ``df``.
+
+    Centralizes the column-validation pattern used by every loader's
+    ``__post_init__`` / ``load_splits`` (v0.30.0 refactor #2 — DRY).
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The DataFrame to validate.
+    required_cols : tuple or list of str
+        Column names that must be present.
+    context : str
+        Caller-supplied prefix for the error message (e.g.,
+        ``"DataFrameLoader"`` or ``"ParquetGlobLoader: split 'train'"``).
+        Identifies *which* loader / split is missing the column.
+
+    Raises
+    ------
+    KeyError
+        On the first missing column. Error message includes the
+        missing column name and the available columns list.
+    """
+    available = list(df.columns)
+    for col in required_cols:
+        if col not in available:
+            raise KeyError(f"{context}: missing column {col!r}; available: {available}")
+
+
 @runtime_checkable
 class DatasetLoader(Protocol):
     """Yields one or more :class:`EvalSlice` keyed by split name.
@@ -130,12 +164,11 @@ class DataFrameLoader:
 
     def __post_init__(self) -> None:
         """Validate the dataframe has the columns we'll read."""
-        for col in (self.split_col, self.feature_col, self.label_col):
-            if col not in self.df.columns:
-                raise KeyError(
-                    f"DataFrameLoader: missing column {col!r}; available: "
-                    f"{list(self.df.columns)}"
-                )
+        _check_required_columns(
+            self.df,
+            (self.split_col, self.feature_col, self.label_col),
+            context="DataFrameLoader",
+        )
         if self.strata_col is not None and self.strata_col not in self.df.columns:
             raise KeyError(
                 f"DataFrameLoader: missing strata column {self.strata_col!r}; "
@@ -285,12 +318,11 @@ class ParquetGlobLoader:
         for split_name, files in files_by_split.items():
             parts = [pd.read_parquet(p) for p in files]
             df = pd.concat(parts, axis=0, ignore_index=True)
-            for col in (self.feature_col, self.label_col):
-                if col not in df.columns:
-                    raise KeyError(
-                        f"ParquetGlobLoader: split {split_name!r}: missing column "
-                        f"{col!r}; available: {list(df.columns)}"
-                    )
+            _check_required_columns(
+                df,
+                (self.feature_col, self.label_col),
+                context=f"ParquetGlobLoader: split {split_name!r}",
+            )
             out[split_name] = EvalSlice(
                 name=split_name,
                 df=df,
@@ -399,12 +431,11 @@ class HFDatasetsLoader:
         for split_name in ds_splits:
             sub = ds[split_name]
             df = sub.to_pandas()
-            for col in (self.feature_col, self.label_col):
-                if col not in df.columns:
-                    raise KeyError(
-                        f"HFDatasetsLoader: split {split_name!r}: missing column "
-                        f"{col!r}; available: {list(df.columns)}"
-                    )
+            _check_required_columns(
+                df,
+                (self.feature_col, self.label_col),
+                context=f"HFDatasetsLoader: split {split_name!r}",
+            )
             out[split_name] = EvalSlice(
                 name=split_name,
                 df=df,
