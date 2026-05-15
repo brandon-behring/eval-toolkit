@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.1] — 2026-05-15 — security-patch (CodeQL + pip-audit)
+
+Tier α of the post-v0.28.0 best-practice gap audit. Pure CI/security
+infrastructure additions; zero source-code or behavior changes.
+
+### Added
+
+- `.github/workflows/codeql.yml`: GitHub's CodeQL static analyzer
+  on push/PR/weekly cron (Sundays 04:00 UTC). Uses the
+  `security-extended` query suite. Findings populate the repo's
+  Security → Code scanning tab.
+- pip-audit step in the existing `test-base-install` CI job:
+  scans the runtime-only venv (`numpy` / `scipy` / `scikit-learn` /
+  `jsonschema`) for known CVEs on every PR. Fails CI on any finding.
+  Dev-extras vulns (pytest, hypothesis, etc.) are not gated —
+  surfaced through Dependabot. Per the v0.28.1 plan Q3=C
+  (runtime-deps-only gate).
+
+### Internal
+
+- Audit discovered that `mypy --strict --no-implicit-reexport src/`
+  already passes with zero issues on the v0.28.0 source. The
+  planned Tier α #3 "chase remaining Any leaks" task was a no-op —
+  no commit shipped for it.
+- pip-audit on current runtime deps: zero known vulnerabilities.
+
 ## [0.28.0] — 2026-05-15 — temporalcv cross-pollination bundle
 
 Six-section bundle adopting the highest-value patterns from the
