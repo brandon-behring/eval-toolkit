@@ -12,8 +12,8 @@
 > domain-specific call.
 
 eval-toolkit ships subgroup *slicing* infrastructure
-([`EvalSlice`](../../src/eval_toolkit/harness.py),
-[`SliceAwareScorer`](../../src/eval_toolkit/harness.py)) but
+([`EvalSlice`](../api/harness.md),
+[`SliceAwareScorer`](../api/harness.md)) but
 *deliberately* does not implement fairness metrics — they're consumer-
 side concerns sensitive to domain semantics, and good libraries already
 exist (`fairlearn`, `aequitas`).
@@ -143,10 +143,10 @@ print(f"ECE per group: { {k: round(v, 4) for k, v in ece_per_group.items()} }")
 
 When subgroup analysis involves running many slices and the scorer is
 expensive (LLM judge, large transformer), the
-[`SliceAwareScorer`](../../src/eval_toolkit/harness.py) Protocol lets
+[`SliceAwareScorer`](../api/harness.md) Protocol lets
 the scorer skip slices it's not relevant to. The harness honors this
 automatically — see the existing
-[`evaluate(...)`](../../src/eval_toolkit/harness.py) machinery and the
+[`evaluate(...)`](../api/harness.md) machinery and the
 `should_score_slice` hook.
 
 Concrete example: an LLM-judge scorer that costs $0.001 per call might

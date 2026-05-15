@@ -12,7 +12,7 @@ consumer replay this evaluation without re-running inference?*
 > (see [getting-started](../getting-started.md)) and have either a CSV,
 > JSONL, or Parquet file of per-row predictions. The
 > [methodology curriculum](README.md) covers the metric kernels
-> ([metrics](metrics.md)), bootstrap CI shapes
+> ([API: metrics](../api/metrics.md)), bootstrap CI shapes
 > ([bootstrap.md](bootstrap.md)), and the broader claim model
 > ([claims.md](claims.md)). What's *not* covered elsewhere is the
 > data contract that ties them together: how the bytes of a

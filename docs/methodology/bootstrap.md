@@ -11,11 +11,11 @@
 
 This chapter covers the four primitives in
 `eval_toolkit.bootstrap`:
-[`bootstrap_ci`](../../src/eval_toolkit/bootstrap.py) (single
-condition), [`paired_bootstrap_diff`](../../src/eval_toolkit/bootstrap.py)
-(two-condition difference), [`paired_bootstrap_op_point_diff`](../../src/eval_toolkit/bootstrap.py)
+[`bootstrap_ci`](../api/bootstrap.md) (single
+condition), [`paired_bootstrap_diff`](../api/bootstrap.md)
+(two-condition difference), [`paired_bootstrap_op_point_diff`](../api/bootstrap.md)
 (two-level: refit threshold per resample), and
-[`cv_clt_ci`](../../src/eval_toolkit/bootstrap.py) (K-fold CV-CI). For
+[`cv_clt_ci`](../api/bootstrap.md) (K-fold CV-CI). For
 a higher-level overview of model comparison see
 [comparison.md](comparison.md); this chapter goes deeper on the
 resampling theory.
@@ -98,7 +98,7 @@ informative score pairs.
 When the metric is *operating-point-dependent* (F1, precision-at-recall)
 and the deployment refits the threshold per data batch, the
 single-level bootstrap underestimates uncertainty. The two-level
-variant ([`paired_bootstrap_op_point_diff`](../../src/eval_toolkit/bootstrap.py))
+variant ([`paired_bootstrap_op_point_diff`](../api/bootstrap.md))
 resamples a *validation* slice, refits the threshold on that
 resample, then computes the metric on the *test* resample.
 
@@ -126,7 +126,7 @@ help.
 
 ## CV-CI: K-fold bootstrap {#cv-ci}
 
-[`cv_clt_ci`](../../src/eval_toolkit/bootstrap.py) computes a
+[`cv_clt_ci`](../api/bootstrap.md) computes a
 CLT-corrected confidence interval over per-fold metric values. Per-fold
 metrics are *not* independent — they share training data, so naive
 Student's-t CIs over fold metrics are anti-conservative. The

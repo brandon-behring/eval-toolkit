@@ -35,7 +35,7 @@ with replacement, computes the metric per resample, and reports a
 quantile-based interval over the resampled distribution.
 
 eval-toolkit's
-[`bootstrap_ci`](../../src/eval_toolkit/bootstrap.py) supports three
+[`bootstrap_ci`](../api/bootstrap.md) supports three
 methods:
 
 - **BCa** (bias-corrected, accelerated) — the default. Adjusts the
@@ -67,7 +67,7 @@ because the resampling noise cancels — the same row that's hard for A
 is also hard for B. Use paired bootstrap to exploit this.
 
 eval-toolkit's
-[`paired_bootstrap_diff`](../../src/eval_toolkit/bootstrap.py) shares
+[`paired_bootstrap_diff`](../api/bootstrap.md) shares
 resample indices across both scorers — the same rows enter each
 resample for both A and B.
 
@@ -92,7 +92,7 @@ chosen confidence level. When it does, you don't.
 ## ECE differences {#ece-differences}
 
 For ECE differences, use
-[`paired_bootstrap_ece_diff`](../../src/eval_toolkit/bootstrap.py)
+[`paired_bootstrap_ece_diff`](../api/bootstrap.md)
 which threads `n_bins` through the metric correctly. ECE is a binned
 estimator, so the resample's bin assignments need to match the
 condition's bin definitions:
@@ -142,9 +142,9 @@ won't help.
 ## CV-CI: confidence intervals from K-fold {#cv-ci}
 
 For K-fold CV results, use
-[`cv_clt_ci`](../../src/eval_toolkit/bootstrap.py): a CLT-corrected
+[`cv_clt_ci`](../api/bootstrap.md): a CLT-corrected
 confidence interval over per-fold metric values. This is what
-[`evaluate_folded`](../../src/eval_toolkit/harness.py) auto-computes
+[`evaluate_folded`](../api/harness.md) auto-computes
 and stores in `RunResult.fold_summary`.
 
 ```python

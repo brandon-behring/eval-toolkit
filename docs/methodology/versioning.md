@@ -8,7 +8,7 @@
 > `lm-evaluation-harness` solved this by stamping every task with a
 > `VERSION` field, surfaced in every output. eval-toolkit adopts the
 > same pattern via the
-> [`Versioned`](../../src/eval_toolkit/leakage.py) opt-in Protocol.
+> [`Versioned`](../api/leakage.md) opt-in Protocol.
 
 This chapter covers when to expose a `version` attribute on your
 Tier-2 implementations (Scorer, LeakageCheck, Splitter,
@@ -25,7 +25,7 @@ import tempfile
 ## The Versioned Protocol {#versioned-protocol}
 
 The toolkit ships
-[`Versioned`](../../src/eval_toolkit/leakage.py) as a one-attribute
+[`Versioned`](../api/leakage.md) as a one-attribute
 runtime-checkable Protocol:
 
 ```python
@@ -40,7 +40,7 @@ runtime-checkable Protocol:
 present, `build_manifest(versioned=...)` auto-collects it into
 `RunManifest.versioned_objects`; if absent, the object is silently
 skipped (per `_collect_versioned` in
-[`manifest.py`](../../src/eval_toolkit/manifest.py)).
+[`manifest.py`](../api/manifest.md)).
 
 ## Threading through to the manifest {#manifest-thread}
 
@@ -71,7 +71,7 @@ print(m.versioned_objects)  # {"my_scorer": "lr-tfidf-v1.2.0"}
 
 The mapping form gives you stable keys (recommended); the sequence
 form keys by `type(obj).__name__`. Per
-[manifest.py § _collect_versioned](../../src/eval_toolkit/manifest.py),
+[manifest.py § _collect_versioned](../api/manifest.md),
 both work.
 
 ## Choosing a version string {#version-string}
@@ -307,7 +307,7 @@ no filename change at all. This keeps consumer code simple: pin to
 
 - [`migration/v0.9.md`](../migration/v0.9.md) §5 for the v0.9
   schema additions.
-- [`CHANGELOG.md`](../../CHANGELOG.md) for the per-version record
+- [`CHANGELOG.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/CHANGELOG.md) for the per-version record
   of which schemas grew.
 
 ## Further reading

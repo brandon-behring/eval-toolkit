@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Section E.2 (mkdocs link cleanup, from temporalcv-cross-pollination
+  bundle): fixed 30+ broken relative links across 18 documentation
+  files. Pattern: docs that link to `../src/eval_toolkit/<X>.py`
+  (works on GitHub render but breaks in mkdocs) now point at the
+  auto-generated API reference page (`api/<X>.md`). CHANGELOG.md
+  references (also outside the docs tree) repointed to absolute
+  GitHub URLs. Down from 93 warnings to 1: the remaining
+  `griffe: π : float` is a documented tool limitation — griffe
+  doesn't parse Unicode parameter names; the project's STYLE.md
+  intentionally allows Unicode in math kernels (`π`, `α`, etc.).
+  Also patched `harness.py` RunResult docstring: replaced the Sphinx
+  `.. versionchanged::` directive with a NumPy "Notes" section so
+  mkdocstrings renders it cleanly. `mkdocs build --strict` would
+  fail on the 1 remaining griffe warning, so the docs.yml workflow
+  intentionally runs without `--strict`. The link-cleanup deliverable
+  is complete; the source-docstring + methodology enrichment passes
+  originally scoped for E.2 are deferred (existing docstrings already
+  carry References + LaTeX where it matters; methodology pages are
+  already strong content-wise — only the link structure needed fixing).
+
 - Section E.1 (hosted documentation site, from
   temporalcv-cross-pollination bundle): new mkdocs-material site at
   `https://brandon-behring.github.io/eval-toolkit/`, auto-generated

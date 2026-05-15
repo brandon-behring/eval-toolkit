@@ -18,8 +18,8 @@ into eval-toolkit's harness.
 >   [`SimilarityStrategy`](#similarity-strategy). Use these when you
 >   want the harness to orchestrate.
 > - **Tier 3 — reproducibility scaffolding.**
->   [`build_manifest`](../src/eval_toolkit/manifest.py),
->   [`set_global_seeds`](../src/eval_toolkit/seeds.py),
+>   [`build_manifest`](api/manifest.md),
+>   [`set_global_seeds`](api/seeds.md),
 >   `provenance.*`. Use these regardless of which tier you build at.
 
 ## Setup (used throughout)
@@ -50,7 +50,7 @@ orchestration, no manifest. Useful for ad-hoc analysis and notebooks.
 
 ## Implementing a `Scorer` {#scorer}
 
-The [`Scorer` Protocol](../src/eval_toolkit/harness.py) is anything
+The [`Scorer` Protocol](api/harness.md) is anything
 exposing `predict_proba(X) -> np.ndarray of P(positive)`.
 
 ### sklearn classifier
@@ -91,7 +91,7 @@ print(f"first 5 scores: {preds.round(3)}")
 ```
 
 Note the `version` attribute — implementing the
-[`Versioned`](../src/eval_toolkit/leakage.py) opt-in Protocol means
+[`Versioned`](api/leakage.md) opt-in Protocol means
 `build_manifest(versioned={...})` auto-captures it, so cross-version
 metric comparisons can be invalidated. See
 [`methodology/versioning.md`](methodology/versioning.md) for the full
@@ -100,7 +100,7 @@ lm-evaluation-harness pattern this mirrors).
 
 ### LLM-judge with cost control
 
-The [`SliceAwareScorer`](../src/eval_toolkit/harness.py) Protocol's
+The [`SliceAwareScorer`](api/harness.md) Protocol's
 `should_score_slice(name)` hook lets the harness skip slices the
 scorer doesn't need to score — critical for expensive LLM judges:
 
@@ -135,7 +135,7 @@ forward+softmax returns a numpy array.
 
 ## Implementing a `LeakageCheck` {#leakage-check}
 
-[`LeakageCheck`](../src/eval_toolkit/leakage.py) takes
+[`LeakageCheck`](api/leakage.md) takes
 `Mapping[str, EvalSlice]` and returns a `LeakageFinding`. The uniform
 input shape means within-split and cross-split checks share one
 contract.
@@ -190,7 +190,7 @@ with which problem.
 
 ## Implementing a `Splitter` {#splitter}
 
-[`Splitter`](../src/eval_toolkit/splits.py) yields fold-dicts ready for
+[`Splitter`](api/splits.md) yields fold-dicts ready for
 `evaluate(...)`. The simplest implementation wraps an existing sklearn
 splitter:
 
@@ -244,8 +244,8 @@ for i, fold in enumerate(spl.iter_folds(parent)):
 
 ## Implementing a `ThresholdSelector` {#threshold-selector}
 
-[`ThresholdSelector`](../src/eval_toolkit/thresholds.py) returns a
-[`ThresholdResult`](../src/eval_toolkit/metrics.py). A custom selector
+[`ThresholdSelector`](api/thresholds.md) returns a
+[`ThresholdResult`](api/metrics.md). A custom selector
 is one short class:
 
 ```python
@@ -283,7 +283,7 @@ When threshold-selection variance matters, pair with
 
 ## Implementing a `DatasetLoader` {#dataset-loader}
 
-[`DatasetLoader`](../src/eval_toolkit/loaders.py) returns
+[`DatasetLoader`](api/loaders.md) returns
 `dict[str, EvalSlice]` (HF `DatasetDict` shape) plus a Croissant-
 compatible `describe()`. Tensor-agnostic: torch users tokenize inside
 the `Scorer`, not the loader.
@@ -337,7 +337,7 @@ print(f"keys={list(splits.keys())}  describe.name={loader.describe()['name']}")
 ## Implementing a `SimilarityStrategy` {#similarity-strategy}
 
 This Protocol predates v0.7.0; see
-[`text_dedup.py`](../src/eval_toolkit/text_dedup.py)'s docstring and
+[`text_dedup.py`](api/text_dedup.md)'s docstring and
 the existing reference impls (TfidfCosineStrategy,
 ExactNormalizedHashStrategy, EmbeddingCosineStrategy,
 JaccardNgramStrategy, MinHashLSHStrategy). The shape:

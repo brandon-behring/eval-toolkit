@@ -11,7 +11,7 @@
 > never saw.
 
 This chapter covers when to use each [`Splitter`
-](../../src/eval_toolkit/splits.py) reference impl, when CV alone is
+](../api/splits.md) reference impl, when CV alone is
 insufficient, and how to compose splits with leakage checks.
 
 ## Setup
@@ -80,7 +80,7 @@ Keeps the positive/negative ratio stable across folds, which keeps PR-AUC
 estimates comparable across folds.
 
 **Primitive.**
-[`StratifiedKFoldSplitter`](../../src/eval_toolkit/splits.py) wraps
+[`StratifiedKFoldSplitter`](../api/splits.md) wraps
 `sklearn.model_selection.StratifiedKFold`.
 
 ```python
@@ -108,7 +108,7 @@ across paragraphs, same author, same source. Random K-fold leaks across
 groups; group-disjoint K-fold doesn't.
 
 **Primitive.**
-[`GroupKFoldSplitter`](../../src/eval_toolkit/splits.py) wraps
+[`GroupKFoldSplitter`](../api/splits.md) wraps
 `sklearn.model_selection.GroupKFold`. Pass `group_col=` (column name in
 the slice's dataframe) or `groups=` (numpy array at `iter_folds` call).
 
@@ -123,7 +123,7 @@ for fold in splitter.iter_folds(parent):
 print("group-disjoint K-fold OK")
 ```
 
-Pair with [`GroupLeakageCheck`](../../src/eval_toolkit/leakage.py) (see
+Pair with [`GroupLeakageCheck`](../api/leakage.md) (see
 [leakage.md §6](leakage.md#group-leakage)) to catch the case where the
 underlying dataset already has the same group ID in pre-existing splits.
 
@@ -135,7 +135,7 @@ CV procedure** — not just within a single fold. The pattern that
 ``prompt-injection-sdd`` hand-rolled (3-fold, 3 seeds, 9 runs total).
 
 **Primitive.**
-[`SourceDisjointKFoldSplitter`](../../src/eval_toolkit/splits.py)
+[`SourceDisjointKFoldSplitter`](../api/splits.md)
 generalizes the pattern. Distinct sources are sorted, shuffled with the
 seed, then round-robin assigned to K folds. Fold *i*'s test set = rows
 whose source falls in bucket *i*.
@@ -170,7 +170,7 @@ set. Random K-fold mixes time periods and lets the model interpolate
 across them; time-aware splits force the model to extrapolate.
 
 **Primitive.**
-[`TimeSeriesSplitter`](../../src/eval_toolkit/splits.py) wraps
+[`TimeSeriesSplitter`](../api/splits.md) wraps
 `sklearn.model_selection.TimeSeriesSplit`. Each fold's train set is
 everything ≤ a moving boundary; the test set is the next chunk after.
 
@@ -186,7 +186,7 @@ for i, fold in enumerate(splitter.iter_folds(parent)):
 ```
 
 Pair with
-[`TemporalLeakageCheck`](../../src/eval_toolkit/leakage.py) (see
+[`TemporalLeakageCheck`](../api/leakage.md) (see
 [leakage.md §7](leakage.md#temporal-leakage)) to verify the invariant
 end-to-end.
 
@@ -218,7 +218,7 @@ on validation-strategy leakage.
   CV (inner CV on the train fold for HP search, outer CV for reporting)
   or a separate validation slice carved off the train fold.
 - **Reporting K-fold mean without CI.** Use
-  [`cv_clt_ci`](../../src/eval_toolkit/bootstrap.py) (or call
+  [`cv_clt_ci`](../api/bootstrap.md) (or call
   `evaluate_folded(...)` which auto-computes it). A single mean number
   hides the cross-fold variance and is impossible to compare across
   papers.
@@ -232,8 +232,8 @@ on validation-strategy leakage.
 - **Splitting before deduplication.** If your dataset has duplicates and
   you split first, the duplicates might end up on opposite sides of the
   split — instant cross-split leakage. Run
-  [`ExactDuplicateCheck`](../../src/eval_toolkit/leakage.py) +
-  [`NearDuplicateCheck`](../../src/eval_toolkit/leakage.py) on the *full*
+  [`ExactDuplicateCheck`](../api/leakage.md) +
+  [`NearDuplicateCheck`](../api/leakage.md) on the *full*
   dataset before splitting.
 
 ## Further reading

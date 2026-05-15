@@ -185,9 +185,11 @@ class RunResult:
         JSON schema version. ``"v1"`` for v0.7.0+; downstream parsers gate
         on this.
 
-    .. versionchanged:: 0.7.0
-        Added ``by_fold``, ``fold_summary``, ``schema_version`` (additive,
-        defaults empty / ``"v1"`` — backward compatible).
+    Notes
+    -----
+    Changed in 0.7.0: added ``by_fold``, ``fold_summary``,
+    ``schema_version`` (additive, defaults empty / ``"v1"`` — backward
+    compatible).
     """
 
     run_id: str

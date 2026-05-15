@@ -1,7 +1,7 @@
 # Migration guides
 
 Per-version migration guides for breaking + behavior-changing
-upgrades. Use these alongside [`CHANGELOG.md`](../CHANGELOG.md) — the
+upgrades. Use these alongside [`CHANGELOG.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/CHANGELOG.md) — the
 changelog records *what* changed; these docs walk through *how* to
 update consumer code.
 

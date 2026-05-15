@@ -40,22 +40,22 @@ yourself citing in production-eval write-ups go first.
 - **Lipton, Z., Elkan, C., & Naryanaswamy, B.** *Optimal thresholding of
   classifiers to maximize F1 measure.* ECML PKDD 2014.
   [arXiv:1402.1892](https://arxiv.org/abs/1402.1892).
-  *Optimality proof for [`MaxF1Selector`](../../src/eval_toolkit/thresholds.py).*
+  *Optimality proof for [`MaxF1Selector`](../api/thresholds.md).*
 
 - **Elkan, C.** *The foundations of cost-sensitive learning.* IJCAI 2001.
   *Bayes-optimal threshold derivation used by
-  [`CostSensitiveSelector`](../../src/eval_toolkit/thresholds.py).*
+  [`CostSensitiveSelector`](../api/thresholds.md).*
 
 - **Youden, W. J.** *Index for rating diagnostic tests.* Cancer 3(1),
   1950. *Original Youden's J statistic
-  ([`YoudenJSelector`](../../src/eval_toolkit/thresholds.py)).*
+  ([`YoudenJSelector`](../api/thresholds.md)).*
 
 ## Splits & cross-validation
 
 - **Bates, S., Hastie, T., & Tibshirani, R.** *Cross-validation: what
   does it estimate and how well does it do it?* JASA 2024. *The CLT-
   corrected K-fold CI underlying
-  [`cv_clt_ci`](../../src/eval_toolkit/bootstrap.py).*
+  [`cv_clt_ci`](../api/bootstrap.md).*
 
 - **Hastie, T., Tibshirani, R., & Friedman, J.** *The Elements of
   Statistical Learning.* §7.10. *Cross-validation methodology canon.*
@@ -63,8 +63,8 @@ yourself citing in production-eval write-ups go first.
 - **Yan, X. et al.** *Hidden Leaks in Time Series Forecasting.* arXiv,
   2025. [arXiv:2512.06932](https://arxiv.org/html/2512.06932v1).
   *Validation-strategy leakage in time-series settings; relevant to
-  [`TimeSeriesSplitter`](../../src/eval_toolkit/splits.py) and
-  [`TemporalLeakageCheck`](../../src/eval_toolkit/leakage.py).*
+  [`TimeSeriesSplitter`](../api/splits.md) and
+  [`TemporalLeakageCheck`](../api/leakage.md).*
 
 - **Pellizzoni, S. et al.** *Don't push the button! Data leakage risks
   in ML and transfer learning.* Springer AI Review, 2025.
@@ -92,7 +92,7 @@ yourself citing in production-eval write-ups go first.
 - **Croissant: A Metadata Format for ML-Ready Datasets.** MLCommons,
   2024. [arXiv:2403.19546](https://arxiv.org/abs/2403.19546).
   *Croissant-compatible metadata in
-  [`DatasetLoader.describe()`](../../src/eval_toolkit/loaders.py).*
+  [`DatasetLoader.describe()`](../api/loaders.md).*
 
 - **Pineau, J. et al.** *Improving reproducibility in machine learning
   research.* JMLR 22, 2021. *Practical guide alongside the NeurIPS
@@ -110,7 +110,7 @@ yourself citing in production-eval write-ups go first.
   [arXiv:2505.04806](https://arxiv.org/html/2505.04806v1).
   *21.3 % naive-dedup detection vs 76.2 % attack-success-rate finding
   motivating
-  [`NormalizedFormLeakageCheck`](../../src/eval_toolkit/leakage.py).*
+  [`NormalizedFormLeakageCheck`](../api/leakage.md).*
 
 - **DataSentinel + PromptLocate.** [arXiv:2511.15759](https://arxiv.org/abs/2511.15759).
   *Strict-normalization contamination checks for prompt-injection
@@ -129,7 +129,7 @@ yourself citing in production-eval write-ups go first.
 - **EleutherAI lm-evaluation-harness.**
   [github.com/EleutherAI/lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness).
   *Source of the per-task `VERSION` field pattern adopted by
-  [`Versioned`](../../src/eval_toolkit/leakage.py).*
+  [`Versioned`](../api/leakage.md).*
 
 - **UK AISI Inspect AI.** [inspect.aisi.org.uk](https://inspect.aisi.org.uk/).
   *Reference architecture for safety-eval harness Scorer/Solver

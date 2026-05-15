@@ -144,7 +144,7 @@ class LoRATransformerScorer(TransformerScorer):
 LLM-judge and large-transformer scorers are expensive — typical
 production runs skip them on inexpensive subgroup slices and only run
 them on the headline `test` slice. Implement
-[`SliceAwareScorer`](../../src/eval_toolkit/harness.py)'s
+[`SliceAwareScorer`](../api/harness.md)'s
 `should_score_slice` hook:
 
 <!-- skip: next -->
@@ -163,7 +163,7 @@ class CostControlledTransformerScorer(TransformerScorer):
 ```
 
 The harness honors `should_score_slice` automatically — see
-[`evaluate(...)`](../../src/eval_toolkit/harness.py); skipped slices
+[`evaluate(...)`](../api/harness.md); skipped slices
 land in `RunResult.by_slice[name].by_scorer[scorer_name] =
 {"skipped": "..."}`.
 
@@ -208,7 +208,7 @@ introduces small numerical noise that bootstrap CIs absorb but bit-
 identity does not. Two implications:
 
 - **Calibrate at inference precision.** If you'll deploy in bf16, fit
-  [`fit_temperature`](../../src/eval_toolkit/calibration.py) on bf16
+  [`fit_temperature`](../api/calibration.md) on bf16
   logits, not fp32 logits cast to bf16.
 - **Don't compare ECE across precision levels.** A 0.001–0.005 ECE
   delta is well within fp16/bf16 noise on moderate-size eval sets.

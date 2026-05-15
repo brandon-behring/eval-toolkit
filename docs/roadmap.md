@@ -10,7 +10,7 @@ order may change as feedback comes in.
 
 ## Currently shipped (as of v0.8.0)
 
-See [`CHANGELOG.md`](../CHANGELOG.md) for the full release history.
+See [`CHANGELOG.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/CHANGELOG.md) for the full release history.
 The state-of-the-toolkit summary:
 
 - 5 Tier-2 Protocols (`Scorer`, `LeakageCheck`, `Splitter`,
@@ -152,7 +152,7 @@ These are valuable but **not** on the roadmap:
 
 ## See also
 
-- [`CHANGELOG.md`](../CHANGELOG.md) — release history.
+- [`CHANGELOG.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/CHANGELOG.md) — release history.
 - [`docs/MIGRATION.md`](MIGRATION.md) — version-to-version migration
   guides.
 - [`docs/methodology/reading_list.md`](methodology/reading_list.md) —

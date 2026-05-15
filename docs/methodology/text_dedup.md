@@ -10,7 +10,7 @@
 > spurious matches (false-positive that drops valid eval rows).
 
 This chapter covers
-[`SimilarityStrategy`](../../src/eval_toolkit/text_dedup.py) — the
+[`SimilarityStrategy`](../api/text_dedup.md) — the
 toolkit's pluggable similarity Protocol — and the five reference
 impls: when to use each, threshold tuning, and how dedup composes
 with [`LeakageCheck`](leakage.md).
@@ -134,7 +134,7 @@ The threshold is strategy-specific:
 
 ## How dedup composes with `LeakageCheck` {#composition}
 
-[`NearDuplicateCheck`](../../src/eval_toolkit/leakage.py) wraps
+[`NearDuplicateCheck`](../api/leakage.md) wraps
 `near_dedup` with a `SimilarityStrategy`-typed `strategy` parameter.
 Same for `CrossSplitLeakageCheck` wrapping `cross_dedup`. So the
 strategy-pluggability flows from `text_dedup` → `leakage` →
@@ -158,7 +158,7 @@ encoding-obfuscation attack class specifically.
 
 ## Cross-source dedup (train ↔ eval) {#cross-source}
 
-[`cross_dedup`](../../src/eval_toolkit/text_dedup.py) is the lower-
+[`cross_dedup`](../api/text_dedup.md) is the lower-
 level primitive: given two text lists (train, eval), returns the eval
 indices to *keep* (i.e., those NOT near-duplicate to any train text).
 [`CrossSplitLeakageCheck`](leakage.md#cross-split) wraps this for the

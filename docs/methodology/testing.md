@@ -145,7 +145,7 @@ fails loudly.
 The toolkit uses golden tests for:
 
 1. The anchor-based markdown rendering in
-   [`eval_toolkit.docs`](../../src/eval_toolkit/docs.py).
+   [`eval_toolkit.docs`](../api/docs.md).
 2. **JSON schema validation** of `results.json` /
    `results_full.json` / `manifest.json` outputs against the v1
    schemas in `src/eval_toolkit/schemas/` (see `tests/test_schemas.py`).

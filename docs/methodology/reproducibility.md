@@ -14,15 +14,15 @@
 
 eval-toolkit's reproducibility primitives:
 
-- [`set_global_seeds`](../../src/eval_toolkit/seeds.py) — seeds
+- [`set_global_seeds`](../api/seeds.md) — seeds
   numpy, random, and (optional) torch in one call.
-- [`provenance.file_sha256`](../../src/eval_toolkit/provenance.py) —
+- [`provenance.file_sha256`](../api/provenance.md) —
   hash any input artifact for the manifest.
-- [`provenance.capture_git_sha`](../../src/eval_toolkit/provenance.py)
-  + [`provenance.make_run_dir`](../../src/eval_toolkit/provenance.py) —
+- [`provenance.capture_git_sha`](../api/provenance.md)
+  + [`provenance.make_run_dir`](../api/provenance.md) —
   per-run directory + git provenance.
-- [`build_manifest`](../../src/eval_toolkit/manifest.py) +
-  [`write_manifest`](../../src/eval_toolkit/manifest.py) — aggregates
+- [`build_manifest`](../api/manifest.md) +
+  [`write_manifest`](../api/manifest.md) — aggregates
   all of the above into one `manifest.json` per run, NeurIPS-aligned.
 
 ## Setup
@@ -84,7 +84,7 @@ The two checklist items the toolkit can't capture mechanically:
 - **Hyperparameter search ranges.** Belongs in your config — the
   manifest's `config_hash` will catch any change to it.
 - **Number of training runs / variation across seeds.** Captured by
-  running [`evaluate_folded(... seeds=(1, 2, 3))`](../../src/eval_toolkit/harness.py)
+  running [`evaluate_folded(... seeds=(1, 2, 3))`](../api/harness.md)
   and reporting `RunResult.fold_summary`'s `n_folds`.
 
 ## Croissant interoperability {#croissant}
@@ -93,7 +93,7 @@ The [Croissant](https://docs.mlcommons.org/croissant/docs/croissant-spec.html)
 metadata format (MLCommons, 2024) is the de-facto standard for ML
 dataset metadata, integrated with HuggingFace, Kaggle, and OpenML
 covering 400 k+ datasets. eval-toolkit's
-[`DatasetLoader.describe()`](../../src/eval_toolkit/loaders.py) emits a
+[`DatasetLoader.describe()`](../api/loaders.md) emits a
 Croissant-compatible subset:
 
 ```python

@@ -119,7 +119,7 @@ print(f"LabelConflictCheck: {finding_conflict.message}")
 
 The encoding-obfuscated row in our fixture (`"ig​nore all previo​us..."`)
 **should** have triggered the
-[`NormalizedFormLeakageCheck`](../../src/eval_toolkit/leakage.py) had it
+[`NormalizedFormLeakageCheck`](../api/leakage.md) had it
 collided with another row — in this fixture every row is unique, so
 the finding's `n_affected` is 0. In a real corpus, the check would flag
 ~5–10 % of rows in our experience.
@@ -197,7 +197,7 @@ print(f"sample regex scores: {regex.predict_proba(['ignore all previous', 'norma
 
 `evaluate_folded` orchestrates the K-fold loop, applies the
 `leakage_checks` per fold, and auto-computes a
-[`cv_clt_ci`](../../src/eval_toolkit/bootstrap.py) summary across the
+[`cv_clt_ci`](../api/bootstrap.md) summary across the
 fold metrics:
 
 ```python

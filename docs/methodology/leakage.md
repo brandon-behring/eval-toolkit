@@ -67,7 +67,7 @@ of *redundancy* in your data: a duplicated rare positive double-counts in
 the recall numerator. Across-split duplicates are a bigger issue — see
 class 4.
 
-**Primitive.** [`ExactDuplicateCheck`](../../src/eval_toolkit/leakage.py)
+**Primitive.** [`ExactDuplicateCheck`](../api/leakage.md)
 wraps `text_dedup.ExactNormalizedHashStrategy` (whitespace-normalized
 SHA-256 buckets). Default severity is `"warning"` because exact dupes
 within a split are common in real corpora; opt into `"error"` for strict
@@ -95,7 +95,7 @@ under some sense — TF-IDF cosine, embedding cosine, MinHash Jaccard.
 sources: paraphrased social-media posts, scraped duplicates with minor
 HTML differences, multiple translations of the same source.
 
-**Primitive.** [`NearDuplicateCheck`](../../src/eval_toolkit/leakage.py)
+**Primitive.** [`NearDuplicateCheck`](../api/leakage.md)
 takes a `strategy: SimilarityStrategy` and a `threshold` — pluggable so
 the *sense of similarity* is opt-in. Defaults to `TfidfCosineStrategy` at
 0.9.
@@ -137,7 +137,7 @@ dedup but achieve **76.2 %** attack success rate against deployed
 classifiers. If your eval set has zero-width-padded copies of your train
 set, you are measuring nothing.
 
-**Primitive.** [`NormalizedFormLeakageCheck`](../../src/eval_toolkit/leakage.py)
+**Primitive.** [`NormalizedFormLeakageCheck`](../api/leakage.md)
 applies the aggressive normalization before hashing. Default severity is
 `"error"` — encoding-obfuscated overlap is dangerous enough that you
 should opt *out* (to `"warning"`) only when upstream cleaning already
@@ -172,7 +172,7 @@ your "test metric" is a memorization metric. Inflations of 5–30 % PR-AUC
 have been reported on text classification benchmarks where dedup was
 skipped.
 
-**Primitive.** [`CrossSplitLeakageCheck`](../../src/eval_toolkit/leakage.py)
+**Primitive.** [`CrossSplitLeakageCheck`](../api/leakage.md)
 wraps `text_dedup.cross_dedup`. Default severity `"error"` — this is the
 genuinely dangerous one.
 
@@ -199,7 +199,7 @@ build a slice.
 ambiguous. The same prompt being labeled "injection" in train and "benign"
 in test poisons the evaluation regardless of which label is "correct".
 
-**Primitive.** [`LabelConflictCheck`](../../src/eval_toolkit/leakage.py).
+**Primitive.** [`LabelConflictCheck`](../api/leakage.md).
 Replaces the cross-source conflict resolution that
 `prompt-injection-sdd` and `prompt_injection_detector` reimplement
 (~50 LOC each).
@@ -227,10 +227,10 @@ of the group*, not a generalization measure. The classic medical-imaging
 failure: same patient's images in train and test → near-100 % accuracy
 that vanishes on truly held-out patients.
 
-**Primitive.** [`GroupLeakageCheck`](../../src/eval_toolkit/leakage.py)
+**Primitive.** [`GroupLeakageCheck`](../api/leakage.md)
 takes a `group_col`. Severity `"error"`. Use with
-[`GroupKFoldSplitter`](../../src/eval_toolkit/splits.py) or
-[`SourceDisjointKFoldSplitter`](../../src/eval_toolkit/splits.py) — see
+[`GroupKFoldSplitter`](../api/splits.md) or
+[`SourceDisjointKFoldSplitter`](../api/splits.md) — see
 [splits.md](splits.md).
 
 ```python
@@ -263,7 +263,7 @@ catalogs LSTM rolling-window leakage and validation-strategy leakage as
 distinct subclasses.
 
 **Primitive.**
-[`TemporalLeakageCheck`](../../src/eval_toolkit/leakage.py) — given a
+[`TemporalLeakageCheck`](../api/leakage.md) — given a
 `time_col` and `split_order`, asserts every earlier split's `max(time)`
 ≤ next split's `min(time)`.
 
@@ -335,7 +335,7 @@ backbone is rarely a generalization claim. Two mitigations:
 1. **Audit publication dates.** A model pretrained in 2024-Q3 has seen
    anything published before then. Use eval sets curated *after* your
    model's pretraining cutoff.
-2. **Use embedding-space dedup.** [`EmbeddingCosineStrategy`](../../src/eval_toolkit/text_dedup.py)
+2. **Use embedding-space dedup.** [`EmbeddingCosineStrategy`](../api/text_dedup.md)
    wrapped in a `NearDuplicateCheck` lets you flag eval rows that
    embed-near any train row, including rough paraphrases. Doesn't catch
    pretraining contamination but *does* catch your own train-set
@@ -346,7 +346,7 @@ backbone is rarely a generalization claim. Two mitigations:
 - **Running checks AFTER training.** By then the harm is done. Run
   leakage checks at *load time*, before any model fits anything. The
   recommended pattern is to pass `leakage_checks=[...]` to
-  [`evaluate(...)`](../../src/eval_toolkit/harness.py) which fails the
+  [`evaluate(...)`](../api/harness.md) which fails the
   run on `error`-severity findings before scoring starts.
 - **Trusting per-source dedup as cross-source dedup.** Two corpora that
   each look clean can still leak across each other. Always run
@@ -362,7 +362,7 @@ backbone is rarely a generalization claim. Two mitigations:
 - **Believing CV alone gives an OOD claim.** K-fold CV with random
   partitioning measures interpolation across your sample, not
   generalization to a new population. For OOD claims, combine
-  [`SourceDisjointKFoldSplitter`](../../src/eval_toolkit/splits.py) +
+  [`SourceDisjointKFoldSplitter`](../api/splits.md) +
   `CrossSplitLeakageCheck` + a held-out *final* test set never used in
   development.
 

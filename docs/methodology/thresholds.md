@@ -11,7 +11,7 @@
 > the deployment will use a tuned operating point.
 
 This chapter covers the six [`ThresholdSelector`
-](../../src/eval_toolkit/thresholds.py) reference impls, the Bayes-
+](../api/thresholds.md) reference impls, the Bayes-
 optimal derivation, and the subtle question of when to refit the
 threshold per bootstrap resample.
 
@@ -33,7 +33,7 @@ s = np.clip(y * 0.6 + rng.normal(0, 0.25, 200), 0, 1)
 ## v0.7.0 BREAKING — `select_threshold` now takes a Selector instance {#migration}
 
 The v0.6 string form is **removed**. Every call site passes a
-[`ThresholdSelector`](../../src/eval_toolkit/thresholds.py) instance.
+[`ThresholdSelector`](../api/thresholds.md) instance.
 
 | v0.6 | v0.7 |
 |---|---|
@@ -174,12 +174,12 @@ threshold-dependent metric), should the threshold be fixed once on the
 full data, or refit on each bootstrap resample?
 
 **Fix once (single-level bootstrap).** Use
-[`bootstrap_ci`](../../src/eval_toolkit/bootstrap.py) wrapping a
+[`bootstrap_ci`](../api/bootstrap.md) wrapping a
 function that takes `(y_true, y_score)` and uses a pre-fit threshold.
 The CI captures uncertainty in the *metric at this fixed threshold*.
 
 **Refit per resample (two-level bootstrap).** Use
-[`paired_bootstrap_op_point_diff`](../../src/eval_toolkit/bootstrap.py)
+[`paired_bootstrap_op_point_diff`](../api/bootstrap.md)
 which re-runs the threshold selection on each resample, then computes
 the metric. The CI captures *both* the metric uncertainty and the
 threshold-selection uncertainty.
@@ -222,7 +222,7 @@ print(f"Δ F1: {diff.delta:.3f}  CI [{diff.ci_low:.3f}, {diff.ci_high:.3f}]")
 
 For OOD or diagnostic slices, the common pattern is to fit the
 threshold on a mixed-class validation slice and apply it elsewhere.
-Use [`operating_points.py`](../../src/eval_toolkit/operating_points.py)
+Use [`operating_points.py`](../api/operating_points.md)
 for this instead of hand-rolling post-processing. Mixed-class targets
 report `metrics_at_threshold`; all-positive targets report
 `recall@threshold`; all-negative targets report `fpr@threshold` and
@@ -255,7 +255,7 @@ claim-evidence framing.
   from a code base where `recall@p` (or `"recall_0.90"` in the v0.6
   string API) picked the *smallest* threshold meeting the recall floor
   — i.e., the *highest-recall* feasible point — eval-toolkit's
-  [`TargetRecallSelector(p)`](../../src/eval_toolkit/thresholds.py)
+  [`TargetRecallSelector(p)`](../api/thresholds.md)
   picks the *highest* threshold meeting the floor — i.e., the
   *most-precise* feasible point. Both are valid operating points; we
   standardize on the most-precise convention because it matches
