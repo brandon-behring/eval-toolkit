@@ -116,6 +116,12 @@ When the release that contains the deadline ships (e.g., `0.31.0`):
   not in `__all__` and not documented in `docs/api/`, they're not
   public. Treat as private.
 
+## Active deprecations
+
+| Symbol / artifact | Announced | Removal | Reason |
+|---|---|---|---|
+| `[validation]` optional-dependency extra | v0.30.1 | v0.33.0 | No-op since v0.16.0 (jsonschema moved to base deps). Extras cannot emit `DeprecationWarning` at import time, so the deprecation is documentation-only. `pip install eval-toolkit[validation]` will continue to resolve cleanly through v0.32.x and will be removed in v0.33.0. |
+
 ## See also
 
 - [`src/eval_toolkit/_deprecated.py`](../src/eval_toolkit/_deprecated.py) — implementation

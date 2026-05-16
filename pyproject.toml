@@ -50,9 +50,15 @@ plotting = ["matplotlib>=3.8", "pillow>=10.0"]
 property = ["hypothesis>=6.100"]
 yaml = ["pyyaml>=6.0"]
 parquet = ["pyarrow>=15.0"]
-# Retained as a transitive no-op so [eval-toolkit[validation]] / dev still
-# resolve cleanly; jsonschema is now in the base deps. Remove in v0.17.0
-# after a deprecation window if no downstream consumer complains.
+# DEPRECATED (announced v0.30.1, removal v0.33.0).
+#
+# Retained as a transitive no-op so `pip install eval-toolkit[validation]`
+# / dev still resolve cleanly. jsonschema moved to the base deps in
+# v0.16.0; this extra has been a no-op ever since. The 2-minor-version
+# window (v0.30.1 announce → v0.33.0 remove) matches the @deprecated
+# policy in docs/DEPRECATION.md. Extras can't trigger import-time
+# DeprecationWarnings, so the deprecation is documentation-only here +
+# in CHANGELOG ### Deprecated + docs/DEPRECATION.md.
 validation = []
 # v0.28.0 (Section E.1): docs site via mkdocs-material + mkdocstrings.
 # Per Q4=B in the temporalcv-cross-pollination plan; LaTeX via MathJax v3
