@@ -11,49 +11,82 @@ see [DEPRECATION.md](DEPRECATION.md). For ongoing contributor flow
 ## TL;DR — the happy-path checklist
 
 ```
-1. Edit src/eval_toolkit/_version.py → bump X.Y.Z
-2. Regen tests/golden/public_api/snapshot.json:
-   REGEN_PUBLIC_API_GOLDEN=1 uv run python -m pytest tests/test_public_api.py
-3. Add [X.Y.Z] entry to CHANGELOG.md (convert from [Unreleased])
-4. Commit: "release: vX.Y.Z — <short description>"
-5. Push to main; wait for CI green (CI + CodeQL + Deploy docs)
-6. Tag: git tag -a vX.Y.Z -m "vX.Y.Z — <short description>"
-7. Push tag: git push origin vX.Y.Z
-8. Watch publish.yml + docs.yml fire
-9. Smoke-test: pip install eval-toolkit==X.Y.Z in a clean Py3.13 venv
-10. Update memory: project_etk_on_pypi reflects the new version
+1. make release-prep VERSION=X.Y.Z   # bumps _version.py + regenerates
+                                     # public_api snapshot in one step,
+                                     # then prints the remaining steps
+2. Edit CHANGELOG.md: convert [Unreleased] → [X.Y.Z] header with date
+3. Commit: chore(release): vX.Y.Z — <short description>
+4. Push to main; wait for CI green (CI + CodeQL + Deploy docs)
+5. Tag: git tag -a vX.Y.Z -m "vX.Y.Z — <short description>"
+6. Push tag: git push origin vX.Y.Z
+7. Watch publish.yml + docs.yml fire
+8. Smoke-test: pip install eval-toolkit==X.Y.Z in a clean Py3.13 venv
+9. Update memory: project_etk_on_pypi reflects the new version
 ```
+
+**The `make release-prep` target (added v0.30.1)** automates steps 1 + 2
+of the prior flow as a single atomic action — it closes the public_api
+snapshot-drift gotcha that hit ~50% of v0.27.x–v0.30.0 releases. The
+target accepts PEP 440 versions (final + prerelease) and refuses
+malformed strings; see "Detailed runbook" §1 for the validation regex.
 
 ## Detailed runbook
 
 ### Pre-release
 
-#### 1. Version bump
-
-Edit `src/eval_toolkit/_version.py` — the **single source of truth**.
-`pyproject.toml` reads it dynamically via `[tool.hatch.version]`; do
-NOT edit pyproject's version (it's `dynamic = ["version"]`).
-
-#### 2. Public-API snapshot regen (load-bearing!)
+#### 1. Version bump + snapshot regen (one step via `make release-prep`)
 
 ```bash
-REGEN_PUBLIC_API_GOLDEN=1 uv run python -m pytest tests/test_public_api.py
+make release-prep VERSION=X.Y.Z
 ```
 
-The public-API drift-guard test (`tests/test_public_api.py`) pins
-`__version__` as one of the snapshot's value entries. **If you skip
-this step, CI will fail on the release commit with**:
+This single target performs both the historically-load-bearing steps:
+
+1. Validates `VERSION` against the PEP 440 regex
+   `^[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|a[0-9]+|b[0-9]+|\.dev[0-9]+)?$`.
+   Final, rcN, aN, bN, .devN are accepted; anything else exits 2.
+2. Rewrites `src/eval_toolkit/_version.py` with the new
+   `__version__`. (`pyproject.toml`'s version is `dynamic = ["version"]`
+   pointing at this file — do NOT edit pyproject's version directly.)
+3. Regenerates `tests/golden/public_api/snapshot.json` by running
+   `REGEN_PUBLIC_API_GOLDEN=1 pytest tests/test_public_api.py -q`.
+4. Prints the remaining manual steps (CHANGELOG edit, commit, tag).
+
+**Why this matters**: the public-API drift-guard test
+(`tests/test_public_api.py`) pins `__version__` as one of the
+snapshot's value entries. **If you skip the regen, CI will fail on the
+release commit with**:
 
 ```
 AssertionError: Public API entry drift (signatures/bases/docs/values):
     __version__.value: actual="'X.Y.Z'" expected="'A.B.C'"
 ```
 
-**Recovery:** regen the snapshot, amend the release commit (or push a
-follow-up `fix(release): regen public_api snapshot` commit).
-This bit us in v0.28.0 → fixed in `58e120a`.
+Forgetting the regen bit v0.28.0 / v0.28.1 / v0.29.0 / v0.30.0 — the
+exact failure mode the `release-prep` target now prevents. **Recovery
+(if you ever still hit it):** re-run `make release-prep VERSION=X.Y.Z`,
+amend the release commit (or push a follow-up
+`fix(release): regen public_api snapshot` commit).
 
-#### 3. CHANGELOG
+##### Manual fallback (no Make available)
+
+If for any reason you cannot run `make`:
+
+```bash
+# 1. Bump _version.py manually
+cat > src/eval_toolkit/_version.py <<'EOF'
+"""Single lightweight version source."""
+
+__all__ = ["__version__"]
+
+__version__ = "X.Y.Z"
+EOF
+
+# 2. Regen snapshot
+REGEN_PUBLIC_API_GOLDEN=1 uv run python -m pytest tests/test_public_api.py
+```
+
+#### 2. CHANGELOG
 
 Convert the `[Unreleased]` section to `## [X.Y.Z] — YYYY-MM-DD — <short>`.
 Add a brief summary paragraph and the section list. Use today's UTC
@@ -61,7 +94,7 @@ date for the `YYYY-MM-DD`.
 
 Keep `## [Unreleased]` as an empty placeholder above the new entry.
 
-#### 4. Commit
+#### 3. Commit
 
 Stage explicitly (never `git add .` — `.env.local` and personal scratch
 files must stay unstaged):
@@ -77,7 +110,7 @@ Push to main:
 git push origin main
 ```
 
-#### 5. Wait for CI green
+#### 4. Wait for CI green
 
 Three workflows fire on a push to main:
 
@@ -95,7 +128,7 @@ Or via the web UI: `https://github.com/brandon-behring/eval-toolkit/actions`.
 
 ### Release
 
-#### 6. Tag
+#### 5. Tag
 
 ```bash
 git tag -a vX.Y.Z -m "vX.Y.Z — <short description>
@@ -107,7 +140,7 @@ Use an **annotated tag** (`-a`), not a lightweight one. The publish
 workflow keys off `refs/tags/v*`; annotated tags carry the release
 notes that GitHub's Releases UI surfaces.
 
-#### 7. Push tag
+#### 6. Push tag
 
 ```bash
 git push origin vX.Y.Z
@@ -116,7 +149,7 @@ git push origin vX.Y.Z
 This triggers `publish.yml` (→ PyPI via Trusted Publishing OIDC) and
 the `Deploy docs` workflow re-fires with the new tag.
 
-#### 8. Watch the publish
+#### 7. Watch the publish
 
 ```bash
 gh run watch --workflow=publish.yml
@@ -128,7 +161,7 @@ SKIPPED (only fires on `*rcN` / `*aN` / `*bN` / `*devN` tags); the
 
 ### Post-release
 
-#### 9. Verify install
+#### 8. Verify install
 
 PyPI's simple-index has eventual-consistency caching — a fresh release
 can take **30-60 seconds** to appear in the index even after
@@ -150,7 +183,7 @@ print('version consistency: OK')
 "
 ```
 
-#### 10. Update memory
+#### 9. Update memory
 
 Update the `project_etk_on_pypi` memory file to reflect the new
 current PyPI version + note any new public API in the release.

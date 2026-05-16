@@ -1,4 +1,4 @@
-.PHONY: help install hooks lint format test test-fast test-unit test-property test-smoke test-doctest type ci coverage clean
+.PHONY: help install hooks lint format test test-fast test-unit test-property test-smoke test-doctest type ci coverage clean release-prep
 
 PYTHON := .venv/bin/python
 VENV := .venv
@@ -23,6 +23,7 @@ help:
 	@echo "  coverage      pytest with coverage report"
 	@echo "  ci            lint + test + coverage gate"
 	@echo "  clean         remove .venv, caches, build artifacts"
+	@echo "  release-prep  bump _version.py + regen public-api snapshot (VERSION=X.Y.Z)"
 
 install:
 	uv venv
@@ -87,3 +88,35 @@ clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	@echo "Cleaned"
+
+# release-prep VERSION=X.Y.Z — canonical "step 1" of the release flow.
+# Closes the public_api snapshot-drift gotcha that hit v0.28.0 / v0.28.1 /
+# v0.29.0 / v0.30.0 releases (forgetting to regen the snapshot after a
+# version bump). See docs/RELEASING.md for the full runbook.
+#
+# Accepts PEP 440 final + prerelease versions: 0.30.1, 0.31.0rc1,
+# 0.32.0a2, 0.33.0b1, 0.34.0.dev3.
+release-prep:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION is required. Usage: make release-prep VERSION=0.30.1"; \
+		exit 1; \
+	fi
+	@echo "$(VERSION)" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|a[0-9]+|b[0-9]+|\.dev[0-9]+)?$$' || { \
+		echo "Error: VERSION '$(VERSION)' does not match PEP 440 (X.Y.Z[rcN|aN|bN|.devN])"; \
+		exit 2; \
+	}
+	@echo '"""Single lightweight version source."""' >  src/eval_toolkit/_version.py
+	@echo ''                                          >> src/eval_toolkit/_version.py
+	@echo '__all__ = ["__version__"]'                 >> src/eval_toolkit/_version.py
+	@echo ''                                          >> src/eval_toolkit/_version.py
+	@echo '__version__ = "$(VERSION)"'                >> src/eval_toolkit/_version.py
+	@echo "[release-prep] wrote src/eval_toolkit/_version.py with __version__ = '$(VERSION)'"
+	REGEN_PUBLIC_API_GOLDEN=1 $(PYTHON) -m pytest tests/test_public_api.py -q
+	@echo ""
+	@echo "[release-prep] DONE. Next steps:"
+	@echo "  1. Edit CHANGELOG.md: convert [Unreleased] header to '## [$(VERSION)] — $$(date +%Y-%m-%d) — <theme>'"
+	@echo "  2. Review diff: git diff src/eval_toolkit/_version.py tests/golden/public_api/snapshot.json CHANGELOG.md"
+	@echo "  3. Commit:      git add src/eval_toolkit/_version.py tests/golden/public_api/snapshot.json CHANGELOG.md"
+	@echo "                  git commit -m 'chore(release): v$(VERSION) — <theme>'"
+	@echo "  4. Push:        git push origin main"
+	@echo "  5. After CI green: git tag -a v$(VERSION) -m 'v$(VERSION) — <theme>' && git push origin v$(VERSION)"
