@@ -43,3 +43,4 @@ coverage.xml
 
 # mkdocs build output (Section E.1 v0.28.0)
 /site/
+docs-preview/build/

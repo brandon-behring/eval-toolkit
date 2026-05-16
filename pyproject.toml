@@ -69,6 +69,20 @@ docs = [
     "mkdocstrings[python]>=0.24",
     "pymdown-extensions>=10.7",
 ]
+# v0.31.0 docs migration (Phase 1+2): Sphinx + pydata-sphinx-theme. Lives
+# alongside the [docs] mkdocs install until Phase 3 swaps the two and
+# this extra is renamed back to [docs]. See
+# ~/.claude/plans/what-do-we-need-synchronous-turtle.md for the locked
+# Q1-Q13 decisions driving this stack.
+docs-preview = [
+    "sphinx>=7.3",
+    "pydata-sphinx-theme>=0.16",
+    "myst-nb>=1.1",                  # MyST Markdown + Jupyter-style execution (Q9)
+    "jupyter-cache>=1.0",            # myst-nb execution cache backend (Q11)
+    "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.6",
+    "sphinx-autodoc-typehints>=2.0",
+]
 # `all` references the sub-extras directly (PEP 685 self-reference). This
 # avoids drift: adding a dep to e.g. `dataframe` no longer requires a
 # mirroring edit here.
