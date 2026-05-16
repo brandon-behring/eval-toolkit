@@ -1,4 +1,13 @@
-"""Tests for the v0.22.0 expanded evaluate_scorer_on_slice kwargs (C11 / F8.1)."""
+"""Tests for the expanded evaluate_scorer_on_slice metric-option kwargs.
+
+Covers precomputed_scores, attack_style, fpr_ladder, compute_mce,
+compute_brier, calibrator, and bootstrap_roc_auc — all the optional
+per-call metric switches introduced in v0.22.0.
+
+Renamed from test_harness_v22.py during the v0.30.1 hygiene split —
+feature-grouped instead of release-grouped naming. Every assertion
+preserved verbatim from the v22 file.
+"""
 
 from __future__ import annotations
 

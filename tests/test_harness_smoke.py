@@ -20,9 +20,11 @@ from eval_toolkit.harness import (
     write_run_result,
 )
 
-# StubScorer moved to tests/conftest.py (v0.30.0 refactor #4); import alias
-# preserves existing usage names in this file with minimal diff churn.
+# Scorer doubles moved to tests/conftest.py (v0.30.0 refactor #4); import
+# aliases preserve existing usage names with minimal diff churn.
+from tests.conftest import ErrorScorer as _BrokenScorer  # noqa: E402
 from tests.conftest import StubScorer as _StubScorer  # noqa: E402
+from tests.conftest import UniformScorer as _UniformScorer  # noqa: E402
 
 
 class _SliceAwareStub:
@@ -181,3 +183,53 @@ def test_scorer_protocol_runtime_check() -> None:
     """Any object with predict_proba is accepted by the Protocol."""
     scorer: Scorer = _StubScorer(np.array([0.1, 0.9]))
     assert hasattr(scorer, "predict_proba")
+
+
+# ---------------------------------------------------------------------------
+# on_scorer_error contract (raise / record paths)
+# Migrated from test_harness_v07.py during v0.30.1 hygiene split —
+# feature-grouped instead of release-grouped.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_on_scorer_error_raise_propagates(slice_with_data: EvalSlice) -> None:
+    with pytest.raises(RuntimeError, match="intentional failure"):
+        evaluate(
+            {"broken": _BrokenScorer()},
+            [slice_with_data],
+            run_id="r",
+            on_scorer_error="raise",
+        )
+
+
+@pytest.mark.unit
+def test_on_scorer_error_record_captures(slice_with_data: EvalSlice) -> None:
+    """on_scorer_error='record' captures error per (slice, scorer); run completes."""
+    result = evaluate(
+        {"broken": _BrokenScorer()},
+        [slice_with_data],
+        run_id="r",
+        on_scorer_error="record",
+    )
+    entry = result.by_slice["test"]["by_scorer"]["broken"]
+    assert entry["error"] == "intentional failure for tests"
+    assert entry["exc_type"] == "RuntimeError"
+    assert "traceback" in entry
+    assert entry["scores"] == []
+
+
+@pytest.mark.unit
+def test_on_scorer_error_record_does_not_break_other_scorers(
+    slice_with_data: EvalSlice,
+) -> None:
+    """A broken scorer should not poison the run for healthy scorers."""
+    result = evaluate(
+        {"broken": _BrokenScorer(), "healthy": _UniformScorer()},
+        [slice_with_data],
+        run_id="r",
+        on_scorer_error="record",
+    )
+    assert "error" in result.by_slice["test"]["by_scorer"]["broken"]
+    healthy = result.by_slice["test"]["by_scorer"]["healthy"]
+    assert isinstance(healthy.get("pr_auc"), float)

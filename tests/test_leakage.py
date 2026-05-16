@@ -508,3 +508,66 @@ def test_kapoor_l2_partial_via_label_conflict_check() -> None:
     finding_clean = LabelConflictCheck().validate(splits_clean)
     assert finding_clean.n_affected == 0
     assert finding_clean.evidence["conflicts"] == []
+
+
+# ---------------------------------------------------------------------------
+# Harness ⇄ leakage integration (record / skip / raise modes on evaluate())
+# Migrated from test_harness_v07.py during v0.30.1 hygiene split —
+# these tests exercise the harness/leakage seam end-to-end and belong
+# with the rest of the leakage suite.
+# ---------------------------------------------------------------------------
+
+from eval_toolkit.harness import evaluate  # noqa: E402
+
+# v0.30.0 refactor #4: shared scorer doubles centralized in conftest.
+from tests.conftest import UniformScorer as _UniformScorer  # noqa: E402
+
+
+@pytest.fixture
+def big_slice() -> EvalSlice:
+    """60 rows; balanced labels."""
+    df = pd.DataFrame({"text": [f"t{i}" for i in range(60)], "label": [i % 2 for i in range(60)]})
+    return EvalSlice(name="test", df=df)
+
+
+@pytest.mark.unit
+def test_leakage_checks_record_mode_captures_report(big_slice: EvalSlice) -> None:
+    result = evaluate(
+        {"u": _UniformScorer()},
+        [big_slice],
+        run_id="r",
+        leakage_checks=[NormalizedFormLeakageCheck()],
+        on_leakage="record",
+    )
+    assert "leakage_report" in result.config
+    assert isinstance(result.config["leakage_report"], dict)
+
+
+@pytest.mark.unit
+def test_leakage_checks_skip_mode_omits_report(big_slice: EvalSlice) -> None:
+    result = evaluate(
+        {"u": _UniformScorer()},
+        [big_slice],
+        run_id="r",
+        leakage_checks=[NormalizedFormLeakageCheck()],
+        on_leakage="skip",
+    )
+    # In skip mode, the report is run but not recorded.
+    assert "leakage_report" not in result.config
+
+
+@pytest.mark.unit
+def test_leakage_checks_raise_on_error_finding() -> None:
+    """on_leakage='raise' with a real conflict should fail the run."""
+    df = pd.DataFrame({"text": ["x", "y"], "label": [0, 1]})
+    df_test = pd.DataFrame({"text": ["x", "z"], "label": [1, 0]})  # label conflict on "x"
+    train = EvalSlice(name="train", df=df)
+    test = EvalSlice(name="test", df=df_test)
+    with pytest.raises(RuntimeError, match="Leakage checks produced"):
+        evaluate(
+            {"u": _UniformScorer()},
+            [train, test],
+            run_id="r",
+            leakage_checks=[LabelConflictCheck()],
+            on_leakage="raise",
+        )

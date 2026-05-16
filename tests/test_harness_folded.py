@@ -1,4 +1,13 @@
-"""Tests for the v0.7.0 harness additions: leakage_checks, on_scorer_error, evaluate_folded."""
+"""Tests for the v0.7.0 evaluate_folded orchestrator (k-fold/holdout eval).
+
+Covers the additive RunResult.by_fold + RunResult.fold_summary fields and
+every entry point into evaluate_folded (holdout, k-fold, multi-seed, and
+error paths).
+
+Extracted from the version-keyed test_harness_v07.py during the v0.30.1
+hygiene split — feature-grouped instead of release-grouped naming. Every
+assertion preserved verbatim from the v07 file.
+"""
 
 from __future__ import annotations
 
@@ -12,13 +21,9 @@ from eval_toolkit.harness import (
     evaluate,
     evaluate_folded,
 )
-from eval_toolkit.leakage import LabelConflictCheck, NormalizedFormLeakageCheck
 from eval_toolkit.splits import HoldoutSplitter, StratifiedKFoldSplitter
 
 # v0.30.0 refactor #4: shared scorer doubles moved to tests/conftest.py.
-# Imports below alias to the names this file already uses, minimizing
-# call-site churn.
-from tests.conftest import ErrorScorer as _BrokenScorer  # noqa: E402
 from tests.conftest import UniformScorer as _UniformScorer  # noqa: E402
 
 
@@ -30,16 +35,8 @@ def big_slice() -> EvalSlice:
 
 
 # ---------------------------------------------------------------------------
-# RunResult schema version
+# RunResult.by_fold / fold_summary additive fields
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-def test_run_result_schema_version_default(big_slice: EvalSlice) -> None:
-    result = evaluate({"u": _UniformScorer()}, [big_slice], run_id="r")
-    assert result.schema_version == RUN_RESULT_SCHEMA_VERSION
-    assert result.schema_version == "v1"
-    assert result.to_dict()["schema_version"] == "v1"
 
 
 @pytest.mark.unit
@@ -50,92 +47,6 @@ def test_run_result_to_dict_serializes_by_fold_and_summary(big_slice: EvalSlice)
     # Non-folded run: both default-empty.
     assert payload["by_fold"] == {}
     assert payload["fold_summary"] == {}
-
-
-# ---------------------------------------------------------------------------
-# on_scorer_error
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-def test_on_scorer_error_raise_propagates(big_slice: EvalSlice) -> None:
-    with pytest.raises(RuntimeError, match="intentional failure"):
-        evaluate({"broken": _BrokenScorer()}, [big_slice], run_id="r", on_scorer_error="raise")
-
-
-@pytest.mark.unit
-def test_on_scorer_error_record_captures(big_slice: EvalSlice) -> None:
-    """on_scorer_error='record' captures error per (slice, scorer); run completes."""
-    result = evaluate(
-        {"broken": _BrokenScorer()}, [big_slice], run_id="r", on_scorer_error="record"
-    )
-    entry = result.by_slice["test"]["by_scorer"]["broken"]
-    assert entry["error"] == "intentional failure for tests"
-    assert entry["exc_type"] == "RuntimeError"
-    assert "traceback" in entry
-    assert entry["scores"] == []
-
-
-@pytest.mark.unit
-def test_on_scorer_error_record_does_not_break_other_scorers(big_slice: EvalSlice) -> None:
-    """A broken scorer should not poison the run for healthy scorers."""
-    result = evaluate(
-        {"broken": _BrokenScorer(), "healthy": _UniformScorer()},
-        [big_slice],
-        run_id="r",
-        on_scorer_error="record",
-    )
-    assert "error" in result.by_slice["test"]["by_scorer"]["broken"]
-    healthy = result.by_slice["test"]["by_scorer"]["healthy"]
-    assert isinstance(healthy.get("pr_auc"), float)
-
-
-# ---------------------------------------------------------------------------
-# leakage_checks integration
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-def test_leakage_checks_record_mode_captures_report(big_slice: EvalSlice) -> None:
-    result = evaluate(
-        {"u": _UniformScorer()},
-        [big_slice],
-        run_id="r",
-        leakage_checks=[NormalizedFormLeakageCheck()],
-        on_leakage="record",
-    )
-    assert "leakage_report" in result.config
-    assert isinstance(result.config["leakage_report"], dict)
-
-
-@pytest.mark.unit
-def test_leakage_checks_skip_mode_omits_report(big_slice: EvalSlice) -> None:
-    result = evaluate(
-        {"u": _UniformScorer()},
-        [big_slice],
-        run_id="r",
-        leakage_checks=[NormalizedFormLeakageCheck()],
-        on_leakage="skip",
-    )
-    # In skip mode, the report is run but not recorded.
-    assert "leakage_report" not in result.config
-
-
-@pytest.mark.unit
-def test_leakage_checks_raise_on_error_finding() -> None:
-    """on_leakage='raise' with a real conflict should fail the run."""
-    df = pd.DataFrame({"text": ["x", "y"], "label": [0, 1]})
-    df_test = pd.DataFrame({"text": ["x", "z"], "label": [1, 0]})  # label conflict on "x"
-    train = EvalSlice(name="train", df=df)
-    test = EvalSlice(name="test", df=df_test)
-    with pytest.raises(RuntimeError, match="Leakage checks produced"):
-        evaluate(
-            {"u": _UniformScorer()},
-            [train, test],
-            run_id="r",
-            leakage_checks=[LabelConflictCheck()],
-            on_leakage="raise",
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -219,3 +130,14 @@ def test_evaluate_folded_missing_eval_split_raises(big_slice: EvalSlice) -> None
             run_id="r",
             eval_split_names=("nope",),
         )
+
+
+# Trivial assertion to lock the schema-version constant — not folded-specific,
+# but lives here because it imports the same RunResult+evaluate stack and
+# requires zero extra fixtures.
+@pytest.mark.unit
+def test_run_result_schema_version_default(big_slice: EvalSlice) -> None:
+    result = evaluate({"u": _UniformScorer()}, [big_slice], run_id="r")
+    assert result.schema_version == RUN_RESULT_SCHEMA_VERSION
+    assert result.schema_version == "v1"
+    assert result.to_dict()["schema_version"] == "v1"
