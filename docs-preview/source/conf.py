@@ -80,6 +80,8 @@ myst_enable_extensions = [
     "linkify",  # auto-detect bare URLs
     "substitution",  # variable substitution
     "tasklist",  # GitHub-style task lists
+    "attrs_block",  # `## Heading {#anchor}` block-level attributes
+    "attrs_inline",  # `{class="..."}` inline attributes
 ]
 myst_heading_anchors = 3  # auto-generate anchors for H1-H3
 
