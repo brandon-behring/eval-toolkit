@@ -11,15 +11,19 @@ and empty-similarities branches.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from eval_toolkit.text_dedup import (
+    EmbeddingCosineStrategy,
     JaccardNgramStrategy,
     MinHashLSHStrategy,
     SimilarityAuditFinding,
     SimilarityAuditReport,
+    SimilarityStrategy,
     audit_source_label_similarity,
     cross_dedup,
+    near_dedup,
     sha256_text,
 )
 
@@ -354,3 +358,111 @@ def test_cross_dedup_empty_train_keeps_all_eval() -> None:
 def test_cross_dedup_empty_eval_returns_empty() -> None:
     kept = cross_dedup(["a", "b"], [])
     assert kept == []
+
+
+# ---------------------------------------------------------------------------
+# EmbeddingCosineStrategy: buggy embedder catches inconsistent feature dim
+# (Migrated from test_coverage_gap.py during v0.30.1 hygiene split.)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_embedding_cosine_pairs_across_rejects_dim_mismatch() -> None:
+    """EmbeddingCosineStrategy.pairs_across catches buggy embedders that return
+    different feature dimensions for query vs reference."""
+    call_count = {"n": 0}
+
+    def buggy_embedder(texts: list[str]) -> np.ndarray:
+        call_count["n"] += 1
+        # First call (refs) returns d=4; second call (queries) returns d=8.
+        d = 4 if call_count["n"] == 1 else 8
+        return np.zeros((len(texts), d), dtype=np.float64)
+
+    strat = EmbeddingCosineStrategy(buggy_embedder)
+    with pytest.raises(ValueError, match="inconsistent feature dimensions"):
+        strat.pairs_across(["q1", "q2"], ["r1", "r2", "r3"], k=2)
+
+
+# ---------------------------------------------------------------------------
+# MinHashLSHStrategy: protocol conformance + near-duplicate detection
+# (Migrated from test_coverage_gap.py v0.4.0 C4 section during v0.30.1
+# hygiene split — every assertion preserved verbatim.)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_minhash_lsh_satisfies_protocol() -> None:
+    """MinHashLSHStrategy is a runtime-checkable SimilarityStrategy."""
+    strat = MinHashLSHStrategy(n=2, num_perm=64, bands=16)
+    assert isinstance(strat, SimilarityStrategy)
+
+
+@pytest.mark.unit
+def test_minhash_lsh_pairs_within_shape() -> None:
+    strat = MinHashLSHStrategy(n=2, num_perm=64, bands=16, seed=0)
+    texts = ["alpha bravo", "alpha bravo charlie", "delta echo", "foxtrot golf"]
+    sims, idx = strat.pairs_within(texts, k=3)
+    assert sims.shape == idx.shape == (4, 3)
+
+
+@pytest.mark.unit
+def test_minhash_lsh_self_similarity_is_one() -> None:
+    """For pairs_within, each text's most-similar neighbor is itself with sim=1."""
+    strat = MinHashLSHStrategy(n=2, num_perm=64, bands=16, seed=0)
+    texts = ["alpha bravo charlie", "delta echo foxtrot"]
+    sims, idx = strat.pairs_within(texts, k=2)
+    for i in range(2):
+        assert int(idx[i, 0]) == i
+        assert sims[i, 0] == pytest.approx(1.0, abs=1e-9)
+
+
+@pytest.mark.unit
+def test_minhash_lsh_finds_near_duplicate() -> None:
+    """Near-duplicate pair should be discovered + scored ≥ 0.5 Jaccard."""
+    strat = MinHashLSHStrategy(n=3, num_perm=128, bands=16, seed=0)
+    texts = [
+        "the quick brown fox jumps over the lazy dog",
+        "the quick brown fox jumps over the lazy doggo!",  # near-dup
+        "completely unrelated lorem ipsum text content",
+    ]
+    sims, idx = strat.pairs_within(texts, k=2)
+    # Top-1 (other than self) for text 0 should be text 1
+    assert int(idx[0, 1]) == 1
+    assert sims[0, 1] > 0.5  # high Jaccard between the near-dups
+
+
+@pytest.mark.unit
+def test_minhash_lsh_validates_args() -> None:
+    with pytest.raises(ValueError, match="n must be"):
+        MinHashLSHStrategy(n=0)
+    with pytest.raises(ValueError, match="num_perm"):
+        MinHashLSHStrategy(num_perm=4)
+    with pytest.raises(ValueError, match="bands"):
+        MinHashLSHStrategy(num_perm=128, bands=0)
+    with pytest.raises(ValueError, match="bands"):
+        MinHashLSHStrategy(num_perm=128, bands=200)
+    with pytest.raises(ValueError, match="divisible"):
+        MinHashLSHStrategy(num_perm=128, bands=15)  # 128 not divisible by 15
+
+
+@pytest.mark.unit
+def test_minhash_lsh_handles_empty_input() -> None:
+    strat = MinHashLSHStrategy(n=2, num_perm=64, bands=16)
+    sims_w, idx_w = strat.pairs_within([], k=5)
+    assert sims_w.shape == idx_w.shape == (0, 0)
+    sims_a, idx_a = strat.pairs_across([], ["a"], k=5)
+    assert sims_a.shape == idx_a.shape == (0, 0)
+
+
+@pytest.mark.unit
+def test_minhash_lsh_in_near_dedup_orchestrator() -> None:
+    """Plug-in contract: near_dedup accepts MinHashLSHStrategy via strategy=."""
+    texts = [
+        "the quick brown fox",
+        "the quick brown fox!",  # near-dup
+        "lorem ipsum dolor sit amet",
+    ]
+    strat = MinHashLSHStrategy(n=3, num_perm=128, bands=16, seed=0)
+    report = near_dedup(texts, threshold=0.5, strategy=strat)
+    # The near-dup pair should collapse to 1 entry
+    assert report.n_kept == 2
