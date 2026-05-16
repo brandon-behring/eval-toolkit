@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.1] — 2026-05-15 — repo hygiene + release-tooling patch
+
+Pure organizational + release-tooling cleanup. No public-API change —
+every existing import, kwarg, and return shape preserved (verified by
+the public-API drift-guard test). Total test count unchanged: every
+assertion in the reorganized files preserved verbatim.
+
+The work originates from the post-v0.30.0 backlog audit (zero TODO /
+FIXME comments in source, zero overdue `@deprecated` deadlines, no dead
+modules). Ships clusters B + C; clusters A + B² (Kapoor 2023 leakage
+detectors + mutmut audit follow-ups) defer to v0.31.0.
+
+### Added
+
+- **`make release-prep VERSION=X.Y.Z` target** (C1): canonical "step 1"
+  of the release flow. Validates PEP 440, atomically rewrites
+  `src/eval_toolkit/_version.py`, regenerates
+  `tests/golden/public_api/snapshot.json`, and prints the remaining
+  manual steps. Closes the public_api snapshot-drift gotcha that hit
+  v0.28.0 / v0.28.1 / v0.29.0 / v0.30.0 — ~50% of recent releases.
+  Documented in `docs/RELEASING.md` (TL;DR + detailed runbook §1).
+
+### Changed
+
+- **Tests reorganized by domain (B1 + B2)**:
+  - `tests/test_coverage_gap.py` (1252 LOC monolithic) → split into
+    `test_coverage_metrics.py`, `test_coverage_bootstrap.py`,
+    `test_coverage_calibration.py`, `test_coverage_plotting.py`,
+    `test_coverage_harness.py` (the 7-domain reality required 5 new
+    files rather than the 4 originally scoped). MinHashLSHStrategy +
+    EmbeddingCosineStrategy tests merged into existing
+    `tests/test_text_dedup_coverage.py`. 107 tests preserved verbatim
+    across the new boundaries.
+  - `tests/test_harness_v07.py` + `tests/test_harness_v22.py` deleted;
+    their 23 tests distributed by subject matter into existing/new
+    feature-grouped files: `test_harness_smoke.py` (on_scorer_error
+    contract), new `test_harness_folded.py` (evaluate_folded +
+    by_fold/fold_summary), new `test_harness_metric_options.py`
+    (evaluate_scorer_on_slice metric kwargs), `test_leakage.py`
+    (leakage_checks integration). Version-keyed naming retired —
+    the repo convention is per-feature test files.
+
+- **`__init__.py` topic-grouping comments** (B3): the 200-symbol
+  `_EXPORTS` dict now carries `# --- module ---` section dividers above
+  each grouped block. Pure documentation; the public-API snapshot
+  reads dict keys and values only, so the snapshot is unchanged.
+  Improves IDE outline / goto-definition discoverability.
+
+- **`docs/v0.3_research_audit.md` archived** (B5): the 37KB
+  pre-v0.30 audit doc was not referenced in `mkdocs.yml` nav — a
+  historical artifact. Moved to `docs/archive/v0.3_research_audit.md`
+  with a `docs/archive/README.md` explaining the convention.
+
+### Deprecated
+
+- **`[validation]` optional-dependency extra** (B6): no-op since
+  v0.16.0 (jsonschema moved to base deps). Announced for removal in
+  v0.33.0 per the 2-minor-version deprecation policy in
+  `docs/DEPRECATION.md`. `pip install eval-toolkit[validation]`
+  continues to resolve cleanly through v0.32.x. Extras can't emit
+  `DeprecationWarning` at import time, so the deprecation is
+  documentation-only.
+
+### Out of scope (this patch)
+
+- Cluster A — Kapoor 2023 leakage detectors (L3.3 SamplingBiasCheck +
+  L2-general IllegitimateFeatureCheck) ship in v0.31.0 with their own
+  focused release. L1.2 + L1.3 are permanently dropped (see the v0.31.0
+  CHANGELOG entry + `docs/methodology/leakage-detection.md`
+  "Out of scope" section for the rationale).
+- Cluster A² — mutmut audit follow-ups + cosmic-ray attempt also ship
+  with v0.31.0.
+- Benchmark baseline-comparison automation in `nightly-benchmarks.yml`
+  also deferred to v0.31.0.
+
 ## [0.30.0] — 2026-05-15 — code-organization refactors (SRP / DRY / maintainability)
 
 Internal restructuring driven by the post-v0.29.0 code-organization
