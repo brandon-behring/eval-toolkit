@@ -45,9 +45,13 @@ jobs:
         run: uv python install 3.13
 
       - name: Create venv + install with docs-preview extra
+        # `[all,docs-preview]` so autosummary can import every public module
+        # (plotting needs matplotlib; loaders need pandas+pyarrow; etc.).
+        # PEP 685 self-referencing extras keep this DRY against the `[all]`
+        # in pyproject.toml.
         run: |
           uv venv --python 3.13 .venv
-          uv pip install -e ".[docs-preview]"
+          uv pip install -e ".[all,docs-preview]"
 
       - name: Build Sphinx site (warnings-as-errors)
         # Phase 2 will iterate until -W passes cleanly. Until then, the
