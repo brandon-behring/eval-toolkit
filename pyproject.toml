@@ -79,6 +79,7 @@ docs-preview = [
     "pydata-sphinx-theme>=0.16",
     "myst-nb>=1.1",                  # MyST Markdown + Jupyter-style execution (Q9)
     "jupyter-cache>=1.0",            # myst-nb execution cache backend (Q11)
+    "linkify-it-py>=2.0",            # needed for myst_enable_extensions = [..., "linkify", ...]
     "sphinx-copybutton>=0.5",
     "sphinx-design>=0.6",
     "sphinx-autodoc-typehints>=2.0",
