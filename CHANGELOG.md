@@ -7,6 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] — 2026-05-16 — Sphinx docs migration
+
+Documentation toolchain swap from mkdocs-material + mkdocstrings to
+Sphinx + pydata-sphinx-theme. The live site at
+`https://brandon-behring/github.io/eval-toolkit/` rebuilds on this
+release with the new theme + per-symbol API pages + intersphinx
+cross-references to numpy / scipy / sklearn / pandas / matplotlib.
+
+No Python source change. No public-API change. Every test still passes
+(Sybil's 203 doc tests collect at their new `docs/source/` paths).
+
+### Why migrate (user pain points, Q1)
+
+1. **Look + feel** — `pydata-sphinx-theme` is the scientific-Python
+   convention (numpy, scipy, sklearn, pandas all use it). The previous
+   mkdocs-material site read as "tech-blog" style; the new site reads
+   as "scientific library reference."
+2. **Auto-generated API docs feel thin** — `mkdocstrings` stubs
+   (single `::: eval_toolkit.X` per page) produced uniform but shallow
+   output. Sphinx `autosummary` + `autodoc` + `napoleon` generates a
+   summary table per module + a dedicated HTML page for each public
+   symbol (~190 per-symbol pages total). Each carries signature with
+   type hints, NumPy-style docstring sections, and a `[source]` link
+   back to GitHub.
+3. **Cross-references / intersphinx** — `:class:`numpy.ndarray`` and
+   similar markers in docstrings now render as live links to the
+   external project's docs. mkdocs had no equivalent.
+
+### Changed
+
+- **Docs toolchain**: mkdocs-material + mkdocstrings + pymdown-extensions →
+  Sphinx + pydata-sphinx-theme + myst-nb + jupyter-cache +
+  sphinx-copybutton + sphinx-design + sphinx-autodoc-typehints +
+  linkify-it-py. Same Pages URL, same single-version policy, same
+  push-to-main + tag deploy triggers; the build chain underneath is
+  fully replaced.
+- **Docs source layout**: `docs/*.md` → `docs/source/*.md` with
+  `docs/source/conf.py` as the canonical Sphinx config. The
+  conventional `docs/source/` / `docs/build/` split (Q8) matches what
+  `sphinx-quickstart` generates and what numpy / sklearn use.
+- **API stubs**: each of 22 modules' mkdocstrings stubs (`::: eval_toolkit.X`)
+  replaced with MyST `autosummary` blocks using `:toctree: generated/<mod>/`.
+  Per-symbol page generation is incremental (cached in
+  `docs/source/api/generated/`, gitignored).
+- **Heading anchors**: 138 mkdocs-style `## Heading {#anchor}` patterns
+  across 18 files migrated to MyST native `(anchor)=\n## Heading`
+  block-target syntax. The `{#anchor}` syntax was rendering as literal
+  text under MyST; `(anchor)=` registers as a proper cross-reference
+  target.
+- **Cross-tree refs**: 7 hardcoded relative paths to files outside the
+  Sphinx source tree (`../src/eval_toolkit/_deprecated.py`,
+  `../tests/test_deprecations.py`, `../CONTRIBUTING.md`, etc.) rewritten
+  to absolute GitHub URLs at the project repo.
+
+### Added
+
+- **Executable cells via myst-nb** (Q9): example `.md` files can opt in
+  to cell execution at docs-build time. `nb_execution_mode = "cache"`
+  (Q11) means first build executes everything; subsequent builds
+  re-execute only changed cells. Cache stored in
+  `docs/build/.jupyter_cache/`. v0.31.0 ships the infrastructure;
+  individual examples that opt in via `{code-cell}` directives are a
+  future enhancement (current `.md` examples still use the
+  ` ```python ` fences that render as static code).
+- **Intersphinx mapping** (Q1 #3): live links from any
+  `:class:`numpy.ndarray`` / `:func:`scipy.stats.bootstrap`` etc. in a
+  docstring or `.md` file to the target project's docs.
+- **`sphinx-autodoc-typehints`** integration: type hints rendered into
+  signatures cleanly rather than duplicated in the body.
+
+### Removed
+
+- `mkdocs.yml` — replaced by `docs/source/conf.py`.
+- `docs/javascripts/mathjax-config.js` — `sphinx.ext.mathjax`
+  handles MathJax v3 natively.
+- `.github/workflows/docs-sphinx-preview.yml` — the parallel-build
+  preview workflow served Phase 1+2; Phase 3 promotes Sphinx to the
+  primary `docs.yml` workflow and the preview goes away.
+
+### Out of scope (explicitly not pursued)
+
+- **tikzjax** — v0.28.0 enabled tikzjax (Q12) but no docstring or `.md`
+  ever used it. Sphinx has no clean equivalent (the audit confirmed
+  zero `<script type="text/tikz">` blocks exist). Dropped without
+  replacement. MathJax remains for inline LaTeX math.
+- **Versioned docs** (`sphinx-multiversion`) — single-version site
+  retained (Q5); can be added later without re-architecting.
+- **Read the Docs hosting** — staying on GitHub Pages.
+- **Sphinx-gallery** for examples — keeps current `.md` + Sybil
+  testing; conversion to `.py` scripts not pursued.
+- **Project logo** (Q13) — favicon only; can add later via a
+  cosmetic PR.
+
+### Kapoor leakage detectors + mutmut follow-ups → v0.32.0
+
+The post-v0.30.0 backlog items (L3.3 `SamplingBiasCheck` + L2-general
+`IllegitimateFeatureCheck` Kapoor 2023 detectors, mutmut audit
+follow-ups, benchmark baseline-comparison automation) were originally
+queued for v0.31.0. Per the migration plan, they shift to v0.32.0 so
+docs ships its own focused release.
+
 ## [0.30.1] — 2026-05-15 — repo hygiene + release-tooling patch
 
 Pure organizational + release-tooling cleanup. No public-API change —
