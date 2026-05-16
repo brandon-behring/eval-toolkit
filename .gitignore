@@ -44,3 +44,7 @@ coverage.xml
 # mkdocs build output (Section E.1 v0.28.0)
 /site/
 docs-preview/build/
+# Sphinx autosummary stub pages (regenerated at build time from the
+# autosummary directive's `autosummary_generate = True` setting).
+docs-preview/source/api/generated/
+docs/source/api/generated/
