@@ -60,21 +60,14 @@ parquet = ["pyarrow>=15.0"]
 # DeprecationWarnings, so the deprecation is documentation-only here +
 # in CHANGELOG ### Deprecated + docs/DEPRECATION.md.
 validation = []
-# v0.28.0 (Section E.1): docs site via mkdocs-material + mkdocstrings.
-# Per Q4=B in the temporalcv-cross-pollination plan; LaTeX via MathJax v3
-# (configured in docs/javascripts/mathjax-config.js) and tikzjax loaded
-# from CDN in mkdocs.yml.
+# v0.31.0 docs site: Sphinx + pydata-sphinx-theme (replaces v0.28.0's
+# mkdocs-material). Migration drivers — pain points Q1 in the v0.31.0
+# plan: look-and-feel (scientific-Python convention), thin auto-API
+# (autosummary per-symbol pages), and live cross-refs to numpy / scipy /
+# sklearn (intersphinx). myst-nb runs example cells at docs-build time
+# with cache mode. See ~/.claude/plans/what-do-we-need-synchronous-turtle.md
+# for the full Q1-Q13 decision log.
 docs = [
-    "mkdocs-material>=9.5",
-    "mkdocstrings[python]>=0.24",
-    "pymdown-extensions>=10.7",
-]
-# v0.31.0 docs migration (Phase 1+2): Sphinx + pydata-sphinx-theme. Lives
-# alongside the [docs] mkdocs install until Phase 3 swaps the two and
-# this extra is renamed back to [docs]. See
-# ~/.claude/plans/what-do-we-need-synchronous-turtle.md for the locked
-# Q1-Q13 decisions driving this stack.
-docs-preview = [
     "sphinx>=7.3",
     "pydata-sphinx-theme>=0.16",
     "myst-nb>=1.1",                  # MyST Markdown + Jupyter-style execution (Q9)
@@ -169,7 +162,7 @@ module = ["scipy.*", "sklearn.*", "matplotlib.*", "pandas.*", "yaml.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "README.md", "docs"]
+testpaths = ["tests", "README.md", "docs/source"]
 
 python_files = ["test_*.py"]
 python_functions = ["test_*"]

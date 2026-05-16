@@ -116,7 +116,7 @@ Three workflows fire on a push to main:
 
 - **CI** — full test matrix (3 OS × Py3.13) + lint + type + coverage gate + base-install + pip-audit
 - **CodeQL** — static security analysis
-- **Deploy docs** — builds + deploys mkdocs site to GitHub Pages
+- **Deploy docs** — builds + deploys Sphinx site to GitHub Pages
 
 All three must be green before tagging. Verify via:
 

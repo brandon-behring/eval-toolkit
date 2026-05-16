@@ -39,13 +39,16 @@ pytest_collect_file = Sybil(
     parsers=[PythonCodeBlockParser(), SkipParser()],
     patterns=_existing(
         "README.md",
-        "docs/extending.md",
-        "docs/MIGRATION.md",
-        "docs/getting-started.md",
-        "docs/repo-strategy.md",
-        "docs/schemas.md",
-        "docs/methodology/*.md",
-        "docs/examples/*.md",
-        "docs/migration/*.md",
+        # v0.31.0 docs migration: source tree moved from docs/* to
+        # docs/source/* when the Sphinx layout flipped on. Sybil patterns
+        # follow the new layout; the old paths are gone from the repo.
+        "docs/source/extending.md",
+        "docs/source/MIGRATION.md",
+        "docs/source/getting-started.md",
+        "docs/source/repo-strategy.md",
+        "docs/source/schemas.md",
+        "docs/source/methodology/*.md",
+        "docs/source/examples/*.md",
+        "docs/source/migration/*.md",
     ),
 ).pytest()

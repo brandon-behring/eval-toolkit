@@ -1,16 +1,17 @@
-"""Sphinx configuration for eval-toolkit docs (v0.31.0 migration preview).
+"""Sphinx configuration for eval-toolkit docs (v0.31.0).
 
-This config lives in the Phase 1 / Phase 2 parallel-build location
-(docs-preview/source/). In Phase 3, the entire source tree moves to
-docs/source/ and the conf.py here becomes docs/source/conf.py.
+Shipped in v0.31.0 (Phase 3 of the mkdocs-material → Sphinx +
+pydata-sphinx-theme migration). Locked decisions per the Q1-Q13
+walkthrough (see ~/.claude/plans/what-do-we-need-synchronous-turtle.md
+"Decision log"):
 
-Locked decisions (see ~/.claude/plans/what-do-we-need-synchronous-turtle.md
-"Decision log" for Q-by-Q rationale):
-- pydata-sphinx-theme (Q3)
+- pydata-sphinx-theme (Q3) — matches numpy / scipy / sklearn convention
 - myst-nb for Markdown + executable cells (Q9)
-- nb_execution_mode = "cache" (Q11)
-- per-symbol autosummary pages (Q7)
+- nb_execution_mode = "cache" (Q11) — re-execute only on source change
+- per-symbol autosummary pages (Q7) — `:toctree: generated/<mod>/`
 - minimal branding: favicon only, no header logo (Q10, Q13)
+- single-version, GitHub Pages (Q5)
+- intersphinx to numpy, scipy, sklearn, pandas, matplotlib (Q1 pain #3)
 """
 
 from __future__ import annotations
@@ -140,7 +141,7 @@ html_context = {
     "github_user": "brandon-behring",
     "github_repo": "eval-toolkit",
     "github_version": "main",
-    "doc_path": "docs-preview/source",  # Phase 3 will change to "docs/source"
+    "doc_path": "docs/source",
 }
 
 # Cross-link `:class:`numpy.ndarray`` etc. — controlled via intersphinx above.

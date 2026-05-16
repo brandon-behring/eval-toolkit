@@ -1,8 +1,12 @@
 name: Deploy docs
 
-# Builds + deploys the mkdocs-material site to GitHub Pages on every
-# push to main and on tag pushes. Single-version (no mike) per
-# v0.28.0 design Q11=A.
+# Builds + deploys the Sphinx + pydata-sphinx-theme site to GitHub
+# Pages on every push to main and on tag pushes. Single-version (no
+# sphinx-multiversion) per the v0.31.0 plan Q5=A.
+#
+# Replaces the v0.28.0 mkdocs-material workflow as of v0.31.0; see
+# CHANGELOG and ~/.claude/plans/what-do-we-need-synchronous-turtle.md
+# for the migration rationale.
 
 on:
   push:
@@ -35,23 +39,28 @@ jobs:
       - name: Set up Python 3.13
         run: uv python install 3.13
 
-      - name: Create venv + install with docs extra
+      - name: Create venv + install with all extras + docs
+        # `[all,docs]` so autosummary can import every public module
+        # at docs-build time (plotting needs matplotlib; loaders need
+        # pandas+pyarrow; etc.). PEP 685 self-referencing extras keep
+        # this DRY against the `[all]` in pyproject.toml.
         run: |
           uv venv --python 3.13 .venv
-          uv pip install -e ".[docs]"
+          uv pip install -e ".[all,docs]"
 
-      - name: Build site
-        # NOTE: --strict is not enabled until Section E.2 (content enrichment)
-        # fixes the relative-link warnings in docs/methodology/*.md (these
-        # link to ../../src/... and ../../CHANGELOG.md which mkdocs treats
-        # as broken in strict mode). E.2 will either rewrite the links or
-        # add a doc-path mapping; then strict mode flips back on.
-        run: uv run mkdocs build
+      - name: Build Sphinx site
+        # NOTE: --strict (-W) is not enabled yet — Phase 2 of the v0.31.0
+        # migration left ~56 advisory warnings (mostly MyST xref-missing
+        # false-positives for anchors that DO resolve correctly in HTML,
+        # plus per-doc duplicate-label warnings from sibling methodology
+        # docs sharing anchor names like `pitfalls`). Future polish to
+        # zero-warning state will flip `-W` back on.
+        run: uv run sphinx-build -b html docs/source/ docs/build/html/
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: docs/build/html
 
   deploy:
     needs: build
