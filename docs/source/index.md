@@ -4,14 +4,6 @@ Reusable evaluation contracts for binary classification — metrics,
 bootstrap confidence intervals, calibration, leakage detection, threshold
 selection, and a pluggable harness that ties them together.
 
-```{warning}
-This is the Sphinx-rendered docs site (preview build, v0.31.0
-migration). The canonical live site is still at the mkdocs URL until
-Phase 3 completes the switch. See
-[the v0.31.0 plan](https://github.com/brandon-behring/eval-toolkit/blob/main/docs-preview/README.md)
-for context.
-```
-
 ## Get started
 
 ```{toctree}
