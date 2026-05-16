@@ -6,7 +6,7 @@ releases**, and the recovery steps for each known failure mode.
 
 For the high-level release philosophy (SemVer, deprecation policy, etc.),
 see [DEPRECATION.md](DEPRECATION.md). For ongoing contributor flow
-(branch model, hooks, test loop), see [CONTRIBUTING.md](../CONTRIBUTING.md).
+(branch model, hooks, test loop), see [CONTRIBUTING.md](https://github.com/brandon-behring/eval-toolkit/blob/main/CONTRIBUTING.md).
 
 ## TL;DR — the happy-path checklist
 
@@ -315,7 +315,7 @@ the security patch without picking up feature changes.
 
 ## Cross-references
 
-- [CONTRIBUTING.md](../CONTRIBUTING.md) — ongoing contributor flow,
+- [CONTRIBUTING.md](https://github.com/brandon-behring/eval-toolkit/blob/main/CONTRIBUTING.md) — ongoing contributor flow,
   hooks, test loop. References this doc for release specifics.
 - [DEPRECATION.md](DEPRECATION.md) — when and how to deprecate
   public API (forthcoming).

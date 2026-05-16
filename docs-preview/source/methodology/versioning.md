@@ -224,7 +224,7 @@ with tempfile.TemporaryDirectory() as d:
 (schema-evolution)=
 ## Schema evolution policy
 The toolkit's JSON Schemas live in
-[`src/eval_toolkit/schemas/`](../../src/eval_toolkit/schemas/) and
+[`src/eval_toolkit/schemas/`](https://github.com/brandon-behring/eval-toolkit/tree/main/src/eval_toolkit/schemas) and
 follow a `.vN.json` filename convention (`results.v1.json`,
 `results_full.v1.json`, `manifest.v1.json`). This section documents
 when the filename bumps and when it stays.

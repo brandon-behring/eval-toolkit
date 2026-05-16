@@ -60,7 +60,7 @@ underlying canon.
 
 ## Cross-references
 
-- The [v0.3 research audit](../v0.3_research_audit.md) is the
+- The [v0.3 research audit](https://github.com/brandon-behring/eval-toolkit/blob/main/docs/archive/v0.3_research_audit.md) is the
   *descriptive* counterpart: literature review, gap analysis, industry
   rating. Use it when defending a methodological choice in a write-up.
 - [`extending.md`](../extending.md) is the build-side complement:

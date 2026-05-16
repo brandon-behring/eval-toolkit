@@ -124,7 +124,7 @@ When the release that contains the deadline ships (e.g., `0.31.0`):
 
 ## See also
 
-- [`src/eval_toolkit/_deprecated.py`](../src/eval_toolkit/_deprecated.py) — implementation
-- [`tests/test_deprecations.py`](../tests/test_deprecations.py) — deprecation tests
+- [`src/eval_toolkit/_deprecated.py`](https://github.com/brandon-behring/eval-toolkit/blob/main/src/eval_toolkit/_deprecated.py) — implementation
+- [`tests/test_deprecations.py`](https://github.com/brandon-behring/eval-toolkit/blob/main/tests/test_deprecations.py) — deprecation tests
 - [`docs/RELEASING.md`](RELEASING.md) — release runbook
-- [`CONTRIBUTING.md`](../CONTRIBUTING.md) — general contribution flow
+- [`CONTRIBUTING.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/CONTRIBUTING.md) — general contribution flow
