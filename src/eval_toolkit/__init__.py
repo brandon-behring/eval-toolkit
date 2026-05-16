@@ -24,13 +24,20 @@ from eval_toolkit._version import __version__
 # Matches numpy / scikit-learn / requests convention.
 _logging.getLogger("eval_toolkit").addHandler(_logging.NullHandler())
 
+# Entries are grouped by source module (matches the value column). Keys
+# within each group keep their existing order — roughly constants → types
+# → functions — for IDE outline + import-grep ergonomics. The section
+# dividers below are informational only; the snapshot in
+# tests/golden/public_api/ reads dict keys + values, not comments.
 _EXPORTS: dict[str, str] = {
+    # --- analysis ---
     "CsvPredictionReader": "eval_toolkit.analysis",
     "JsonlPredictionReader": "eval_toolkit.analysis",
     "PredictionArrays": "eval_toolkit.analysis",
     "bootstrap_metric_from_predictions": "eval_toolkit.analysis",
     "load_prediction_arrays": "eval_toolkit.analysis",
     "paired_diff_from_prediction_refs": "eval_toolkit.analysis",
+    # --- artifacts ---
     "MetricState": "eval_toolkit.artifacts",
     "PredictionArtifactRef": "eval_toolkit.artifacts",
     "PredictionColumns": "eval_toolkit.artifacts",
@@ -42,6 +49,7 @@ _EXPORTS: dict[str, str] = {
     "validate_prediction_artifact_ref": "eval_toolkit.artifacts",
     "validate_results": "eval_toolkit.artifacts",
     "write_json_strict": "eval_toolkit.artifacts",
+    # --- bootstrap ---
     "DEFAULT_CONFIDENCE": "eval_toolkit.bootstrap",
     "DEFAULT_METHOD": "eval_toolkit.bootstrap",
     "DEFAULT_N_RESAMPLES": "eval_toolkit.bootstrap",
@@ -62,6 +70,7 @@ _EXPORTS: dict[str, str] = {
     "paired_bootstrap_ece_diff": "eval_toolkit.bootstrap",
     "paired_bootstrap_op_point_diff": "eval_toolkit.bootstrap",
     "paired_mde": "eval_toolkit.bootstrap",
+    # --- calibration ---
     "DEFAULT_FN_COST": "eval_toolkit.calibration",
     "DEFAULT_FP_COST": "eval_toolkit.calibration",
     "DEFAULT_N_BINS": "eval_toolkit.calibration",
@@ -76,6 +85,7 @@ _EXPORTS: dict[str, str] = {
     "fit_temperature_oracle": "eval_toolkit.calibration",
     "reliability_curve": "eval_toolkit.calibration",
     "reliability_diagram_data": "eval_toolkit.calibration",
+    # --- claims ---
     "ClaimReport": "eval_toolkit.claims",
     "ClaimSpec": "eval_toolkit.claims",
     "EvidenceGate": "eval_toolkit.claims",
@@ -94,17 +104,21 @@ _EXPORTS: dict[str, str] = {
     "required_slice_gate": "eval_toolkit.claims",
     "source_role_gate": "eval_toolkit.claims",
     "strict_artifact_gate": "eval_toolkit.claims",
+    # --- config ---
     "from_yaml": "eval_toolkit.config",
     "frozen_config": "eval_toolkit.config",
+    # --- docs ---
     "ANCHOR_RE": "eval_toolkit.docs",
     "DEFAULT_FORMATTERS": "eval_toolkit.docs",
     "render_files": "eval_toolkit.docs",
     "render_text": "eval_toolkit.docs",
     "walk_path": "eval_toolkit.docs",
+    # --- evidence ---
     "AggregateEvidence": "eval_toolkit.evidence",
     "EvidenceAxis": "eval_toolkit.evidence",
     "PairingMetadata": "eval_toolkit.evidence",
     "RECOMMENDED_SOURCE_ROLES": "eval_toolkit.evidence",
+    # --- harness ---
     "DEFAULT_BOOTSTRAP_RESAMPLES": "eval_toolkit.harness",
     "RUN_RESULT_SCHEMA_VERSION": "eval_toolkit.harness",
     "EvalSlice": "eval_toolkit.harness",
@@ -114,6 +128,7 @@ _EXPORTS: dict[str, str] = {
     "evaluate_scorer_on_slice": "eval_toolkit.harness",
     "with_claim_report": "eval_toolkit.harness",
     "write_run_result": "eval_toolkit.harness",
+    # --- leakage ---
     "CrossSplitLeakageCheck": "eval_toolkit.leakage",
     "ExactDuplicateCheck": "eval_toolkit.leakage",
     "GroupLeakageCheck": "eval_toolkit.leakage",
@@ -125,17 +140,20 @@ _EXPORTS: dict[str, str] = {
     "NormalizedFormLeakageCheck": "eval_toolkit.leakage",
     "TemporalLeakageCheck": "eval_toolkit.leakage",
     "run_leakage_checks": "eval_toolkit.leakage",
+    # --- loaders ---
     "DataFrameLoader": "eval_toolkit.loaders",
     "DatasetLoader": "eval_toolkit.loaders",
     "HFDatasetsLoader": "eval_toolkit.loaders",
     "ParquetGlobLoader": "eval_toolkit.loaders",
     "SingleSliceLoader": "eval_toolkit.loaders",
+    # --- manifest ---
     "MANIFEST_SCHEMA_VERSION": "eval_toolkit.manifest",
     "RunManifest": "eval_toolkit.manifest",
     "SourceRoleRecord": "eval_toolkit.manifest",
     "build_manifest": "eval_toolkit.manifest",
     "validate_source_roles": "eval_toolkit.manifest",
     "write_manifest": "eval_toolkit.manifest",
+    # --- metrics ---
     "DEFAULT_ASSUMED_PRIORS": "eval_toolkit.metrics",
     "ThresholdResult": "eval_toolkit.metrics",
     "brier_decomposition": "eval_toolkit.metrics",
@@ -155,13 +173,16 @@ _EXPORTS: dict[str, str] = {
     "score_distribution_summary": "eval_toolkit.metrics",
     "single_class_threshold_metrics": "eval_toolkit.metrics",
     "stratified_recall": "eval_toolkit.metrics",
+    # --- operating_points ---
     "FittedOperatingPoint": "eval_toolkit.operating_points",
     "OperatingPointSpec": "eval_toolkit.operating_points",
     "apply_operating_points": "eval_toolkit.operating_points",
     "fit_operating_points": "eval_toolkit.operating_points",
+    # --- paths ---
     "path_for_config": "eval_toolkit.paths",
     "resolve_repo_path": "eval_toolkit.paths",
     "split_provenance_config": "eval_toolkit.paths",
+    # --- plotting ---
     "DEFAULT_FIGSIZE": "eval_toolkit.plotting",
     "PALETTE": "eval_toolkit.plotting",
     "PLOT_STYLE": "eval_toolkit.plotting",
@@ -175,6 +196,7 @@ _EXPORTS: dict[str, str] = {
     "plot_score_histograms": "eval_toolkit.plotting",
     "save_figure": "eval_toolkit.plotting",
     "set_plot_style": "eval_toolkit.plotting",
+    # --- provenance ---
     "FileHash": "eval_toolkit.provenance",
     "FileHashMissing": "eval_toolkit.provenance",
     "capture_git_sha": "eval_toolkit.provenance",
@@ -182,12 +204,15 @@ _EXPORTS: dict[str, str] = {
     "figure_metadata": "eval_toolkit.provenance",
     "file_sha256": "eval_toolkit.provenance",
     "make_run_dir": "eval_toolkit.provenance",
+    # --- protocols ---
     "EvalSliceLike": "eval_toolkit.protocols",
     "PredictionReader": "eval_toolkit.protocols",
     "Scorer": "eval_toolkit.protocols",
     "SliceAwareScorer": "eval_toolkit.protocols",
     "Versioned": "eval_toolkit.protocols",
+    # --- seeds ---
     "set_global_seeds": "eval_toolkit.seeds",
+    # --- splits ---
     "GroupKFoldSplitter": "eval_toolkit.splits",
     "HoldoutSplitter": "eval_toolkit.splits",
     "PoolBuilder": "eval_toolkit.splits",
@@ -198,6 +223,7 @@ _EXPORTS: dict[str, str] = {
     "TimeSeriesSplitter": "eval_toolkit.splits",
     "compute_label_overlap": "eval_toolkit.splits",
     "iter_folds_with_pool": "eval_toolkit.splits",
+    # --- text_dedup ---
     "DEFAULT_DEDUP_THRESHOLD": "eval_toolkit.text_dedup",
     "DedupReport": "eval_toolkit.text_dedup",
     "EmbeddingCosineStrategy": "eval_toolkit.text_dedup",
@@ -213,6 +239,7 @@ _EXPORTS: dict[str, str] = {
     "near_dedup": "eval_toolkit.text_dedup",
     "normalize_text_for_dedup": "eval_toolkit.text_dedup",
     "sha256_text": "eval_toolkit.text_dedup",
+    # --- thresholds ---
     "CISafeThresholdSelector": "eval_toolkit.thresholds",
     "CostSensitiveSelector": "eval_toolkit.thresholds",
     "MaxF1Selector": "eval_toolkit.thresholds",
