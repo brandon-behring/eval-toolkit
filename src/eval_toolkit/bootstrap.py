@@ -19,6 +19,7 @@ References
 
 from __future__ import annotations
 
+import functools
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -28,6 +29,8 @@ import numpy as np
 from scipy.stats import bootstrap as _scipy_bootstrap
 from scipy.stats import norm as _scipy_norm
 from scipy.stats import rankdata as _scipy_rankdata
+
+from eval_toolkit._parallel import parallel_map
 
 _logger = logging.getLogger(__name__)
 
@@ -200,6 +203,7 @@ def bootstrap_ci(
     confidence: float = DEFAULT_CONFIDENCE,
     method: Literal["BCa", "percentile", "studentized"] = DEFAULT_METHOD,
     seed: int = DEFAULT_SEED,
+    n_jobs: int = 1,
 ) -> BootstrapCI:
     """Per-condition CI via :func:`scipy.stats.bootstrap`.
 
@@ -217,10 +221,17 @@ def bootstrap_ci(
         Default 1000.
     confidence : float, optional
         Two-sided confidence level (default 0.95).
-    method : {"BCa", "percentile"}, optional
+    method : {"BCa", "percentile", "studentized"}, optional
         Default "BCa".
     seed : int, optional
         RNG seed for reproducibility.
+    n_jobs : int, optional
+        Parallel workers (default 1 — sequential). Only effective when
+        ``method='studentized'`` (which has the only Python-level outer loop
+        in this function — the BCa/percentile paths delegate to
+        :func:`scipy.stats.bootstrap` which has no ``n_jobs`` knob).
+        Setting ``n_jobs != 1`` with a non-studentized method raises
+        ``ValueError``. See :ref:`methodology/parallelism`.
 
     Returns
     -------
@@ -229,7 +240,8 @@ def bootstrap_ci(
     Raises
     ------
     ValueError
-        If shapes mismatch, ``n < 10``, or ``confidence ∉ (0, 1)``.
+        If shapes mismatch, ``n < 10``, ``confidence ∉ (0, 1)``, or
+        ``n_jobs != 1`` is supplied with a non-studentized ``method``.
 
     Examples
     --------
@@ -264,15 +276,23 @@ def bootstrap_ci(
         raise ValueError(f"n={n} too small for bootstrap; need ≥ 10")
     if not 0 < confidence < 1:
         raise ValueError(f"confidence must be in (0, 1), got {confidence}")
+    if n_jobs != 1 and method != "studentized":
+        raise ValueError(
+            f"n_jobs={n_jobs} requires method='studentized'; got method={method!r}. "
+            "The BCa and percentile paths delegate to scipy.stats.bootstrap "
+            "which does not expose parallelism. Use n_jobs=1 with BCa/percentile, "
+            "or method='studentized' with n_jobs > 1."
+        )
 
     _logger.debug(
-        "bootstrap_ci: metric=%s n=%d n_resamples=%d method=%s confidence=%.3f seed=%d",
+        "bootstrap_ci: metric=%s n=%d n_resamples=%d method=%s confidence=%.3f seed=%d n_jobs=%d",
         getattr(metric, "__name__", repr(metric)),
         n,
         n_resamples,
         method,
         confidence,
         seed,
+        n_jobs,
     )
 
     point = float(metric(y_true_arr, y_score_arr))
@@ -280,7 +300,6 @@ def bootstrap_ci(
     def _statistic(yt: np.ndarray, ys: np.ndarray) -> float:
         return float(metric(yt, ys))
 
-    rng = np.random.default_rng(seed)
     if method == "studentized":
         ci_low, ci_high = _bootstrap_t_ci(
             y_true_arr,
@@ -289,9 +308,11 @@ def bootstrap_ci(
             point,
             n_resamples=n_resamples,
             confidence=confidence,
-            rng=rng,
+            seed=seed,
+            n_jobs=n_jobs,
         )
     else:
+        rng = np.random.default_rng(seed)
         res = _scipy_bootstrap(
             (y_true_arr, y_score_arr),
             statistic=_statistic,
@@ -313,6 +334,53 @@ def bootstrap_ci(
     )
 
 
+def _bootstrap_t_step(
+    seed_seq: np.random.SeedSequence,
+    *,
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    metric: MetricFn,
+) -> tuple[tuple[float, float] | None, str | None]:
+    """One outer-resample step for studentized bootstrap-t.
+
+    Returns ``(result, first_failure)`` where:
+    - ``result`` is ``(theta_b, se_b)`` from one outer-resample +
+      inner-jackknife pair, or ``None`` for any degenerate case
+    - ``first_failure`` is a short string describing the first underlying
+      exception encountered (outer metric call or inner-jackknife LOO),
+      or ``None`` if no exception was raised. Caller surfaces the first
+      cross-resample failure-string in the >5% degenerate error.
+
+    The inner jackknife stays sequential per resample (O(n) per call); only
+    the outer n_resamples loop benefits from parallelism.
+    """
+    rng = np.random.default_rng(seed_seq)
+    n = int(len(y_true))
+    idx = rng.integers(0, n, size=n)
+    y_b = y_true[idx]
+    s_b = y_score[idx]
+    first_failure: str | None = None
+    try:
+        theta_b = float(metric(y_b, s_b))
+    except (ValueError, RuntimeError) as exc:
+        return None, f"{type(exc).__name__}: {exc}"
+    loo = np.full(n, np.nan, dtype=np.float64)
+    for i in range(n):
+        try:
+            loo[i] = float(metric(np.delete(y_b, i), np.delete(s_b, i)))
+        except (ValueError, RuntimeError) as exc:
+            if first_failure is None:
+                first_failure = f"{type(exc).__name__}: {exc}"
+    valid = ~np.isnan(loo)
+    if int(valid.sum()) < 2:
+        return None, first_failure
+    loo_mean = float(np.nanmean(loo))
+    jack_var = (n - 1.0) / n * float(np.nansum((loo[valid] - loo_mean) ** 2))
+    if jack_var <= 0.0:
+        return None, first_failure
+    return (theta_b, float(np.sqrt(jack_var))), first_failure
+
+
 def _bootstrap_t_ci(
     y_true: np.ndarray,
     y_score: np.ndarray,
@@ -321,7 +389,8 @@ def _bootstrap_t_ci(
     *,
     n_resamples: int,
     confidence: float,
-    rng: np.random.Generator,
+    seed: int,
+    n_jobs: int = 1,
 ) -> tuple[float, float]:
     r"""Studentized bootstrap-t CI per Algeshiemer 2024 / Davison & Hinkley §5.2.
 
@@ -338,45 +407,16 @@ def _bootstrap_t_ci(
     Skips degenerate resamples (single-class draws causing the metric to
     raise); raises if > 5% of resamples are degenerate.
     """
-    n = int(len(y_true))
-    theta_stars = np.full(n_resamples, np.nan, dtype=np.float64)
-    se_stars = np.full(n_resamples, np.nan, dtype=np.float64)
-    # Capture first underlying exception so the n_valid raise can name it
-    # (was silent contextlib.suppress; per-resample logging would be noise
-    # in a thousands-iteration loop, but aggregate diagnostic is essential).
-    first_failure: str | None = None
-
-    for b in range(n_resamples):
-        idx = rng.integers(0, n, size=n)
-        y_b = y_true[idx]
-        s_b = y_score[idx]
-        try:
-            theta_b = float(metric(y_b, s_b))
-        except (ValueError, RuntimeError) as exc:
-            if first_failure is None:
-                first_failure = f"{type(exc).__name__}: {exc}"
-            continue
-        # Inner jackknife: leave-one-out within the resample.
-        loo = np.full(n, np.nan, dtype=np.float64)
-        for i in range(n):
-            try:
-                loo[i] = float(metric(np.delete(y_b, i), np.delete(s_b, i)))
-            except (ValueError, RuntimeError) as exc:
-                if first_failure is None:
-                    first_failure = f"{type(exc).__name__}: {exc}"
-        valid = ~np.isnan(loo)
-        if int(valid.sum()) < 2:
-            continue
-        loo_mean = float(np.nanmean(loo))
-        jack_var = (n - 1.0) / n * float(np.nansum((loo[valid] - loo_mean) ** 2))
-        if jack_var <= 0.0:
-            continue
-        theta_stars[b] = theta_b
-        se_stars[b] = float(np.sqrt(jack_var))
-
-    valid_mask = ~np.isnan(theta_stars) & ~np.isnan(se_stars) & (se_stars > 0.0)
-    n_valid = int(valid_mask.sum())
+    seed_seqs = np.random.SeedSequence(seed).spawn(n_resamples)
+    step = functools.partial(_bootstrap_t_step, y_true=y_true, y_score=y_score, metric=metric)
+    raw_results = parallel_map(step, seed_seqs, n_jobs=n_jobs, description="bootstrap_t")
+    valid_pairs = [r for r, _ in raw_results if r is not None]
+    n_valid = len(valid_pairs)
     if n_valid < n_resamples * 0.95:
+        # Surface the first underlying failure for diagnostic context.
+        first_failure: str | None = next(
+            (failure for _, failure in raw_results if failure is not None), None
+        )
         first_msg = (
             f"; first underlying failure: {first_failure}" if first_failure is not None else ""
         )
@@ -387,8 +427,8 @@ def _bootstrap_t_ci(
             f"{first_msg}"
         )
 
-    theta_v = theta_stars[valid_mask]
-    se_v = se_stars[valid_mask]
+    theta_v = np.array([t for t, _ in valid_pairs], dtype=np.float64)
+    se_v = np.array([s for _, s in valid_pairs], dtype=np.float64)
     pivots = (theta_v - point) / se_v
     se_overall = float(np.std(theta_v, ddof=1))
     alpha = (1.0 - confidence) / 2.0
@@ -396,6 +436,31 @@ def _bootstrap_t_ci(
     q_hi = float(np.quantile(pivots, 1.0 - alpha))
     # CI is asymmetric — pivot quantiles are subtracted in reverse order.
     return point - q_hi * se_overall, point - q_lo * se_overall
+
+
+def _paired_bootstrap_diff_step(
+    seed_seq: np.random.SeedSequence,
+    *,
+    y_true_arr: np.ndarray,
+    a: np.ndarray,
+    b: np.ndarray,
+    metric: MetricFn,
+) -> float | None:
+    """One paired-bootstrap resample step (module-level for parallel_map picklability).
+
+    Returns the delta ``metric(B) - metric(A)`` on the resampled indices, or
+    ``None`` if the resample is degenerate (single-class draw → metric raises).
+    Caller filters None values + tracks failure rate.
+    """
+    rng = np.random.default_rng(seed_seq)
+    n = len(y_true_arr)
+    idx = rng.integers(0, n, size=n)
+    try:
+        metric_b = float(metric(y_true_arr[idx], b[idx]))
+        metric_a = float(metric(y_true_arr[idx], a[idx]))
+    except (ValueError, RuntimeError):
+        return None
+    return metric_b - metric_a
 
 
 def paired_bootstrap_diff(
@@ -407,6 +472,7 @@ def paired_bootstrap_diff(
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
     seed: int = DEFAULT_SEED,
+    n_jobs: int = 1,
 ) -> PairedBootstrapCI:
     """Paired-bootstrap CI on ``metric(B) − metric(A)`` using the same resample indices.
 
@@ -417,7 +483,12 @@ def paired_bootstrap_diff(
     y_score_a, y_score_b : np.ndarray, shape (n,)
         Scores from two scorers on the same rows.
     metric : callable ``(y_true, y_score) -> float``
+        Must be picklable when ``n_jobs != 1`` (lambdas not supported).
     n_resamples, confidence, seed : standard bootstrap params.
+    n_jobs : int, optional
+        Parallel workers (default 1 — sequential). ``n_jobs > 1`` uses
+        joblib loky; ``n_jobs=-1`` uses all cores; ``n_jobs=0`` is rejected.
+        See :ref:`methodology/parallelism` for the contract.
 
     Returns
     -------
@@ -429,7 +500,10 @@ def paired_bootstrap_diff(
         If ``y_true``, ``y_score_a``, ``y_score_b`` do not share the same
         shape; if ``n < 10`` (too small for paired bootstrap); if more
         than 5% of resamples raised in ``metric`` (rare-positive
-        degeneracy); or if no resamples produced a usable Δ.
+        degeneracy); or if no resamples produced a usable Δ; or if
+        ``n_jobs == 0``.
+    TypeError
+        If ``n_jobs != 1`` and ``metric`` is not picklable.
 
     Examples
     --------
@@ -449,6 +523,13 @@ def paired_bootstrap_diff(
     correlates the two bootstrap distributions, producing a tighter CI on Δ
     than independent unpaired bootstraps would.
 
+    Per-resample seeding uses :class:`numpy.random.SeedSequence.spawn` so
+    ``n_jobs > 1`` produces bit-for-bit-identical CI to ``n_jobs = 1`` for
+    the same caller-supplied ``seed``. This is the v0.34.0 reproducibility
+    contract; the RNG-stream did change from the v0.33.x single-Generator
+    pattern, so exact CI bounds differ slightly from prior versions on
+    identical seeds (statistically equivalent bootstraps either way).
+
     References
     ----------
     .. [1] Efron, B. "Bootstrap methods: Another look at the jackknife."
@@ -466,20 +547,17 @@ def paired_bootstrap_diff(
         raise ValueError(f"n={n} too small for paired bootstrap; need ≥ 10")
 
     delta_point = float(metric(y_true_arr, b)) - float(metric(y_true_arr, a))
-    rng = np.random.default_rng(seed)
-    deltas: list[float] = []
-    failures = 0
-    for _ in range(n_resamples):
-        idx = rng.integers(0, n, size=n)
-        try:
-            metric_b = float(metric(y_true_arr[idx], b[idx]))
-            metric_a = float(metric(y_true_arr[idx], a[idx]))
-        except (ValueError, RuntimeError):
-            # Single-class resamples raise ValueError on PR/ROC-AUC; rare-positive
-            # data can also trigger sklearn's UndefinedMetric. Skip + audit.
-            failures += 1
-            continue
-        deltas.append(metric_b - metric_a)
+    seed_seqs = np.random.SeedSequence(seed).spawn(n_resamples)
+    step = functools.partial(
+        _paired_bootstrap_diff_step,
+        y_true_arr=y_true_arr,
+        a=a,
+        b=b,
+        metric=metric,
+    )
+    raw_results = parallel_map(step, seed_seqs, n_jobs=n_jobs, description="paired_bootstrap_diff")
+    failures = sum(1 for r in raw_results if r is None)
+    deltas = [r for r in raw_results if r is not None]
 
     if failures > 0.05 * n_resamples:
         raise ValueError(
@@ -504,6 +582,36 @@ def paired_bootstrap_diff(
     )
 
 
+def _paired_bootstrap_ece_diff_step(
+    seed_seq: np.random.SeedSequence,
+    *,
+    y_true_arr: np.ndarray,
+    a: np.ndarray,
+    b: np.ndarray,
+    ece_fn: Callable[[np.ndarray, np.ndarray, int], float],
+    n_bins: int,
+) -> float | None:
+    """One paired-ECE resample step (module-level for parallel_map picklability).
+
+    Returns ``ECE(B) - ECE(A)`` on the resampled indices, or ``None`` if the
+    resample is single-class (ECE undefined). Caller filters None values +
+    tracks failure rate.
+    """
+    rng = np.random.default_rng(seed_seq)
+    n = len(y_true_arr)
+    idx = rng.integers(0, n, size=n)
+    y_re = y_true_arr[idx]
+    n_pos = int(y_re.sum())
+    if n_pos == 0 or n_pos == n:
+        return None
+    try:
+        ece_a = ece_fn(y_re, a[idx], n_bins)
+        ece_b = ece_fn(y_re, b[idx], n_bins)
+    except (ValueError, ZeroDivisionError):
+        return None
+    return float(ece_b - ece_a)
+
+
 def paired_bootstrap_ece_diff(
     y_true: np.ndarray,
     y_score_a: np.ndarray,
@@ -514,6 +622,7 @@ def paired_bootstrap_ece_diff(
     confidence: float = DEFAULT_CONFIDENCE,
     seed: int = DEFAULT_SEED,
     n_bins: int = 10,
+    n_jobs: int = 1,
 ) -> PairedBootstrapCI:
     r"""Paired-bootstrap CI on ``ECE(B) − ECE(A)`` for two calibrated outputs.
 
@@ -537,6 +646,10 @@ def paired_bootstrap_ece_diff(
     n_resamples, confidence, seed : standard bootstrap params.
     n_bins : int, optional
         Number of ECE bins (passed through to ``ece_fn``).
+    n_jobs : int, optional
+        Parallel workers (default 1 — sequential). See
+        :ref:`methodology/parallelism`. ``ece_fn`` must be picklable when
+        ``n_jobs != 1``.
 
     Returns
     -------
@@ -547,7 +660,10 @@ def paired_bootstrap_ece_diff(
     Raises
     ------
     ValueError
-        On shape mismatch, ``n < 10``, or > 5% degenerate resamples.
+        On shape mismatch, ``n < 10``, > 5% degenerate resamples, or
+        ``n_jobs == 0``.
+    TypeError
+        If ``n_jobs != 1`` and ``ece_fn`` is not picklable.
 
     Notes
     -----
@@ -565,23 +681,20 @@ def paired_bootstrap_ece_diff(
         raise ValueError(f"n={n} too small for paired bootstrap; need >= 10")
 
     delta_point = float(ece_fn(y_true_arr, b, n_bins)) - float(ece_fn(y_true_arr, a, n_bins))
-    rng = np.random.default_rng(seed)
-    deltas: list[float] = []
-    failures = 0
-    for _ in range(n_resamples):
-        idx = rng.integers(0, n, size=n)
-        y_re = y_true_arr[idx]
-        n_pos = int(y_re.sum())
-        if n_pos == 0 or n_pos == n:
-            failures += 1
-            continue
-        try:
-            ece_a = ece_fn(y_re, a[idx], n_bins)
-            ece_b = ece_fn(y_re, b[idx], n_bins)
-        except (ValueError, ZeroDivisionError):
-            failures += 1
-            continue
-        deltas.append(float(ece_b - ece_a))
+    seed_seqs = np.random.SeedSequence(seed).spawn(n_resamples)
+    step = functools.partial(
+        _paired_bootstrap_ece_diff_step,
+        y_true_arr=y_true_arr,
+        a=a,
+        b=b,
+        ece_fn=ece_fn,
+        n_bins=n_bins,
+    )
+    raw_results = parallel_map(
+        step, seed_seqs, n_jobs=n_jobs, description="paired_bootstrap_ece_diff"
+    )
+    failures = sum(1 for r in raw_results if r is None)
+    deltas = [r for r in raw_results if r is not None]
 
     if failures > 0.05 * n_resamples:
         raise ValueError(
@@ -605,6 +718,40 @@ def paired_bootstrap_ece_diff(
     )
 
 
+def _paired_bootstrap_op_point_diff_step(
+    seed_seq: np.random.SeedSequence,
+    *,
+    val_y_arr: np.ndarray,
+    val_a: np.ndarray,
+    val_b: np.ndarray,
+    test_y_arr: np.ndarray,
+    test_a: np.ndarray,
+    test_b: np.ndarray,
+    threshold_fn: ThresholdFn,
+    metric_fn: ThresholdedMetricFn,
+) -> float | None:
+    """One two-level op-point resample step (module-level for parallel_map picklability).
+
+    Resamples val + test indices independently; refits threshold on val
+    resample (per scorer); evaluates metric_fn at that threshold on the
+    test resample for both scorers. Returns ``m_B - m_A`` or ``None`` on
+    any threshold-fit / metric-eval failure (e.g., single-class val draw).
+    """
+    rng = np.random.default_rng(seed_seq)
+    n_val = len(val_y_arr)
+    n_test = len(test_y_arr)
+    val_idx = rng.integers(0, n_val, size=n_val)
+    test_idx = rng.integers(0, n_test, size=n_test)
+    try:
+        thr_a = float(threshold_fn(val_y_arr[val_idx], val_a[val_idx]))
+        thr_b = float(threshold_fn(val_y_arr[val_idx], val_b[val_idx]))
+        m_a = float(metric_fn(test_y_arr[test_idx], test_a[test_idx], thr_a))
+        m_b = float(metric_fn(test_y_arr[test_idx], test_b[test_idx], thr_b))
+    except (ValueError, RuntimeError):
+        return None
+    return m_b - m_a
+
+
 def paired_bootstrap_op_point_diff(
     val_y: np.ndarray,
     val_score_a: np.ndarray,
@@ -618,6 +765,7 @@ def paired_bootstrap_op_point_diff(
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
     seed: int = DEFAULT_SEED,
+    n_jobs: int = 1,
 ) -> PairedBootstrapCI:
     r"""Two-level paired bootstrap for operating-point lifts.
 
@@ -645,6 +793,10 @@ def paired_bootstrap_op_point_diff(
     metric_fn : callable ``(y_true, y_score, threshold) -> float``
         Operating-point metric (e.g., F1, precision) at the given threshold.
     n_resamples, confidence, seed : standard bootstrap params.
+    n_jobs : int, optional
+        Parallel workers (default 1 — sequential). See
+        :ref:`methodology/parallelism`. Both ``threshold_fn`` and
+        ``metric_fn`` must be picklable when ``n_jobs != 1``.
 
     Returns
     -------
@@ -655,9 +807,12 @@ def paired_bootstrap_op_point_diff(
     Raises
     ------
     ValueError
-        On shape mismatch or insufficient sample size.
+        On shape mismatch, insufficient sample size, or ``n_jobs == 0``.
     RuntimeError
         If > 50% of resamples are degenerate (e.g., single-class val draws).
+    TypeError
+        If ``n_jobs != 1`` and ``threshold_fn`` / ``metric_fn`` are not
+        picklable.
 
     Notes
     -----
@@ -709,22 +864,24 @@ def paired_bootstrap_op_point_diff(
         metric_fn(test_y_arr, test_a, thr_a_full)
     )
 
-    rng = np.random.default_rng(seed)
-    deltas = np.empty(n_resamples, dtype=np.float64)
-    failures = 0
-    for r in range(n_resamples):
-        val_idx = rng.integers(0, n_val, size=n_val)
-        test_idx = rng.integers(0, n_test, size=n_test)
-        try:
-            thr_a = float(threshold_fn(val_y_arr[val_idx], val_a[val_idx]))
-            thr_b = float(threshold_fn(val_y_arr[val_idx], val_b[val_idx]))
-            m_a = float(metric_fn(test_y_arr[test_idx], test_a[test_idx], thr_a))
-            m_b = float(metric_fn(test_y_arr[test_idx], test_b[test_idx], thr_b))
-            deltas[r] = m_b - m_a
-        except (ValueError, RuntimeError):
-            deltas[r] = np.nan
-            failures += 1
-    valid = deltas[~np.isnan(deltas)]
+    seed_seqs = np.random.SeedSequence(seed).spawn(n_resamples)
+    step = functools.partial(
+        _paired_bootstrap_op_point_diff_step,
+        val_y_arr=val_y_arr,
+        val_a=val_a,
+        val_b=val_b,
+        test_y_arr=test_y_arr,
+        test_a=test_a,
+        test_b=test_b,
+        threshold_fn=threshold_fn,
+        metric_fn=metric_fn,
+    )
+    raw_results = parallel_map(
+        step, seed_seqs, n_jobs=n_jobs, description="paired_bootstrap_op_point_diff"
+    )
+    failures = sum(1 for r in raw_results if r is None)
+    valid_list = [r for r in raw_results if r is not None]
+    valid = np.asarray(valid_list, dtype=np.float64)
     if len(valid) < n_resamples // 2:
         raise RuntimeError(
             f"paired_bootstrap_op_point_diff: {failures}/{n_resamples} resamples degenerate; "
@@ -909,6 +1066,7 @@ def paired_mde(
     power: float = 0.80,
     n_resamples: int = DEFAULT_N_RESAMPLES,
     seed: int = DEFAULT_SEED,
+    n_jobs: int = 1,
 ) -> MDEEstimate:
     r"""Minimum detectable paired Δ at (α, power).
 
@@ -932,6 +1090,11 @@ def paired_mde(
         Two-sided significance (default 0.05).
     power : float, optional
         1 − β; probability of detection at true Δ = MDE (default 0.80).
+    n_jobs : int, optional
+        Parallel workers (default 1 — sequential). Forwarded to the
+        internal :func:`paired_bootstrap_diff` call which carries the
+        compute. ``mde_from_ci`` is O(1) and ignored. See
+        :ref:`methodology/parallelism`.
 
     Returns
     -------
@@ -945,6 +1108,7 @@ def paired_mde(
         n_resamples=n_resamples,
         confidence=0.95,
         seed=seed,
+        n_jobs=n_jobs,
     )
     est = mde_from_ci(paired, alpha=alpha, power=power)
     return MDEEstimate(
