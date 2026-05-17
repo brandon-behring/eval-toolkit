@@ -47,12 +47,14 @@ _DETERMINISTIC_STRATEGY_NAMES = (
 def _load_holdout() -> tuple[list[str], list[str], list[bool]]:
     """Load (text_a, text_b, true_duplicate) triples from the holdout JSONL.
 
-    Skips the metadata header line (``_metadata: true``).
+    Skips the metadata header line (``_metadata: true``). Uses explicit
+    UTF-8 because the corpus contains non-ASCII characters (German umlauts
+    etc.) and Windows defaults to cp1252 (charmap) which can't decode them.
     """
     text_as: list[str] = []
     text_bs: list[str] = []
     truths: list[bool] = []
-    with _HOLDOUT_PATH.open() as f:
+    with _HOLDOUT_PATH.open(encoding="utf-8") as f:
         for line in f:
             rec = json.loads(line)
             if rec.get("_metadata"):
@@ -145,14 +147,16 @@ def test_dedup_holdout_calibration_deterministic_strategies() -> None:
     grid = _compute_full_grid(text_as, text_bs, truths)
 
     if os.environ.get("REGEN_DEDUP_HOLDOUT_GOLDEN") == "1":
-        _EXPECTED_PATH.write_text(json.dumps(grid, indent=2, sort_keys=True) + "\n")
+        _EXPECTED_PATH.write_text(
+            json.dumps(grid, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         pytest.skip(f"REGEN_DEDUP_HOLDOUT_GOLDEN=1; wrote snapshot to {_EXPECTED_PATH}")
 
     assert _EXPECTED_PATH.exists(), (
         f"Snapshot missing: {_EXPECTED_PATH}. Regenerate with: "
         "REGEN_DEDUP_HOLDOUT_GOLDEN=1 pytest tests/golden/test_dedup_holdout_calibration.py"
     )
-    expected = json.loads(_EXPECTED_PATH.read_text())
+    expected = json.loads(_EXPECTED_PATH.read_text(encoding="utf-8"))
 
     for name in _DETERMINISTIC_STRATEGY_NAMES:
         for t_key in (f"{t:.2f}" for t in _THRESHOLDS):

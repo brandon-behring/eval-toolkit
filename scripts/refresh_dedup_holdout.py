@@ -64,14 +64,14 @@ def _bytes_match(path_a: Path, path_b: Path) -> bool:
 
 def _update_provenance_sha(sha: str, date: str) -> None:
     """Replace the SHA + commit-date lines in provenance.md."""
-    text = _PROVENANCE_PATH.read_text()
+    text = _PROVENANCE_PATH.read_text(encoding="utf-8")
     text = re.sub(
         r"git SHA\s*\*\*`[0-9a-f]+`\*\*\s*\(commit dated[^)]+\)",
         f"git SHA **`{sha}`** (commit dated {date})",
         text,
         count=1,
     )
-    _PROVENANCE_PATH.write_text(text)
+    _PROVENANCE_PATH.write_text(text, encoding="utf-8")
 
 
 def _regen_snapshot() -> None:
