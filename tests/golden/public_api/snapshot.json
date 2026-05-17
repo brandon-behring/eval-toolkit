@@ -1030,7 +1030,7 @@
     "bootstrap_ci": {
       "doc_first_line": "Per-condition CI via :func:`scipy.stats.bootstrap`.",
       "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', metric: 'MetricFn', *, n_resamples: 'int' = 1000, confidence: 'float' = 0.95, method: \"Literal['BCa', 'percentile', 'studentized']\" = 'BCa', seed: 'int' = 42) -> 'BootstrapCI'"
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', metric: 'MetricFn', *, n_resamples: 'int' = 1000, confidence: 'float' = 0.95, method: \"Literal['BCa', 'percentile', 'studentized']\" = 'BCa', seed: 'int' = 42, n_jobs: 'int' = 1) -> 'BootstrapCI'"
     },
     "bootstrap_metric_from_predictions": {
       "doc_first_line": "Compute a PR-AUC bootstrap CI from one prediction ref.",
@@ -1285,17 +1285,17 @@
     "paired_bootstrap_diff": {
       "doc_first_line": "Paired-bootstrap CI on ``metric(B) \u2212 metric(A)`` using the same resample indices.",
       "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray', metric: 'MetricFn', *, n_resamples: 'int' = 1000, confidence: 'float' = 0.95, seed: 'int' = 42) -> 'PairedBootstrapCI'"
+      "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray', metric: 'MetricFn', *, n_resamples: 'int' = 1000, confidence: 'float' = 0.95, seed: 'int' = 42, n_jobs: 'int' = 1) -> 'PairedBootstrapCI'"
     },
     "paired_bootstrap_ece_diff": {
       "doc_first_line": "Paired-bootstrap CI on ``ECE(B) \u2212 ECE(A)`` for two calibrated outputs.",
       "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray', *, ece_fn: 'Callable[[np.ndarray, np.ndarray, int], float]', n_resamples: 'int' = 1000, confidence: 'float' = 0.95, seed: 'int' = 42, n_bins: 'int' = 10) -> 'PairedBootstrapCI'"
+      "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray', *, ece_fn: 'Callable[[np.ndarray, np.ndarray, int], float]', n_resamples: 'int' = 1000, confidence: 'float' = 0.95, seed: 'int' = 42, n_bins: 'int' = 10, n_jobs: 'int' = 1) -> 'PairedBootstrapCI'"
     },
     "paired_bootstrap_op_point_diff": {
       "doc_first_line": "Two-level paired bootstrap for operating-point lifts.",
       "kind": "function",
-      "signature": "(val_y: 'np.ndarray', val_score_a: 'np.ndarray', val_score_b: 'np.ndarray', test_y: 'np.ndarray', test_score_a: 'np.ndarray', test_score_b: 'np.ndarray', threshold_fn: 'ThresholdFn', metric_fn: 'ThresholdedMetricFn', *, n_resamples: 'int' = 1000, confidence: 'float' = 0.95, seed: 'int' = 42) -> 'PairedBootstrapCI'"
+      "signature": "(val_y: 'np.ndarray', val_score_a: 'np.ndarray', val_score_b: 'np.ndarray', test_y: 'np.ndarray', test_score_a: 'np.ndarray', test_score_b: 'np.ndarray', threshold_fn: 'ThresholdFn', metric_fn: 'ThresholdedMetricFn', *, n_resamples: 'int' = 1000, confidence: 'float' = 0.95, seed: 'int' = 42, n_jobs: 'int' = 1) -> 'PairedBootstrapCI'"
     },
     "paired_diff_from_prediction_refs": {
       "doc_first_line": "Compute paired PR-AUC delta from two prediction refs.",
@@ -1310,7 +1310,7 @@
     "paired_mde": {
       "doc_first_line": "Minimum detectable paired \u0394 at (\u03b1, power).",
       "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray', metric: 'MetricFn', *, alpha: 'float' = 0.05, power: 'float' = 0.8, n_resamples: 'int' = 1000, seed: 'int' = 42) -> 'MDEEstimate'"
+      "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray', metric: 'MetricFn', *, alpha: 'float' = 0.05, power: 'float' = 0.8, n_resamples: 'int' = 1000, seed: 'int' = 42, n_jobs: 'int' = 1) -> 'MDEEstimate'"
     },
     "path_for_config": {
       "doc_first_line": "Return a stable repo-relative path string when possible, otherwise absolute.",
