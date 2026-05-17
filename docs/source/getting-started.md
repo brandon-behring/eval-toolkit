@@ -452,6 +452,14 @@ result_with_claim = with_claim_report(result, report)
 assert result_with_claim.claim_report is not None
 ```
 
+Each of the three gate calls above (`required_metric_gate`,
+`minimum_slice_size_gate`, `metric_threshold_gate`) is a factory
+that returns an `EvidenceGate` instance — a frozen dataclass bundling
+a callable check, a name, and a severity. Custom gates are written by
+constructing `EvidenceGate` directly with your own check function;
+the [`claims_and_gates`](examples/claims_and_gates.md) example walks
+through both reference and custom gates end-to-end.
+
 See [methodology/claims.md](methodology/claims.md) for the full
 contract — exception handling, severity policy, custom gates.
 

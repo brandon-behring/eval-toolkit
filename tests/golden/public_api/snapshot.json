@@ -6,6 +6,7 @@
     "CISafeThresholdSelector",
     "ClaimReport",
     "ClaimSpec",
+    "CorrectionMethod",
     "CostMatrix",
     "CostSensitiveSelector",
     "CrossSplitLeakageCheck",
@@ -101,6 +102,7 @@
     "apply_operating_points",
     "audit_source_label_similarity",
     "bayes_optimal_threshold",
+    "bonferroni_correct",
     "bootstrap_ci",
     "bootstrap_metric_from_predictions",
     "brier_decomposition",
@@ -109,6 +111,7 @@
     "capture_git_sha",
     "compute_file_hash",
     "compute_label_overlap",
+    "correct_p_values",
     "cross_dedup",
     "cross_validate_metric",
     "cv_clt_ci",
@@ -124,6 +127,7 @@
     "expected_calibration_error_l2",
     "expected_calibration_error_l2_debiased",
     "external_diagnostic_gate",
+    "fdr_bh_correct",
     "figure_metadata",
     "file_sha256",
     "fit_beta_calibrator",
@@ -247,6 +251,11 @@
       "doc_first_line": "A claim plus the gates required before it can be treated as supported.",
       "kind": "class",
       "signature": "(name: 'str', gates: 'tuple[EvidenceGate, ...]', mode: 'str' = 'claim', description: 'str' = '') -> None"
+    },
+    "CorrectionMethod": {
+      "doc_first_line": "",
+      "kind": "function",
+      "signature": "(*args, **kwargs)"
     },
     "CostMatrix": {
       "bases": [
@@ -992,7 +1001,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'0.31.0'"
+      "value": "'0.32.0'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1008,6 +1017,11 @@
       "doc_first_line": "Bayes-optimal threshold per Elkan 2001 [#elkan]_ cost-sensitive derivation.",
       "kind": "function",
       "signature": "(\u03c0: 'float', c_fp: 'float', c_fn: 'float') -> 'float'"
+    },
+    "bonferroni_correct": {
+      "doc_first_line": "Bonferroni family-wise error rate correction.",
+      "kind": "function",
+      "signature": "(p_values: 'np.ndarray') -> 'np.ndarray'"
     },
     "bootstrap_ci": {
       "doc_first_line": "Per-condition CI via :func:`scipy.stats.bootstrap`.",
@@ -1048,6 +1062,11 @@
       "doc_first_line": "Boolean ``(n_train, n_test)`` matrix: True where label windows overlap.",
       "kind": "function",
       "signature": "(t_train: 'np.ndarray', t_test: 'np.ndarray', horizon: 'int') -> 'np.ndarray'"
+    },
+    "correct_p_values": {
+      "doc_first_line": "Dispatch helper for multiple-comparisons correction.",
+      "kind": "function",
+      "signature": "(p_values: 'np.ndarray', *, method: 'CorrectionMethod' = 'bh') -> 'np.ndarray'"
     },
     "cross_dedup": {
       "doc_first_line": "Return eval indices to KEEP (drop those near-duplicate to any train text).",
@@ -1123,6 +1142,11 @@
       "doc_first_line": "Require an external diagnostic payload, optionally thresholded.",
       "kind": "function",
       "signature": "(path: 'str', *, op: \"Literal['<', '<=', '>', '>=', '=='] | None\" = None, threshold: 'float | None' = None, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "fdr_bh_correct": {
+      "doc_first_line": "Benjamini-Hochberg false-discovery-rate correction.",
+      "kind": "function",
+      "signature": "(p_values: 'np.ndarray') -> 'np.ndarray'"
     },
     "figure_metadata": {
       "doc_first_line": "Build a JSON-serializable provenance dict for ``save_figure``.",

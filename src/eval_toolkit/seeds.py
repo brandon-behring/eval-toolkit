@@ -61,6 +61,11 @@ def set_global_seeds(seed: int, *, strict_torch_determinism: bool = False) -> No
     shell *before* launching Python; this function emits a UserWarning
     when the variable is already set to a different value.
 
+    Concrete kernels affected by ``strict_torch_determinism=True``
+    include flash-attention, scatter/gather ops, and certain CUDA
+    reduction kernels; consult the PyTorch reproducibility page
+    (See Also) for the canonical maintained list.
+
     Torch is imported lazily inside the function. If ``torch`` is not
     installed, the random + numpy seeds + ``PYTHONHASHSEED`` are still
     set.
@@ -79,6 +84,8 @@ def set_global_seeds(seed: int, *, strict_torch_determinism: bool = False) -> No
     --------
     `pytorch-lightning.seed_everything <https://lightning.ai/docs/pytorch/stable/common/seed.html>`_ :
         Reference for the strict_torch_determinism semantics.
+    `PyTorch reproducibility notes <https://pytorch.org/docs/stable/notes/randomness.html>`_ :
+        Canonical maintained list of nondeterministic ops + workarounds.
     """
     if not isinstance(seed, int):
         raise TypeError(f"seed must be int, got {type(seed).__name__}")

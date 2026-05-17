@@ -106,6 +106,9 @@ threshold selectors into the harness.
 - [`docs/examples/pytorch_scorer_example.md`](docs/examples/pytorch_scorer_example.md)
   — HuggingFace transformer + LoRA `Scorer` adapter (batched inference,
   GPU/CPU placement, deterministic-mode setup).
+- [`docs/examples/claims_and_gates.md`](docs/examples/claims_and_gates.md)
+  — Composing reference + custom `EvidenceGate`s into a `ClaimSpec` and
+  running `evaluate_claims()` for release-time go/no-go checks.
 
 ## Install
 
@@ -202,7 +205,7 @@ with tempfile.TemporaryDirectory() as run_dir:
 | `eval_toolkit.splits` | `Splitter` Protocol + 5 reference impls (holdout / stratified / group / source-disjoint / time-series) |
 | `eval_toolkit.loaders` | `DatasetLoader` Protocol + 4 reference impls (DataFrame / SingleSlice / ParquetGlob / HF datasets) with Croissant-compatible `describe()` |
 | `eval_toolkit.manifest` | `RunManifest` (NeurIPS-aligned) + source-role / guardrail metadata + `build_manifest` / `write_manifest` |
-| `eval_toolkit.claims` | Generic evidence gates and `ClaimReport` for claim-mode vs exploratory-mode checks |
+| `eval_toolkit.claims` | `EvidenceGate` class (frozen dataclass: name + callable check + severity), reference gate factories (`required_metric_gate`, `minimum_slice_size_gate`, `metric_threshold_gate`, etc.), `evaluate_claims()`, and `ClaimReport` for claim-mode vs exploratory-mode checks. See [`docs/extending.md`](docs/extending.md) for writing custom gates and [`docs/examples/claims_and_gates.md`](docs/examples/claims_and_gates.md) for a worked end-to-end example. |
 | `eval_toolkit.text_dedup` | `SimilarityStrategy` Protocol + 5 strategies (TF-IDF / hash / embedding / Jaccard / MinHash-LSH); `near_dedup` / `cross_dedup` orchestrators |
 | `eval_toolkit.plotting` | PR curves, reliability diagrams, confusion matrices, score histograms, lift CIs |
 | `eval_toolkit.provenance` | File hashing, run-directory layout, figure metadata sidecar |

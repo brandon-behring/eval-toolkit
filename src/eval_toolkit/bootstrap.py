@@ -37,16 +37,20 @@ __all__ = [
     "DEFAULT_N_RESAMPLES",
     "DEFAULT_SEED",
     "BootstrapCI",
+    "CorrectionMethod",
     "DeLongResult",
     "MDEEstimate",
     "MetricFn",
     "PairedBootstrapCI",
     "ThresholdFn",
     "ThresholdedMetricFn",
+    "bonferroni_correct",
     "bootstrap_ci",
+    "correct_p_values",
     "cross_validate_metric",
     "cv_clt_ci",
     "delong_roc_variance",
+    "fdr_bh_correct",
     "mde_from_ci",
     "paired_bootstrap_diff",
     "paired_bootstrap_ece_diff",
@@ -62,6 +66,7 @@ DEFAULT_SEED: Final[int] = 42
 MetricFn = Callable[[np.ndarray, np.ndarray], float]
 ThresholdFn = Callable[[np.ndarray, np.ndarray], float]
 ThresholdedMetricFn = Callable[[np.ndarray, np.ndarray, float], float]
+CorrectionMethod = Literal["bh", "bonferroni", "none"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -1355,3 +1360,151 @@ def delong_roc_variance(
         ci_low=float(delta - half_ci),
         ci_high=float(delta + half_ci),
     )
+
+
+# ---------------------------------------------------------------------------
+# Multiple-comparisons correction
+# ---------------------------------------------------------------------------
+
+
+def fdr_bh_correct(p_values: np.ndarray) -> np.ndarray:
+    r"""Benjamini-Hochberg false-discovery-rate correction.
+
+    Standard step-up FDR-control procedure for the multiple-comparisons
+    problem (e.g., correcting many DeLong / paired-bootstrap p-values
+    across slices, scorers, folds). Less conservative than Bonferroni;
+    controls expected proportion of false discoveries rather than
+    family-wise error rate.
+
+    Parameters
+    ----------
+    p_values : np.ndarray, shape (m,)
+        1-D array of raw p-values; values outside ``[0, 1]`` raise.
+
+    Returns
+    -------
+    np.ndarray, shape (m,)
+        q-values (BH-adjusted p-values) in the same position order as
+        the input. The i-th q-value is
+        :math:`\min_{k \ge i} (m / k) \, p_{(k)}` clipped to
+        ``[0, 1]``, where :math:`p_{(k)}` is the k-th smallest input.
+
+    Raises
+    ------
+    ValueError
+        If input is empty or contains values outside ``[0, 1]``.
+
+    References
+    ----------
+    .. [1] Benjamini, Y. & Hochberg, Y. "Controlling the False Discovery
+           Rate: A Practical and Powerful Approach to Multiple Testing."
+           Journal of the Royal Statistical Society B 57(1), 1995.
+
+    See Also
+    --------
+    bonferroni_correct : Family-wise error rate alternative (strict).
+    correct_p_values : Dispatch helper covering both methods.
+    """
+    p = np.asarray(p_values, dtype=float).ravel()
+    if p.size == 0:
+        raise ValueError("p_values must be non-empty")
+    if not np.all((p >= 0.0) & (p <= 1.0)):
+        bad = p[~((p >= 0.0) & (p <= 1.0))]
+        raise ValueError(f"p_values outside [0, 1]: {bad[:5]}")
+    n = p.size
+    order = np.argsort(p)
+    sorted_p = p[order]
+    # BH step-up: q_(k) = min over i >= k of (n / i) * p_(i)
+    ranks = np.arange(1, n + 1, dtype=float)
+    raw_q = sorted_p * n / ranks
+    # Monotone enforcement: q_(k) ≤ q_(k+1) ≤ ... ≤ q_(n)
+    q_sorted = np.minimum.accumulate(raw_q[::-1])[::-1]
+    q_sorted = np.clip(q_sorted, 0.0, 1.0)
+    q = np.empty_like(q_sorted)
+    q[order] = q_sorted
+    return q
+
+
+def bonferroni_correct(p_values: np.ndarray) -> np.ndarray:
+    """Bonferroni family-wise error rate correction.
+
+    Strict FWER control; multiplies each p-value by the number of
+    tests and clips at 1. Conservative but simple; pick this when the
+    strongest multiple-comparisons guarantee is required.
+
+    Parameters
+    ----------
+    p_values : np.ndarray, shape (m,)
+        1-D array of raw p-values; values outside ``[0, 1]`` raise.
+
+    Returns
+    -------
+    np.ndarray, shape (m,)
+        Corrected p-values ``min(p * m, 1)`` in input position order.
+
+    Raises
+    ------
+    ValueError
+        If input is empty or contains values outside ``[0, 1]``.
+
+    See Also
+    --------
+    fdr_bh_correct : Less conservative FDR-control alternative.
+    correct_p_values : Dispatch helper covering both methods.
+    """
+    p = np.asarray(p_values, dtype=float).ravel()
+    if p.size == 0:
+        raise ValueError("p_values must be non-empty")
+    if not np.all((p >= 0.0) & (p <= 1.0)):
+        bad = p[~((p >= 0.0) & (p <= 1.0))]
+        raise ValueError(f"p_values outside [0, 1]: {bad[:5]}")
+    clipped: np.ndarray = np.clip(p * p.size, 0.0, 1.0)
+    return clipped
+
+
+def correct_p_values(
+    p_values: np.ndarray,
+    *,
+    method: CorrectionMethod = "bh",
+) -> np.ndarray:
+    """Dispatch helper for multiple-comparisons correction.
+
+    Parameters
+    ----------
+    p_values : np.ndarray
+        Raw p-values; passed through to the selected correction.
+    method : {"bh", "bonferroni", "none"}, optional
+        ``"bh"`` (default): Benjamini-Hochberg FDR control.
+        ``"bonferroni"``: Bonferroni FWER control (conservative).
+        ``"none"``: pass-through; returns ``np.asarray(p_values).ravel()``.
+
+    Returns
+    -------
+    np.ndarray
+        Corrected p-values (a.k.a. q-values when ``method="bh"``).
+
+    Notes
+    -----
+    This function is numpy-only by module convention (the ``bootstrap``
+    sub-module depends only on numpy + scipy.stats). The canonical pandas
+    idiom for DataFrame-shaped p-values is::
+
+        df["q_value"] = correct_p_values(df["p_value"].to_numpy(), method="bh")
+
+    Pass ``df[col].to_numpy()`` (1-D) on the way in; assign the returned
+    array back to a new column (the DataFrame index is preserved by the
+    column assignment, not by this function).
+
+    Raises
+    ------
+    ValueError
+        If ``method`` is not one of the documented options, or if
+        the underlying correction raises on invalid p-values.
+    """
+    if method == "bh":
+        return fdr_bh_correct(p_values)
+    if method == "bonferroni":
+        return bonferroni_correct(p_values)
+    if method == "none":
+        return np.asarray(p_values, dtype=float).ravel()
+    raise ValueError(f"method must be 'bh' | 'bonferroni' | 'none'; got {method!r}")

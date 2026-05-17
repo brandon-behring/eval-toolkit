@@ -84,6 +84,10 @@ __all__ = [
     "write_run_result",
 ]
 
+# Default n_resamples for bootstrap-CI routines. Rationale: see
+# ``docs/source/methodology/bootstrap.md`` §"Resampling budget" —
+# 1 000 is the lower bound of the 1k–10k range modern toolkits use
+# (Monte-Carlo error on a 95% CI quantile is ~0.5% at B=1000).
 DEFAULT_BOOTSTRAP_RESAMPLES: Final[int] = 1000
 RUN_RESULT_SCHEMA_VERSION: Final[str] = "v1"
 

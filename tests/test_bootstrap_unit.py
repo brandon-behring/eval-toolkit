@@ -480,3 +480,108 @@ def test_delong_roc_variance_p_value_low_when_b_is_strong() -> None:
     # B is much stronger -> delta_auc strongly negative, p-value tiny.
     assert result.delta_auc < -0.1
     assert result.p_value < 0.001
+
+
+# ---------------------------------------------------------------------------
+# Multiple-comparisons correction (BH / Bonferroni)
+# Ported from piv5.eval.paired (V5 v0.6) — closes eval-toolkit #1.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_bonferroni_simple() -> None:
+    """Bonferroni multiplies by N tests; clips at 1.0."""
+    from eval_toolkit.bootstrap import bonferroni_correct
+
+    p = np.array([0.01, 0.04, 0.5, 1.0])
+    q = bonferroni_correct(p)
+    assert q[0] == pytest.approx(0.04)
+    assert q[1] == pytest.approx(0.16)
+    assert q[2] == 1.0
+    assert q[3] == 1.0
+
+
+@pytest.mark.unit
+def test_bh_uniform_p_values() -> None:
+    """Under uniform null (large N), BH q-values increase monotonically."""
+    from eval_toolkit.bootstrap import fdr_bh_correct
+
+    rng = np.random.default_rng(0)
+    p = rng.uniform(0, 1, size=100)
+    q = fdr_bh_correct(p)
+    # Sort by raw p; q-values should be monotone non-decreasing on that sort.
+    order = np.argsort(p)
+    q_sorted = q[order]
+    assert (np.diff(q_sorted) >= -1e-9).all(), "BH q-values not monotone in p-rank"
+
+
+@pytest.mark.unit
+def test_bh_rejects_at_5pct_known_example() -> None:
+    """BH spec example: p=[0.001, 0.01, 0.04, 0.1, 0.5] → first 2 reject at q<0.05."""
+    from eval_toolkit.bootstrap import fdr_bh_correct
+
+    p = np.array([0.001, 0.01, 0.04, 0.1, 0.5])
+    q = fdr_bh_correct(p)
+    # i=1: (5/1) * 0.001 = 0.005
+    # i=2: (5/2) * 0.01  = 0.025
+    # i=3: (5/3) * 0.04  ≈ 0.0667 (monotone-enforced ≥ upstream)
+    assert q[0] < 0.05
+    assert q[1] < 0.05
+
+
+@pytest.mark.unit
+def test_bh_preserves_input_order() -> None:
+    """Output q-values must align with input p-values' positions, not sorted order."""
+    from eval_toolkit.bootstrap import fdr_bh_correct
+
+    p = np.array([0.5, 0.001, 0.04, 0.01])
+    q = fdr_bh_correct(p)
+    # smallest raw p (0.001 at index 1) should get the smallest q.
+    assert np.argmin(q) == 1
+
+
+@pytest.mark.unit
+def test_correct_p_values_dispatch_bh() -> None:
+    from eval_toolkit.bootstrap import correct_p_values, fdr_bh_correct
+
+    p = np.array([0.01, 0.04, 0.5])
+    assert np.allclose(correct_p_values(p, method="bh"), fdr_bh_correct(p))
+
+
+@pytest.mark.unit
+def test_correct_p_values_dispatch_bonferroni() -> None:
+    from eval_toolkit.bootstrap import bonferroni_correct, correct_p_values
+
+    p = np.array([0.01, 0.04, 0.5])
+    assert np.allclose(correct_p_values(p, method="bonferroni"), bonferroni_correct(p))
+
+
+@pytest.mark.unit
+def test_correct_p_values_dispatch_none() -> None:
+    from eval_toolkit.bootstrap import correct_p_values
+
+    p = np.array([0.01, 0.04, 0.5])
+    assert np.allclose(correct_p_values(p, method="none"), p)
+
+
+@pytest.mark.unit
+def test_correct_p_values_rejects_unknown_method() -> None:
+    from eval_toolkit.bootstrap import correct_p_values
+
+    with pytest.raises(ValueError, match="method must be"):
+        correct_p_values(np.array([0.1]), method="bayesian")  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_corrections_reject_invalid_input() -> None:
+    """Bounds + empty-input invariants for both correction primitives."""
+    from eval_toolkit.bootstrap import bonferroni_correct, fdr_bh_correct
+
+    with pytest.raises(ValueError, match="non-empty"):
+        fdr_bh_correct(np.array([]))
+    with pytest.raises(ValueError, match="non-empty"):
+        bonferroni_correct(np.array([]))
+    with pytest.raises(ValueError, match="outside"):
+        fdr_bh_correct(np.array([-0.1, 0.5]))
+    with pytest.raises(ValueError, match="outside"):
+        bonferroni_correct(np.array([1.5]))

@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-05-16 — Multiple-comparisons correction + EvidenceGate discoverability
+
+Bundled close-outs from the `v0.32` milestone triage (4 issues). Adds
+the BH/Bonferroni p-value correction primitive that V5 has been
+carrying inline, surfaces `EvidenceGate` from the README +
+getting-started, expands the `set_global_seeds(strict_torch_determinism=...)`
+docstring with concrete kernel examples + the canonical PyTorch
+reproducibility link, and co-locates a rationale for the
+`DEFAULT_BOOTSTRAP_RESAMPLES = 1000` default at its definition site.
+
+No breaking changes. Public API gains 4 new exports
+(`fdr_bh_correct`, `bonferroni_correct`, `correct_p_values`, the
+`CorrectionMethod` `Literal` alias); all four are additive on the
+`eval_toolkit.bootstrap` surface.
+
+### Added
+
+- `eval_toolkit.bootstrap.{fdr_bh_correct, bonferroni_correct, correct_p_values}` —
+  Benjamini-Hochberg + Bonferroni p-value corrections for the
+  multiple-comparisons problem (e.g., correcting many DeLong /
+  paired-bootstrap p-values across slices × scorers × folds). NumPy-only
+  implementations; cites Benjamini & Hochberg 1995. Includes the
+  `CorrectionMethod = Literal["bh", "bonferroni", "none"]` dispatch
+  alias and a `correct_p_values(p_values, *, method="bh")` helper that
+  routes to the right correction. Closes #1.
+
+### Changed
+
+- `README.md` modules table + worked-examples section now surface the
+  `EvidenceGate` class explicitly and link to the existing Sphinx
+  worked example (`docs/source/examples/claims_and_gates.md`).
+  `docs/source/getting-started.md` adds a prose paragraph after the
+  claim example explaining that the three gate factories return
+  `EvidenceGate` instances and how custom gates are written.
+  Sphinx-side API/methodology/examples pages were already complete and
+  are unchanged. Closes #2.
+- `set_global_seeds` docstring extended: Notes now name concrete
+  kernels affected by `strict_torch_determinism=True` (flash-attention,
+  scatter/gather ops, certain CUDA reductions); See Also adds the
+  canonical PyTorch reproducibility-notes page alongside the existing
+  Lightning `seed_everything` reference. Closes #4.
+- `DEFAULT_BOOTSTRAP_RESAMPLES = 1000` in `harness.py` now carries a
+  3-line rationale comment cross-referencing
+  `docs/source/methodology/bootstrap.md` §"Resampling budget" (~0.5%
+  Monte-Carlo error on a 95% CI quantile at B=1000; the lower end of
+  the 1k–10k range modern toolkits use). Closes #11.
+
+### Internal
+
+- 9 new unit tests for the BH/Bonferroni functions in
+  `tests/test_bootstrap_unit.py`, ported from `piv5.eval.paired` (V5
+  v0.6): Bonferroni multiplier-and-clip, BH monotonicity under uniform
+  null, BH spec example, BH input-order preservation, three dispatch
+  smoke tests for `correct_p_values`, unknown-method validation, and
+  bounds/empty-input invariants for both primitives.
+
 ## [0.31.0] — 2026-05-16 — Sphinx docs migration
 
 Documentation toolchain swap from mkdocs-material + mkdocstrings to
