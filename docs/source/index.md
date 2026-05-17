@@ -50,6 +50,7 @@ methodology/leakage
 methodology/text_dedup
 methodology/fairness
 methodology/length_stratification
+methodology/parallelism
 methodology/reading_list
 methodology/testing
 methodology/thresholds

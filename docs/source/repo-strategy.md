@@ -377,6 +377,26 @@ Things this strategy explicitly rules out:
   actually triggers and the back-compat shim is the only thing
   left in the main package.
 
+### Parallelism (v0.34.0+)
+
+The toolkit was historically single-threaded — not by policy, just because
+no primitive needed parallelism. v0.34.0 codifies the explicit pattern:
+**opt-in per-function `n_jobs` parameter** backed by the internal
+[`_parallel.parallel_map`](methodology/parallelism.md) helper (joblib
+loky backend; reproducibility-by-default via `np.random.SeedSequence`).
+
+What this means for contributors:
+
+- **Adding `n_jobs` to a new function is allowed and encouraged** when the
+  function has a Python-level loop over independent work units with
+  medium+ per-item cost. Follow the checklist in
+  [methodology/parallelism.md §"When to add `n_jobs`"](methodology/parallelism.md).
+- **Use the helper, don't roll your own.** All parallelism flows through
+  `_parallel.parallel_map`; no inline `joblib.Parallel`, no
+  `concurrent.futures`, no raw `multiprocessing`, no `asyncio`.
+- **Default sequential.** `n_jobs: int = 1` keeps existing call sites
+  unchanged and preserves reproducibility/traceback fidelity by default.
+
 (open-questions)=
 ## 8. Open questions
 Deferred to the v0.13.0 audit (or earlier if a trigger fires):

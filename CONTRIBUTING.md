@@ -109,6 +109,43 @@ logging.basicConfig(level=logging.WARNING)  # silence everything else
 logging.getLogger("eval_toolkit.harness").setLevel(logging.DEBUG)
 ```
 
+## Parallelism
+
+eval-toolkit codified its parallelism story in **v0.34.0**: a single
+internal helper, opt-in per-function `n_jobs` parameters, joblib loky
+backend, and a reproducibility-by-default contract. Full design rationale
+lives in
+[`docs/source/methodology/parallelism.md`](docs/source/methodology/parallelism.md).
+
+**Short version** for contributors adding parallelism to a new function:
+
+1. **Use the helper, not inline `joblib.Parallel`.** Every parallel-
+   capable function in the toolkit calls into
+   `eval_toolkit._parallel.parallel_map`. No `concurrent.futures`, no raw
+   `multiprocessing`, no `threading`, no `asyncio` for CPU-bound work.
+2. **Default `n_jobs: int = 1`** (sequential). Preserves traceback fidelity
+   + reproducibility for existing callers.
+3. **Reproducibility contract**: when the loop body uses random state,
+   the function MUST use `np.random.SeedSequence(seed).spawn(n)` to
+   derive per-item seeds. `n_jobs > 1` MUST give bit-for-bit-identical
+   output to `n_jobs == 1` for the same caller-supplied seed. Add a
+   `test_*_n_jobs_reproducibility` test asserting this.
+4. **Picklability**: when `n_jobs != 1`, the loop body must be a module-
+   level function (not a lambda or local closure). The helper does a
+   `pickle.dumps(fn)` sniff-test up front and raises a helpful `TypeError`
+   if violated.
+5. **Smart defaults** are handled by the helper: `n_jobs=0` raises;
+   `n_jobs > os.cpu_count()` caps with WARNING; `n_jobs=1` with
+   `>= 1000` items emits a one-shot INFO guidance log per process (the
+   toolkit's *only* INFO log — keep it that way unless you have an
+   equally strong "user-relevant progress" case).
+
+Currently parallel-capable: the 5 public bootstrap functions
+(`bootstrap_ci`, `paired_bootstrap_diff`, `paired_bootstrap_ece_diff`,
+`paired_bootstrap_op_point_diff`, `paired_mde`). See
+[methodology/parallelism.md "When to add `n_jobs`"](docs/source/methodology/parallelism.md)
+for the checklist if you're considering wiring a new site.
+
 ## Submitting changes
 
 1. Branch from `main` (the repo uses direct-to-main for solo work and PRs
