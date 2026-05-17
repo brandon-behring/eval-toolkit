@@ -50,6 +50,12 @@ plotting = ["matplotlib>=3.8", "pillow>=10.0"]
 property = ["hypothesis>=6.100"]
 yaml = ["pyyaml>=6.0"]
 parquet = ["pyarrow>=15.0"]
+# v0.33.1: MiniLM convenience embedder for EmbeddingCosineStrategy.
+# sentence-transformers transitively pulls torch + tokenizers (~700MB).
+# Intentionally NOT in [all] / [dev] — opt-in only to keep contributor
+# setup small. The canonical semantic-dedup recipe (all-MiniLM-L6-v2 +
+# cosine@0.80) is what this factory pre-wires for callers.
+embeddings = ["sentence-transformers>=3.0"]
 # DEPRECATED (announced v0.30.1, removal v0.33.0).
 #
 # Retained as a transitive no-op so `pip install eval-toolkit[validation]`
@@ -158,7 +164,7 @@ warn_no_return = true
 strict_equality = true
 
 [[tool.mypy.overrides]]
-module = ["scipy.*", "sklearn.*", "matplotlib.*", "pandas.*", "yaml.*"]
+module = ["scipy.*", "sklearn.*", "matplotlib.*", "pandas.*", "yaml.*", "sentence_transformers.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

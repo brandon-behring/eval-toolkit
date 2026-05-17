@@ -70,6 +70,7 @@ api/calibration
 api/claims
 api/config
 api/docs
+api/embeddings
 api/evidence
 api/harness
 api/leakage

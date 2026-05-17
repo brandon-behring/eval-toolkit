@@ -143,6 +143,7 @@
     "iter_folds_with_pool",
     "load_prediction_arrays",
     "low_fpr_feasibility_gate",
+    "make_minilm_embedder",
     "make_palette",
     "make_run_dir",
     "mde_from_ci",
@@ -1004,7 +1005,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'0.33.0'"
+      "value": "'0.33.1'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1225,6 +1226,11 @@
       "doc_first_line": "Require enough negatives for a low-FPR claim to be statistically feasible.",
       "kind": "function",
       "signature": "(slice_name: 'str', *, max_fpr: 'float', confidence: 'float' = 0.95, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "make_minilm_embedder": {
+      "doc_first_line": "Factory for a MiniLM-based embedder compatible with EmbeddingCosineStrategy.",
+      "kind": "function",
+      "signature": "(model_id: 'str' = 'sentence-transformers/all-MiniLM-L6-v2', *, device: 'str' = 'cpu', batch_size: 'int' = 32) -> 'Callable[[Sequence[str]], np.ndarray]'"
     },
     "make_palette": {
       "doc_first_line": "Construct a semantic-role color palette for downstream projects.",

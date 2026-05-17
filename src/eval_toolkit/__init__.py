@@ -117,6 +117,8 @@ _EXPORTS: dict[str, str] = {
     "render_files": "eval_toolkit.docs",
     "render_text": "eval_toolkit.docs",
     "walk_path": "eval_toolkit.docs",
+    # --- embeddings ---
+    "make_minilm_embedder": "eval_toolkit.embeddings",
     # --- evidence ---
     "AggregateEvidence": "eval_toolkit.evidence",
     "EvidenceAxis": "eval_toolkit.evidence",

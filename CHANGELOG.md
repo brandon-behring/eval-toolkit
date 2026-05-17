@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.1] — 2026-05-17 — MiniLM convenience embedder
+
+Closes the last open item in the v0.33 milestone (deferred from v0.33.0
+per the planned split). Ships the canonical semantic-dedup recipe
+(`sentence-transformers/all-MiniLM-L6-v2` at cosine ≥ 0.80, per ADR-027)
+pre-wired for `EmbeddingCosineStrategy` so consumers stop reinventing the
+embedder-wrapping boilerplate.
+
+No breaking changes. Public API gains 1 new export
+(`make_minilm_embedder`) and 1 new optional dependency extra
+(`[embeddings]`). Existing `EmbeddingCosineStrategy` callers that already
+ship their own embedder are unaffected.
+
+### Added
+
+- `eval_toolkit.embeddings.make_minilm_embedder` — factory returning a
+  `Callable[[Sequence[str]], np.ndarray]` that loads
+  `sentence-transformers/all-MiniLM-L6-v2` (configurable), memoises model
+  loads via `functools.lru_cache(maxsize=8)`, and emits `(n, 384)`
+  `float64` embeddings ready for `EmbeddingCosineStrategy`. Raises a
+  helpful `ImportError` with the install hint when the optional dep is
+  absent. Closes #3.
+- New optional dependency extra `[embeddings]` →
+  `sentence-transformers>=3.0`. Intentionally **not** in `[all]` / `[dev]`
+  because the transitive `torch` install (~700MB) would balloon
+  contributor setup.
+
+### Internal
+
+- `docs/source/api/embeddings.md` Sphinx page added (autosummary stub);
+  wired into the API toctree alongside the other module pages.
+- `docs/source/api/plotting.md` autosummary backfilled with
+  `plot_roc_curve`, `plot_pareto_frontier`, `plot_slice_metric_heatmap`
+  (missed in v0.33.0).
+- `tool.mypy.overrides` extended with `sentence_transformers.*` (matches
+  the existing pattern for untyped third-party libs).
+
 ## [0.33.0] — 2026-05-17 — Plotting batch + ax= parity + CI quality-of-life
 
 Consumer-unblocking release: closes the four upstream-gap TODOs in
