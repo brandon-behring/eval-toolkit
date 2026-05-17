@@ -7,6 +7,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-05-17 — Phase 4 stats unblockers + unified parallelism + cookbook (BREAKING)
+
+Closes all 7 open backlog issues in one consumer-closing release. Also
+lands the toolkit's first unified parallelism story: a shared internal
+`parallel_map` helper + `n_jobs` kwarg on all 5 public bootstrap
+functions. Future iterations will mechanically extend the same helper to
+harness + operating-points (follow-up issues filed).
+
+### Breaking changes
+
+- **`eval_toolkit.bootstrap.mde_from_ci`**: parameter renamed from
+  `paired` to `ci` and type widened to `BootstrapCI | PairedBootstrapCI`
+  (was `PairedBootstrapCI`-only). Positional callers unaffected; keyword
+  callers must update:
+  ```python
+  mde_from_ci(paired=x)  # v0.33.x and earlier
+  mde_from_ci(ci=x)      # v0.34.0+
+  mde_from_ci(x)         # positional form, unchanged
+  ```
+  This is a one-time exception to the repo's 2-minor-version deprecation
+  warning policy (justification + criteria recorded in
+  [`docs/source/DEPRECATION.md`](docs/source/DEPRECATION.md#one-time-exceptions-to-the-2-minor-version-warning-policy)).
+  Notification issues filed on the 2 known toolkit consumers
+  (`prompt-injection-detection-submission`, `post-transformers`). Audit
+  confirms both use positional form — zero actual breakage in practice.
+
+### Added
+
+- `eval_toolkit.bootstrap.block_bootstrap_on_folds` — CV-aware sibling
+  to `cv_clt_ci`; resamples K folds with replacement; returns
+  `BootstrapCI(method="block_bootstrap")`. The A-008 sensitivity-check
+  pattern (block-bootstrap halfwidth / cv_clt halfwidth > 1.5 flags
+  LODO non-exchangeability) is the prototypical use. Closes #21.
+- `eval_toolkit.RecallAtFprResult` (frozen dataclass) +
+  `eval_toolkit.recall_at_fpr(y_true, y_score, target_fpr)` — one-shot
+  recall + actual_fpr + FP/TN at the smallest threshold meeting FPR ≤
+  target. Use `.to_dict()` for JSON / pandas-row integration. Closes #9.
+- New optional `n_jobs: int = 1` kwarg on 5 bootstrap functions:
+  `bootstrap_ci`, `paired_bootstrap_diff`, `paired_bootstrap_ece_diff`,
+  `paired_bootstrap_op_point_diff`, `paired_mde` (via `_bootstrap_t_ci`
+  internal helper). Backed by a new internal `_parallel.parallel_map`
+  helper (joblib loky; not exported). `n_jobs > 1` reproduces `n_jobs=1`
+  result bit-for-bit for the same seed (via
+  `np.random.SeedSequence.spawn`). Lambda metrics rejected at call time
+  with helpful `TypeError`. `n_jobs > os.cpu_count()` is auto-capped
+  with WARNING log; `n_jobs=0` raises `ValueError`. Closes #17.
+- 6 new pages in `docs/source/examples/`:
+  - **Cookbook** (closes #19): `nested_seed_split.md`,
+    `callable_embedder_dedup.md`, `cross_corpus_contamination_scan.md`.
+  - **Plotting walkthroughs**: `plot_roc_curve_walkthrough.md`,
+    `plot_pareto_frontier_walkthrough.md`,
+    `plot_slice_metric_heatmap_walkthrough.md` (backfills the v0.33.0
+    docs gap).
+- `docs/source/methodology/parallelism.md` — design rationale + caller
+  contract for the toolkit-wide parallelism story. Documents the 6
+  design principles (single backend, single helper, opt-in per-fn,
+  default sequential, reproducibility via SeedSequence, picklability
+  surface) and the checklist for adding `n_jobs` to a new function.
+
+### Changed
+
+- `eval_toolkit.bootstrap.mde_from_ci` now accepts
+  `BootstrapCI | PairedBootstrapCI` (was paired-only). See **Breaking
+  changes** above. Closes #20.
+- `eval_toolkit.build_manifest` gains `config_path: Path | str | None`
+  kwarg; when supplied, `config_hash` is computed as
+  `sha256(Path(config_path).read_bytes()).hexdigest()` — capturing the
+  exact YAML file bytes including comments + key ordering (which the
+  default canonical-JSON path strips during parse). Default behavior
+  preserved when `config_path is None`. Closes #10.
+
+### Internal
+
+- New `src/eval_toolkit/_parallel.py` (internal; not exported) — single
+  source of truth for parallelism. Future per-function `n_jobs`
+  additions will reuse this helper. The toolkit's first INFO-level
+  log site is here (once-per-process guidance log when `n_jobs=1` AND
+  iteration count ≥ 1000). New `tests/test_parallel.py` covers smart-
+  default semantics + reproducibility contract.
+- New golden test `tests/golden/test_dedup_holdout_calibration.py`
+  exercising 3 deterministic `SimilarityStrategy` variants against a
+  migrated 50-pair adversarial fixture at thresholds {0.75, 0.80, 0.85}
+  (strict snapshot at `tests/golden/data/dedup_holdout_expected.json`)
+  plus an `EmbeddingCosineStrategy` soft-bound check (FPR < 0.5,
+  FNR < 0.5 at threshold 0.80) gated by `pytest.importorskip` +
+  `@pytest.mark.slow`. Refresh helper at
+  `scripts/refresh_dedup_holdout.py`. Closes #18.
+- `CONTRIBUTING.md` + `docs/source/repo-strategy.md` updated with
+  explicit "Parallelism" section codifying the new pattern (was an
+  implicit anti-pattern before; v0.34.0 codifies the new opt-in design).
+- `docs/source/DEPRECATION.md` extended with a "One-time exceptions"
+  section documenting the `mde_from_ci` rename + criteria future
+  exceptions must satisfy.
+- RNG-stream note: the 5 wired bootstrap fns now derive per-resample
+  seeds via `np.random.SeedSequence(seed).spawn(n_resamples)` instead
+  of sequential calls on a single `Generator`. The bootstrap output is
+  *statistically equivalent* (both are valid bootstraps) but the exact
+  numerical CI bounds for the same caller-supplied `seed` will differ
+  slightly from v0.33.x. Existing tests use behavioral assertions
+  (`overlaps_zero`, `delta`, etc.) that are robust to the RNG-stream
+  change; tests that pin exact CI bounds (e.g., consumer golden tests)
+  may need regen on upgrade.
+
 ## [0.33.1] — 2026-05-17 — MiniLM convenience embedder
 
 Closes the last open item in the v0.33 milestone (deferred from v0.33.0
