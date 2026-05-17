@@ -47,6 +47,7 @@ __all__ = [
     "PairedBootstrapCI",
     "ThresholdFn",
     "ThresholdedMetricFn",
+    "block_bootstrap_on_folds",
     "bonferroni_correct",
     "bootstrap_ci",
     "correct_p_values",
@@ -980,25 +981,38 @@ class MDEEstimate:
 
 
 def mde_from_ci(
-    paired: PairedBootstrapCI,
+    ci: BootstrapCI | PairedBootstrapCI,
     *,
     alpha: float = 0.05,
     power: float = 0.80,
 ) -> MDEEstimate:
-    r"""Derive MDE from an existing ``PairedBootstrapCI`` (no second bootstrap).
+    r"""Derive MDE from an existing ``BootstrapCI`` or ``PairedBootstrapCI``.
 
-    Reuses the bootstrap distribution implicit in the paired CI: the
-    half-width at 95% gives :math:`\sigma_\Delta \approx (\mathrm{ci\_high} - \mathrm{ci\_low}) / (2 \cdot 1.96)`,
-    and the standard two-sided MDE formula gives
-    :math:`\mathrm{MDE} = (z_{\alpha/2} + z_{\beta}) \cdot \sigma_\Delta`.
+    Reuses the bootstrap distribution implicit in the supplied CI: the
+    half-width at confidence :math:`c` gives :math:`\sigma \approx
+    (\mathrm{ci\_high} - \mathrm{ci\_low}) / (2 \cdot z_{(1+c)/2})`, and the
+    standard two-sided MDE formula gives
+    :math:`\mathrm{MDE} = (z_{\alpha/2} + z_{\beta}) \cdot \sigma`.
+
+    **v0.34.0 BREAKING**: the first parameter is now ``ci`` (was ``paired``)
+    and accepts both ``BootstrapCI`` (single-condition CI) and
+    ``PairedBootstrapCI`` (paired-difference CI). Positional callers are
+    unaffected; keyword callers must migrate
+    ``mde_from_ci(paired=x)`` → ``mde_from_ci(ci=x)`` or
+    ``mde_from_ci(x)``. See ``docs/source/DEPRECATION.md`` for the one-time-
+    exception justification.
 
     Parameters
     ----------
-    paired : PairedBootstrapCI
+    ci : BootstrapCI or PairedBootstrapCI
+        Either kind of bootstrap CI dataclass. The function extracts
+        ``ci_low``, ``ci_high``, ``confidence``, and ``n_resamples`` from
+        either; for ``PairedBootstrapCI`` the observed effect is
+        ``ci.delta``; for ``BootstrapCI`` it is ``ci.point_estimate``.
     alpha : float, optional
         Two-sided significance level (default 0.05).
     power : float, optional
-        Detection probability at true Δ = MDE (default 0.80).
+        Detection probability at true effect = MDE (default 0.80).
 
     Returns
     -------
@@ -1010,23 +1024,24 @@ def mde_from_ci(
     ValueError
         If ``alpha`` or ``power`` is not in (0, 1).
     RuntimeError
-        If the supplied CI has non-positive width (paired bootstrap
+        If the supplied CI has non-positive width (bootstrap likely
         degenerate; no usable variance signal).
 
     Notes
     -----
     Limitations of the analytical σ̂ from CI half-width:
 
-    1. **Normality assumption**: ``σ̂_Δ = width / (2 · z_{α/2})`` assumes
-       the bootstrap distribution of Δ is approximately normal and
-       symmetric. For small ``n_resamples`` (< 200) or skewed metrics
-       (PR-AUC under extreme imbalance), σ̂ is biased.
-    2. **Boundary-effect bias on bounded metrics**: when the true Δ is
-       near 0 or near the metric's max (e.g., AUC ≈ 1), the CI is
+    1. **Normality assumption**: ``σ̂ = width / (2 · z_{α/2})`` assumes
+       the bootstrap distribution is approximately normal and symmetric.
+       For small ``n_resamples`` (< 200) or skewed metrics (PR-AUC under
+       extreme imbalance), σ̂ is biased.
+    2. **Boundary-effect bias on bounded metrics**: when the true effect
+       is near 0 or near the metric's max (e.g., AUC ≈ 1), the CI is
        asymmetric and the half-width approximation under-estimates σ.
-    3. **Skew bias**: for heavy-tailed Δ distributions the percentile-CI
+    3. **Skew bias**: for heavy-tailed distributions the percentile-CI
        half-width over-estimates σ. Use :func:`paired_mde` (which
-       computes σ from the deltas directly) when these effects matter.
+       computes σ from the deltas directly) when these effects matter
+       and a paired-difference CI is the use case.
 
     References
     ----------
@@ -1037,21 +1052,25 @@ def mde_from_ci(
         raise ValueError(f"alpha must be in (0, 1), got {alpha}")
     if not 0.0 < power < 1.0:
         raise ValueError(f"power must be in (0, 1), got {power}")
-    width = paired.ci_high - paired.ci_low
+    width = ci.ci_high - ci.ci_low
     if width <= 0:
-        raise RuntimeError(f"non-positive CI width ({width}); paired bootstrap likely degenerate")
-    z_at_paired_conf = _normal_quantile((1.0 + paired.confidence) / 2.0)
-    sigma = width / (2.0 * z_at_paired_conf)
+        raise RuntimeError(f"non-positive CI width ({width}); bootstrap likely degenerate")
+    z_at_ci_conf = _normal_quantile((1.0 + ci.confidence) / 2.0)
+    sigma = width / (2.0 * z_at_ci_conf)
     z_alpha = _normal_quantile(1.0 - alpha / 2.0)
     z_power = _normal_quantile(power)
     mde = float((z_alpha + z_power) * sigma)
+    # Effect-size attribute differs by CI type: paired carries `.delta` as the
+    # observed difference; marginal carries `.point_estimate` as the observed
+    # single-condition metric. Duck-typed extraction keeps the body branch-free.
+    delta_observed = float(getattr(ci, "delta", getattr(ci, "point_estimate", 0.0)))
     return MDEEstimate(
         mde=mde,
         sigma_delta=float(sigma),
-        delta_observed=float(paired.delta),
+        delta_observed=delta_observed,
         alpha=alpha,
         power=power,
-        n_resamples=int(paired.n_resamples),
+        n_resamples=int(ci.n_resamples),
         n=-1,
     )
 
@@ -1227,6 +1246,109 @@ def cv_clt_ci(
         confidence=confidence,
         n_resamples=K,
         method="cv_clt",
+    )
+
+
+def block_bootstrap_on_folds(
+    fold_metrics: np.ndarray,
+    *,
+    n_resamples: int = DEFAULT_N_RESAMPLES,
+    confidence: float = DEFAULT_CONFIDENCE,
+    seed: int = DEFAULT_SEED,
+) -> BootstrapCI:
+    r"""Block bootstrap on folds: resample K folds with replacement; percentile CI on mean.
+
+    Sibling primitive to :func:`cv_clt_ci`. Where :func:`cv_clt_ci` applies
+    the Bayle et al. 2020 CV-CLT correction (correct asymptotically under
+    fold exchangeability), the block bootstrap is more *conservative* under
+    fold-level **non-exchangeability** — situations where the K folds are
+    not interchangeable (e.g., source-disjoint LODO folds where one source
+    is intrinsically harder than the others). The sensitivity-check
+    pattern: if
+    ``block_bootstrap_CI_halfwidth / cv_clt_CI_halfwidth > 1.5`` then
+    LODO non-exchangeability dominates within-fold variance and the
+    block-bootstrap CI is the safer headline.
+
+    The algorithm: draw ``n_resamples`` K-element samples with replacement
+    from ``fold_metrics``; for each sample compute the mean; return the
+    ``[alpha/2, 1 - alpha/2]`` percentile CI on the empirical distribution
+    of resample means.
+
+    This helper does **not** run the CV; callers supply per-fold metric
+    estimates as in :func:`cv_clt_ci`. The body is one vectorized numpy
+    call (no per-resample Python loop) — does NOT accept ``n_jobs`` since
+    parallel-spawn overhead would dominate the O(seconds) total.
+
+    Parameters
+    ----------
+    fold_metrics : np.ndarray, shape (K,)
+        Per-fold metric estimates. Need ≥ 2 folds.
+    n_resamples : int, optional
+        Number of bootstrap resamples (default 1000). 10000 is typical for
+        the cross-fold sensitivity-check use case (runs in O(seconds)).
+    confidence : float, optional
+        Two-sided confidence level (default 0.95).
+    seed : int, optional
+        RNG seed for reproducibility.
+
+    Returns
+    -------
+    BootstrapCI
+        With ``method="block_bootstrap"``, ``n_resamples`` as supplied,
+        ``point_estimate=mean(fold_metrics)``.
+
+    Raises
+    ------
+    ValueError
+        If ``fold_metrics`` is not 1-D, has < 2 entries, contains non-finite
+        values, or ``confidence`` is outside (0, 1).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> folds = np.array([0.83, 0.81, 0.85, 0.79, 0.84])
+    >>> ci = block_bootstrap_on_folds(folds, n_resamples=2000, seed=42)
+    >>> ci.method
+    'block_bootstrap'
+    >>> bool(ci.ci_low <= ci.point_estimate <= ci.ci_high)
+    True
+
+    See Also
+    --------
+    eval_toolkit.bootstrap.cv_clt_ci :
+        The CV-CLT sibling primitive; use it as the headline CI when folds
+        are exchangeable + use ``block_bootstrap_on_folds`` as the spoke
+        for the sensitivity-check pattern.
+
+    References
+    ----------
+    .. [1] Efron, B. & Tibshirani, R. "An Introduction to the Bootstrap."
+           Chapman & Hall, 1993. (§8 Bootstrap of stratified data.)
+    """
+    arr = np.asarray(fold_metrics, dtype=np.float64)
+    if arr.ndim != 1:
+        raise ValueError(f"fold_metrics must be 1-D; got shape {arr.shape}")
+    K = arr.shape[0]
+    if K < 2:
+        raise ValueError(f"fold_metrics must have K ≥ 2 folds; got K={K}")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError("fold_metrics must be all-finite; got NaN or Inf")
+    if not 0.0 < confidence < 1.0:
+        raise ValueError(f"confidence must be in (0, 1); got {confidence}")
+
+    rng = np.random.default_rng(seed)
+    # Vectorized: (n_resamples, K) index draws, gather, mean along axis 1.
+    idx = rng.integers(0, K, size=(n_resamples, K))
+    resample_means = arr[idx].mean(axis=1)
+    alpha = 1.0 - confidence
+    ci_low, ci_high = np.quantile(resample_means, [alpha / 2.0, 1.0 - alpha / 2.0])
+    return BootstrapCI(
+        point_estimate=float(arr.mean()),
+        ci_low=float(ci_low),
+        ci_high=float(ci_high),
+        confidence=confidence,
+        n_resamples=int(n_resamples),
+        method="block_bootstrap",
     )
 
 

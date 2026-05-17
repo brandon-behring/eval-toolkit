@@ -62,6 +62,7 @@ _EXPORTS: dict[str, str] = {
     "PairedBootstrapCI": "eval_toolkit.bootstrap",
     "ThresholdedMetricFn": "eval_toolkit.bootstrap",
     "ThresholdFn": "eval_toolkit.bootstrap",
+    "block_bootstrap_on_folds": "eval_toolkit.bootstrap",
     "bonferroni_correct": "eval_toolkit.bootstrap",
     "bootstrap_ci": "eval_toolkit.bootstrap",
     "correct_p_values": "eval_toolkit.bootstrap",

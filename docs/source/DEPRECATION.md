@@ -122,6 +122,36 @@ When the release that contains the deadline ships (e.g., `0.31.0`):
 |---|---|---|---|
 | `[validation]` optional-dependency extra | v0.30.1 | v0.33.0 | No-op since v0.16.0 (jsonschema moved to base deps). Extras cannot emit `DeprecationWarning` at import time, so the deprecation is documentation-only. `pip install eval-toolkit[validation]` will continue to resolve cleanly through v0.32.x and will be removed in v0.33.0. |
 
+## One-time exceptions to the 2-minor-version warning policy
+
+The 2-minor-version warning is a **policy**, not a hard SemVer rule (pre-1.0
+allows breaking changes in minor bumps; the policy is what we *commit to
+above* SemVer's floor). Rarely, an exception is justified when the cost of
+the warning window exceeds its benefit — known consumer set is small + the
+deprecation alias would carry forever-debt + every known consumer can be
+notified directly via cross-repo issue.
+
+Every exception below is documented with: announced version, justification,
+and notification mechanism.
+
+| Symbol | Renamed/removed | Version | Justification | Notification |
+|---|---|---|---|---|
+| `eval_toolkit.bootstrap.mde_from_ci(paired=...)` parameter rename | Renamed to `ci=...` and type widened to `BootstrapCI | PairedBootstrapCI` | v0.34.0 | Pre-1.0 SemVer; only 2 known consumers (`prompt-injection-detection-submission`, `post-transformers`), both use positional form per audit; deprecation alias would add forever-debt for a clean-API win. Cleaning the name now (before widespread adoption) beats living with the awkward `paired=` parameter name forever. | Cross-repo issues filed on both known consumers with explicit migration step: `mde_from_ci(paired=x)` → `mde_from_ci(ci=x)`. Positional `mde_from_ci(x)` unaffected. |
+
+**Future exception criteria** (must satisfy all):
+
+1. **Small known consumer set** (≤ 3 repos) — verifiable via grep across
+   sibling repos
+2. **Cross-repo notification feasible** — issues filed on every consumer
+   before / with the release
+3. **API-debt cost > warning-window cost** — the alias would carry
+   non-trivial future maintenance (e.g., long-lived `paired=` accepted
+   forever, special-cased in docstrings, etc.)
+4. **Documented here at announce time** — not retroactively
+
+If any of these don't hold, follow the standard 2-minor-version
+deprecation process above.
+
 ## See also
 
 - [`src/eval_toolkit/_deprecated.py`](https://github.com/brandon-behring/eval-toolkit/blob/main/src/eval_toolkit/_deprecated.py) — implementation

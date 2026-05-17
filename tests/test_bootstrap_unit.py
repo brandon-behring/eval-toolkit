@@ -254,6 +254,73 @@ def test_mde_from_ci_validates() -> None:
 
 
 @pytest.mark.unit
+def test_mde_from_ci_accepts_bootstrap_ci() -> None:
+    """v0.34.0: mde_from_ci accepts BootstrapCI (was paired-only before rename)."""
+    fake_marginal = BootstrapCI(
+        point_estimate=0.10,
+        ci_low=0.05,
+        ci_high=0.15,
+        confidence=0.95,
+        n_resamples=1000,
+        method="BCa",
+    )
+    mde = mde_from_ci(fake_marginal, alpha=0.05, power=0.80)
+    # sigma_delta = (0.15 - 0.05) / (2 * 1.959964) ≈ 0.0255 → mde ≈ (1.96 + 0.842) * sigma ≈ 0.0715
+    assert mde.sigma_delta == pytest.approx(0.0255, abs=1e-3)
+    assert mde.mde > 0
+    # delta_observed should be the point_estimate for BootstrapCI input
+    assert mde.delta_observed == pytest.approx(0.10)
+
+
+@pytest.mark.unit
+def test_mde_from_ci_paired_kwarg_rejected_after_v0_34_0_rename() -> None:
+    """v0.34.0 BREAKING: `paired=` keyword form raises TypeError after the rename.
+
+    The first param was renamed from `paired` to `ci`. Positional callers
+    are unaffected; keyword callers must update. This test proves the alias
+    is genuinely gone (no backward-compat shim).
+    """
+    fake = PairedBootstrapCI(
+        delta=0.1,
+        ci_low=0.05,
+        ci_high=0.15,
+        overlaps_zero=False,
+        confidence=0.95,
+        n_resamples=1000,
+    )
+    with pytest.raises(TypeError, match=r"paired"):
+        mde_from_ci(paired=fake)  # type: ignore[call-arg]
+
+
+@pytest.mark.unit
+def test_mde_from_ci_equivalent_paired_vs_bootstrap_input_on_matching_widths() -> None:
+    """A BootstrapCI and PairedBootstrapCI with same (ci_low, ci_high, confidence,
+    n_resamples) produce same sigma_delta + mde. Difference: delta_observed."""
+    paired = PairedBootstrapCI(
+        delta=0.2,
+        ci_low=0.05,
+        ci_high=0.15,
+        overlaps_zero=False,
+        confidence=0.95,
+        n_resamples=500,
+    )
+    marginal = BootstrapCI(
+        point_estimate=0.7,
+        ci_low=0.05,
+        ci_high=0.15,
+        confidence=0.95,
+        n_resamples=500,
+        method="BCa",
+    )
+    mde_p = mde_from_ci(paired)
+    mde_m = mde_from_ci(marginal)
+    assert mde_p.sigma_delta == pytest.approx(mde_m.sigma_delta)
+    assert mde_p.mde == pytest.approx(mde_m.mde)
+    assert mde_p.delta_observed == 0.2
+    assert mde_m.delta_observed == 0.7
+
+
+@pytest.mark.unit
 def test_paired_bootstrap_overlaps_zero_inclusive_on_degenerate_ci() -> None:
     """A zero-width CI at zero must report overlaps_zero=True (inclusive bounds).
 
