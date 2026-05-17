@@ -167,6 +167,56 @@ def test_build_manifest_hashes_data_files(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_build_manifest_config_path_hashes_file_bytes(tmp_path: Path) -> None:
+    """v0.34.0 (#10): when config_path supplied, config_hash captures file bytes.
+
+    The file-bytes hash differs from the canonical-JSON hash because YAML
+    comments + key ordering + whitespace are stripped during parse.
+    """
+    import hashlib
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_bytes(b"# top-line comment\nk: 5\nn: 10\n")
+    m = build_manifest(
+        run_id="demo",
+        config={"k": 5, "n": 10},  # parsed equivalent
+        config_path=config_file,
+    )
+    expected_hex = hashlib.sha256(config_file.read_bytes()).hexdigest()
+    assert m.config_hash == f"sha256:{expected_hex}"
+
+
+@pytest.mark.unit
+def test_build_manifest_default_path_preserves_canonical_json_hash(tmp_path: Path) -> None:
+    """Without config_path, config_hash remains the canonical-JSON hash (existing behavior)."""
+    m_path = build_manifest(
+        run_id="demo",
+        config={"k": 5, "n": 10},
+        config_path=None,  # explicit None = existing behavior
+    )
+    m_default = build_manifest(run_id="demo", config={"k": 5, "n": 10})
+    # Both should match (no config_path → canonical-JSON path on both)
+    assert m_path.config_hash == m_default.config_hash
+
+
+@pytest.mark.unit
+def test_build_manifest_config_path_vs_canonical_diverge(tmp_path: Path) -> None:
+    """File-bytes hash and canonical-JSON hash differ on the same logical config.
+
+    Proves that config_path captures information (whitespace, comments,
+    YAML formatting) that the canonical-JSON path strips.
+    """
+    config_file = tmp_path / "config.yaml"
+    config_file.write_bytes(b"# comment\nk: 5\n")
+    m_filepath = build_manifest(run_id="demo", config={"k": 5}, config_path=config_file)
+    m_canonical = build_manifest(run_id="demo", config={"k": 5})
+    assert m_filepath.config_hash != m_canonical.config_hash, (
+        "file-bytes hash and canonical-JSON hash should differ on the same logical config "
+        "(file includes comment + trailing newline)"
+    )
+
+
+@pytest.mark.unit
 def test_build_manifest_collects_versioned_objects() -> None:
     class WithVersion:
         version = "1.2.3"

@@ -72,6 +72,7 @@
     "PurgedKFoldSplitter",
     "RECOMMENDED_SOURCE_ROLES",
     "RUN_RESULT_SCHEMA_VERSION",
+    "RecallAtFprResult",
     "RunManifest",
     "RunResult",
     "Scorer",
@@ -176,6 +177,7 @@
     "precision_at_prior",
     "quantile_stratified_pr_auc",
     "quantile_stratified_report",
+    "recall_at_fpr",
     "reliability_curve",
     "reliability_diagram_data",
     "render_files",
@@ -799,6 +801,14 @@
       "type": "str",
       "value": "'v1'"
     },
+    "RecallAtFprResult": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "One-shot recall + actual-FPR + FP/TN at the smallest threshold meeting FPR \u2264 target.",
+      "kind": "class",
+      "signature": "(threshold: 'float', recall: 'float', actual_fpr: 'float', n_val_neg: 'int', fp: 'int', tn: 'int') -> None"
+    },
     "RunManifest": {
       "bases": [
         "object"
@@ -1056,7 +1066,7 @@
     "build_manifest": {
       "doc_first_line": "Pure builder: assemble a :class:`RunManifest` from components.",
       "kind": "function",
-      "signature": "(*, run_id: 'str', config: 'Mapping[str, Any]', data_files: 'Mapping[str, Path | str] | None' = None, seeds: 'Mapping[str, int] | None' = None, extra_code_versions: 'Mapping[str, str] | None' = None, data_revisions: 'Mapping[str, str] | None' = None, metadata: 'Mapping[str, str] | None' = None, versioned: 'Sequence[object] | Mapping[str, object] | None' = None, leakage_report: 'object | None' = None, source_roles: 'Sequence[SourceRoleRecord | Mapping[str, object]] | None' = None, required_source_roles: 'Sequence[str]' = (), guardrails: 'Sequence[str | Mapping[str, object]] | None' = None, prediction_artifacts: 'Sequence[PredictionArtifactRef | Mapping[str, object]] | None' = None, contamination_flags: 'Mapping[str, str] | None' = None, wall_clock_seconds: 'float | None' = None, repo_root: 'Path | str | None' = None, git_sha: 'str | None' = None) -> 'RunManifest'"
+      "signature": "(*, run_id: 'str', config: 'Mapping[str, Any]', data_files: 'Mapping[str, Path | str] | None' = None, seeds: 'Mapping[str, int] | None' = None, extra_code_versions: 'Mapping[str, str] | None' = None, data_revisions: 'Mapping[str, str] | None' = None, metadata: 'Mapping[str, str] | None' = None, versioned: 'Sequence[object] | Mapping[str, object] | None' = None, leakage_report: 'object | None' = None, source_roles: 'Sequence[SourceRoleRecord | Mapping[str, object]] | None' = None, required_source_roles: 'Sequence[str]' = (), guardrails: 'Sequence[str | Mapping[str, object]] | None' = None, prediction_artifacts: 'Sequence[PredictionArtifactRef | Mapping[str, object]] | None' = None, contamination_flags: 'Mapping[str, str] | None' = None, wall_clock_seconds: 'float | None' = None, repo_root: 'Path | str | None' = None, git_sha: 'str | None' = None, config_path: 'Path | str | None' = None) -> 'RunManifest'"
     },
     "capture_git_sha": {
       "doc_first_line": "Current HEAD full SHA, or ``None`` if not in a git repo.",
@@ -1392,6 +1402,11 @@
       "doc_first_line": "Full vs trimmed PR-AUC report with a gap-flag (SDD reporting convention).",
       "kind": "function",
       "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', stratifier: 'np.ndarray', *, q_low: 'float' = 0.25, q_high: 'float' = 0.75, gap_threshold: 'float' = 0.05) -> 'dict[str, float | bool]'"
+    },
+    "recall_at_fpr": {
+      "doc_first_line": "Compute recall + actual_fpr + FP/TN at the smallest threshold meeting FPR \u2264 target.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', target_fpr: 'float') -> 'RecallAtFprResult'"
     },
     "reliability_curve": {
       "doc_first_line": "Bin-level calibration data wrapping :func:`sklearn.calibration.calibration_curve`.",

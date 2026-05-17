@@ -200,6 +200,17 @@ def _hash_canonical_json(payload: Mapping[str, Any]) -> str:
     return f"sha256:{hashlib.sha256(blob.encode()).hexdigest()}"
 
 
+def _file_sha256_hexdigest(path: Path) -> str:
+    """SHA-256 over the raw bytes of ``path``. Format: ``sha256:<hex>``.
+
+    Used by :func:`build_manifest` when ``config_path`` is supplied so the
+    config_hash captures the exact file revision (including comments and
+    key ordering, which are lost by :func:`_hash_canonical_json` after the
+    YAML parser normalizes them).
+    """
+    return f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+
+
 def _is_git_dirty(repo_root: Path | str | None = None) -> bool:
     """True iff ``git status --porcelain`` shows uncommitted changes.
 
@@ -400,6 +411,7 @@ def build_manifest(
     wall_clock_seconds: float | None = None,
     repo_root: Path | str | None = None,
     git_sha: str | None = None,
+    config_path: Path | str | None = None,
 ) -> RunManifest:
     """Pure builder: assemble a :class:`RunManifest` from components.
 
@@ -452,6 +464,17 @@ def build_manifest(
         with no ``.git/`` directory — skip the
         :func:`~eval_toolkit.provenance.capture_git_sha` fallback). When
         ``None`` (default), :func:`capture_git_sha` is used to auto-detect.
+    config_path : Path or str or None, optional
+        Path to the YAML/JSON config file on disk that produced ``config``.
+        When supplied, :attr:`RunManifest.config_hash` is set to
+        ``sha256(Path(config_path).read_bytes()).hexdigest()`` — capturing
+        the exact file bytes (including comments + key ordering, which
+        ``_hash_canonical_json(dict(config))`` strips during parse). This
+        is the recommended path when a manifest's config_hash needs to
+        round-trip with a specific YAML revision (closes #10 V5 AUD-003).
+        When ``None`` (default), the canonical-JSON hash of the parsed
+        ``config`` mapping is used (existing behavior; key-order- and
+        whitespace-insensitive).
 
     Returns
     -------
@@ -540,6 +563,14 @@ def build_manifest(
 
     g_info, cuda = gpu_info()
 
+    # Per #10: when config_path supplied, hash file bytes (captures comments +
+    # exact YAML revision); else fall back to canonical-JSON of parsed config
+    # (key-order-/whitespace-insensitive, existing behavior).
+    if config_path is not None:
+        config_hash_value = _file_sha256_hexdigest(Path(config_path))
+    else:
+        config_hash_value = _hash_canonical_json(dict(config))
+
     return RunManifest(
         run_id=run_id,
         captured_at=_utc_now_iso8601(),
@@ -550,7 +581,7 @@ def build_manifest(
         metadata=dict(metadata) if metadata else {},
         seeds=dict(seeds) if seeds else {},
         data_hashes=data_hashes,
-        config_hash=_hash_canonical_json(dict(config)),
+        config_hash=config_hash_value,
         env=_capture_env(),
         gpu_info=g_info,
         cuda_version=cuda,

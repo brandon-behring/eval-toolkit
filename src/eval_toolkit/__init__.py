@@ -253,6 +253,7 @@ _EXPORTS: dict[str, str] = {
     "CISafeThresholdSelector": "eval_toolkit.thresholds",
     "CostSensitiveSelector": "eval_toolkit.thresholds",
     "MaxF1Selector": "eval_toolkit.thresholds",
+    "RecallAtFprResult": "eval_toolkit.thresholds",
     "TargetFPRSelector": "eval_toolkit.thresholds",
     "TargetPrecisionSelector": "eval_toolkit.thresholds",
     "TargetRecallSelector": "eval_toolkit.thresholds",
@@ -260,6 +261,7 @@ _EXPORTS: dict[str, str] = {
     "ThresholdSelector": "eval_toolkit.thresholds",
     "WilsonInterval": "eval_toolkit.thresholds",
     "YoudenJSelector": "eval_toolkit.thresholds",
+    "recall_at_fpr": "eval_toolkit.thresholds",
     "select_threshold": "eval_toolkit.thresholds",
     "wilson_interval": "eval_toolkit.thresholds",
 }

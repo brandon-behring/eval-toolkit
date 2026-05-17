@@ -40,6 +40,7 @@ __all__ = [
     "CISafeThresholdSelector",
     "CostSensitiveSelector",
     "MaxF1Selector",
+    "RecallAtFprResult",
     "TargetFPRSelector",
     "TargetPrecisionSelector",
     "TargetRecallSelector",
@@ -47,6 +48,7 @@ __all__ = [
     "ThresholdSelector",
     "WilsonInterval",
     "YoudenJSelector",
+    "recall_at_fpr",
     "select_threshold",
     "wilson_interval",
 ]
@@ -681,6 +683,133 @@ class TargetFPRSelector:
         # TPR (most-recall) feasible point.
         idx = int(eligible[-1])
         return _result_at(y_true, y_score, float(thresholds[idx]), self.criterion)
+
+
+@dataclass(frozen=True, slots=True)
+class RecallAtFprResult:
+    """One-shot recall + actual-FPR + FP/TN at the smallest threshold meeting FPR ≤ target.
+
+    Returned by :func:`recall_at_fpr`. The dataclass surfaces both the
+    rate-form metrics (``recall``, ``actual_fpr``) and the underlying counts
+    (``fp``, ``tn``, ``n_val_neg``) so downstream consumers don't have to
+    re-derive them at the chosen threshold.
+
+    Use :meth:`to_dict` for JSON serialization / pandas-row integration.
+
+    Attributes
+    ----------
+    threshold : float
+        The smallest threshold (highest-TPR feasible) meeting FPR ≤ target,
+        as chosen by :class:`TargetFPRSelector`. Set to ``1.0`` when no
+        threshold meets the target (degenerate scoring fallback).
+    recall : float
+        TPR at the chosen threshold; ``0.0`` in the no-feasible-threshold
+        fallback.
+    actual_fpr : float
+        Realized FPR at the chosen threshold (typically ``≤ target_fpr`` by
+        construction, but recorded explicitly for audit).
+    n_val_neg : int
+        Number of negative-class rows in ``y_true`` (the denominator of
+        the FPR calculation).
+    fp : int
+        False positives at the chosen threshold.
+    tn : int
+        True negatives at the chosen threshold (``n_val_neg − fp``).
+    """
+
+    threshold: float
+    recall: float
+    actual_fpr: float
+    n_val_neg: int
+    fp: int
+    tn: int
+
+    def to_dict(self) -> dict[str, float | int]:
+        """Flat dict mirroring the canonical key set used by downstream consumers."""
+        return {
+            "threshold": self.threshold,
+            "recall": self.recall,
+            "actual_fpr": self.actual_fpr,
+            "n_val_neg": self.n_val_neg,
+            "fp": self.fp,
+            "tn": self.tn,
+        }
+
+
+def recall_at_fpr(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    target_fpr: float,
+) -> RecallAtFprResult:
+    """Compute recall + actual_fpr + FP/TN at the smallest threshold meeting FPR ≤ target.
+
+    One-shot convenience over :class:`TargetFPRSelector` for the common
+    "recall@FPR" use case (e.g., screening workflows reporting recall at
+    a fixed FPR ceiling of 1%, 0.5%, 0.1%). Avoids the instantiate +
+    ``.select()`` + re-derive-FP/TN-at-threshold dance.
+
+    When no threshold meets the target FPR (degenerate scoring), returns
+    ``RecallAtFprResult(threshold=1.0, recall=0.0, actual_fpr=0.0, fp=0,
+    tn=n_val_neg)``. This is the V5 reference behavior (no false positives
+    at threshold 1.0 by construction).
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary labels.
+    y_score : np.ndarray, shape (n,)
+        Scores in ``[0, 1]`` or any monotone-equivalent representation.
+    target_fpr : float
+        FPR ceiling in ``[0, 1]``.
+
+    Returns
+    -------
+    RecallAtFprResult
+        Use ``.to_dict()`` for JSON / pandas-row integration.
+
+    Raises
+    ------
+    ValueError
+        If ``target_fpr`` is outside ``[0, 1]`` (via underlying
+        :class:`TargetFPRSelector` validation).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> y = np.concatenate([np.zeros(50, dtype=int), np.ones(50, dtype=int)])
+    >>> rng = np.random.default_rng(42)
+    >>> # Discriminative scorer: signal in y, noise on top
+    >>> s = y * 0.5 + rng.uniform(0, 0.5, size=100)
+    >>> result = recall_at_fpr(y, s, target_fpr=0.10)
+    >>> result.actual_fpr <= 0.10  # FPR ceiling honored
+    True
+    >>> result.n_val_neg
+    50
+    """
+    selector = TargetFPRSelector(fpr=target_fpr)
+    try:
+        result = selector.select(y_true, y_score)
+        threshold = float(result.threshold)
+        recall = float(result.recall)
+    except RuntimeError:
+        # No threshold achieves FPR ≤ target — fall back to threshold=1.0
+        # which by construction yields zero positives (recall=0, FPR=0).
+        threshold = 1.0
+        recall = 0.0
+
+    y_pred = (np.asarray(y_score) >= threshold).astype(int)
+    is_neg = np.asarray(y_true) == 0
+    n_val_neg = int(is_neg.sum())
+    fp = int(((y_pred == 1) & is_neg).sum())
+    actual_fpr = (fp / n_val_neg) if n_val_neg > 0 else 0.0
+    return RecallAtFprResult(
+        threshold=threshold,
+        recall=recall,
+        actual_fpr=actual_fpr,
+        n_val_neg=n_val_neg,
+        fp=fp,
+        tn=n_val_neg - fp,
+    )
 
 
 @dataclass(frozen=True, slots=True)
