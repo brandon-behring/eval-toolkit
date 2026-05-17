@@ -49,7 +49,7 @@ Why centralised:
 ``n_jobs`` is an **explicit keyword-only parameter** on each
 parallel-capable public function, defaulting to ``1`` (sequential).
 
-```python
+```text
 def paired_bootstrap_diff(..., *, n_jobs: int = 1) -> PairedBootstrapCI: ...
 ```
 
@@ -82,7 +82,7 @@ When a parallel-capable function performs random resampling, it MUST use
 ``n_jobs > 1`` produces **bit-for-bit-identical** output to ``n_jobs == 1``
 for the same caller-supplied ``seed``:
 
-```python
+```text
 seed_seq = np.random.SeedSequence(seed)
 spawned = seed_seq.spawn(n_resamples)
 deltas = parallel_map(_resample_step, spawned, n_jobs=n_jobs)
