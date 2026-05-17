@@ -23,9 +23,12 @@ from eval_toolkit.plotting import (  # noqa: E402
     plot_confusion_matrix_grid,
     plot_lift_ci,
     plot_metric_bars,
+    plot_pareto_frontier,
     plot_pr_curve,
     plot_reliability_diagram,
+    plot_roc_curve,
     plot_score_histograms,
+    plot_slice_metric_heatmap,
 )
 
 
@@ -320,3 +323,201 @@ def test_bootstrap_distribution_with_ci_overlay_and_title() -> None:
         title="Δ distribution",
     )
     assert fig is not None
+
+
+# ---------------------------------------------------------------------------
+# plot_roc_curve — validation branches + ax= path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_plot_roc_curve_rejects_threshold_out_of_range() -> None:
+    with pytest.raises(ValueError, match="threshold must be in"):
+        plot_roc_curve(
+            y_true=np.array([0, 1, 0, 1]),
+            y_score=np.array([0.1, 0.9, 0.4, 0.6]),
+            threshold=1.5,
+        )
+
+
+@pytest.mark.unit
+def test_plot_roc_curve_rejects_baseline_shape_mismatch() -> None:
+    with pytest.raises(ValueError, match="baseline_curve fpr and tpr must have same shape"):
+        plot_roc_curve(
+            y_true=np.array([0, 1, 0, 1]),
+            y_score=np.array([0.1, 0.9, 0.4, 0.6]),
+            baseline_curve=(np.array([0.0, 1.0]), np.array([0.0, 0.5, 1.0])),
+        )
+
+
+@pytest.mark.unit
+def test_plot_roc_curve_rejects_baseline_not_tuple() -> None:
+    with pytest.raises(ValueError, match="baseline_curve must be a"):
+        plot_roc_curve(
+            y_true=np.array([0, 1, 0, 1]),
+            y_score=np.array([0.1, 0.9, 0.4, 0.6]),
+            baseline_curve=[np.array([0.0]), np.array([0.0])],  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.unit
+def test_plot_roc_curve_with_threshold_baseline_and_title_uses_ax() -> None:
+    """Hits threshold star + baseline overlay + title + ax= branch."""
+    fig, ax = plt.subplots()
+    out = plot_roc_curve(
+        y_true=np.array([0, 0, 1, 1]),
+        y_score=np.array([0.1, 0.4, 0.6, 0.9]),
+        threshold=0.5,
+        baseline_curve=(np.array([0.0, 1.0]), np.array([0.0, 1.0])),
+        baseline_label="ref",
+        title="ROC with overlays",
+        ax=ax,
+    )
+    assert out is fig
+
+
+# ---------------------------------------------------------------------------
+# plot_pareto_frontier — validation branches + ax= path + alt direction
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_plot_pareto_frontier_rejects_shape_mismatch() -> None:
+    with pytest.raises(ValueError, match="must have same shape"):
+        plot_pareto_frontier(np.array([1.0, 2.0]), np.array([0.5, 0.7, 0.8]))
+
+
+@pytest.mark.unit
+def test_plot_pareto_frontier_rejects_2d_inputs() -> None:
+    with pytest.raises(ValueError, match="must be 1-D"):
+        plot_pareto_frontier(np.array([[1.0]]), np.array([[0.5]]))
+
+
+@pytest.mark.unit
+def test_plot_pareto_frontier_rejects_empty() -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        plot_pareto_frontier(np.array([]), np.array([]))
+
+
+@pytest.mark.unit
+def test_plot_pareto_frontier_rejects_nonfinite() -> None:
+    with pytest.raises(ValueError, match="must contain finite"):
+        plot_pareto_frontier(np.array([1.0, 2.0]), np.array([0.5, np.nan]))
+
+
+@pytest.mark.unit
+def test_plot_pareto_frontier_rejects_label_length_mismatch() -> None:
+    with pytest.raises(ValueError, match="point_labels length"):
+        plot_pareto_frontier(
+            np.array([1.0, 2.0]),
+            np.array([0.5, 0.7]),
+            point_labels=["only-one"],
+        )
+
+
+@pytest.mark.unit
+def test_plot_pareto_frontier_lower_is_better_path_uses_ax() -> None:
+    """Hits higher_metric_is_better=False branch + labels + ax= branch."""
+    fig, ax = plt.subplots()
+    cost = np.array([1.0, 2.0, 3.0, 2.5])
+    err = np.array([0.5, 0.3, 0.25, 0.4])  # lower-better; index 3 dominated
+    out = plot_pareto_frontier(
+        cost,
+        err,
+        point_labels=["a", "b", "c", "d"],
+        higher_metric_is_better=False,
+        xlabel="cost",
+        ylabel="error",
+        title="lower-better frontier",
+        ax=ax,
+    )
+    assert out is fig
+
+
+# ---------------------------------------------------------------------------
+# plot_slice_metric_heatmap — validation branches + ax= path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_plot_slice_metric_heatmap_rejects_1d_grid() -> None:
+    with pytest.raises(ValueError, match="must be 2-D"):
+        plot_slice_metric_heatmap(
+            np.array([0.5, 0.7]),
+            row_labels=("a",),
+            col_labels=("x", "y"),
+        )
+
+
+@pytest.mark.unit
+def test_plot_slice_metric_heatmap_rejects_empty() -> None:
+    with pytest.raises(ValueError, match="non-empty"):
+        plot_slice_metric_heatmap(
+            np.zeros((0, 3)),
+            row_labels=(),
+            col_labels=("a", "b", "c"),
+        )
+
+
+@pytest.mark.unit
+def test_plot_slice_metric_heatmap_rejects_row_label_mismatch() -> None:
+    with pytest.raises(ValueError, match="row_labels length"):
+        plot_slice_metric_heatmap(
+            np.array([[0.5, 0.7]]),
+            row_labels=("a", "b"),
+            col_labels=("x", "y"),
+        )
+
+
+@pytest.mark.unit
+def test_plot_slice_metric_heatmap_rejects_col_label_mismatch() -> None:
+    with pytest.raises(ValueError, match="col_labels length"):
+        plot_slice_metric_heatmap(
+            np.array([[0.5, 0.7]]),
+            row_labels=("a",),
+            col_labels=("x",),
+        )
+
+
+@pytest.mark.unit
+def test_plot_slice_metric_heatmap_no_annotate_uses_ax() -> None:
+    """Hits annotate=False branch + ax= branch + NaN cells get masked."""
+    fig, ax = plt.subplots()
+    grid = np.array([[0.5, np.nan], [0.7, 0.8]])
+    out = plot_slice_metric_heatmap(
+        grid,
+        row_labels=("r1", "r2"),
+        col_labels=("c1", "c2"),
+        annotate=False,
+        title="no annotations + NaN cells",
+        ax=ax,
+    )
+    assert out is fig
+
+
+# ---------------------------------------------------------------------------
+# ax= parity backfill — plot_metric_bars + plot_score_histograms
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_plot_metric_bars_with_ax_returns_same_figure() -> None:
+    fig, ax = plt.subplots()
+    out = plot_metric_bars(
+        {"slice_a": 0.85, "slice_b": 0.72, "slice_c": 0.91},
+        ylabel="PR-AUC",
+        ax=ax,
+    )
+    assert out is fig
+
+
+@pytest.mark.unit
+def test_plot_score_histograms_with_ax_returns_same_figure() -> None:
+    rng = np.random.default_rng(0)
+    fig, ax = plt.subplots()
+    out = plot_score_histograms(
+        {"slice_x": rng.uniform(0, 1, 50), "slice_y": rng.uniform(0, 1, 40)},
+        scorer_name="model",
+        ax=ax,
+    )
+    assert out is fig

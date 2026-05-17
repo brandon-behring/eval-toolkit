@@ -195,9 +195,12 @@ _EXPORTS: dict[str, str] = {
     "plot_confusion_matrix_grid": "eval_toolkit.plotting",
     "plot_lift_ci": "eval_toolkit.plotting",
     "plot_metric_bars": "eval_toolkit.plotting",
+    "plot_pareto_frontier": "eval_toolkit.plotting",
     "plot_pr_curve": "eval_toolkit.plotting",
     "plot_reliability_diagram": "eval_toolkit.plotting",
+    "plot_roc_curve": "eval_toolkit.plotting",
     "plot_score_histograms": "eval_toolkit.plotting",
+    "plot_slice_metric_heatmap": "eval_toolkit.plotting",
     "save_figure": "eval_toolkit.plotting",
     "set_plot_style": "eval_toolkit.plotting",
     # --- provenance ---

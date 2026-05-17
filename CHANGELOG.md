@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0] — 2026-05-17 — Plotting batch + ax= parity + CI quality-of-life
+
+Consumer-unblocking release: closes the four upstream-gap TODOs in
+`prompt-injection-detection-submission`'s Phase 4 figures (F1, F2, F5,
+F6-left) which had been carrying hand-rolled prototypes pending these
+primitives. Also bundles two CI/maintenance fixes that were quality-of-life
+pain points during v0.32 ship.
+
+**Note**: The `v0.33` milestone's #3 (`make_minilm_embedder`) is deferred
+to the next iteration (likely v0.33.1 or v0.34) so this release stays
+focused on the plotting batch + `ax=` parity. MiniLM adds a new optional
+dep + new module; ships better as its own bite.
+
+No breaking changes. Public API gains 3 new plotting exports
+(`plot_roc_curve`, `plot_pareto_frontier`, `plot_slice_metric_heatmap`)
+and adds an `ax=` kwarg to 2 existing plotting fns (`plot_metric_bars`,
+`plot_score_histograms`) — all additive.
+
+### Added
+
+- `eval_toolkit.plotting.plot_roc_curve` — sibling to `plot_pr_curve`;
+  accepts `ax=`, optional baseline overlay, threshold marker. Includes
+  a diagonal chance line. Closes #14.
+- `eval_toolkit.plotting.plot_pareto_frontier` — cost-vs-performance
+  scatter with running-best frontier overlay (O(n log n) sweep). Supports
+  both higher-is-better and lower-is-better metric directions, optional
+  per-point labels. Closes #15.
+- `eval_toolkit.plotting.plot_slice_metric_heatmap` — (rows × cols × metric)
+  heatmap with colorbar + optional cell annotations + NaN-cell masking.
+  Closes #16.
+
+### Changed
+
+- `plot_metric_bars` and `plot_score_histograms` now accept an `ax=` kwarg,
+  bringing the count of `ax=`-accepting plotting fns to 6 of 7
+  (`plot_confusion_matrix_grid` remains figure-creating since it's
+  intrinsically a grid-of-axes). Closes #24.
+- `Makefile`'s `coverage` target now filters `monte_carlo` and `benchmark`
+  markers, matching what `.github/workflows/ci.yml` actually runs. `make ci`
+  drops from ~45 min to ~3 min locally. Closes #25.
+
+### Internal
+
+- 16 new edge tests covering input validation + `ax=` branches for the
+  3 new plotting fns and the 2 backfilled ones.
+- 3 new `@pytest.mark.mpl_image_compare` baseline tests + checked-in
+  baseline PNGs for the new plotting fns.
+- `.github/workflows/*.yml` audited for Node.js 20 deprecation; bumped
+  `actions/upload-artifact@v4 → v5` (3 workflows) and
+  `actions/download-artifact@v4 → v5` (publish.yml) ahead of the
+  2026-09-16 Node-20 removal deadline. Closes #26.
+
 ## [0.32.0] — 2026-05-16 — Multiple-comparisons correction + EvidenceGate discoverability
 
 Bundled close-outs from the `v0.32` milestone triage (4 issues). Adds

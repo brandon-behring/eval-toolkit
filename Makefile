@@ -79,7 +79,7 @@ type:
 	$(PYTHON) -m mypy src
 
 coverage:
-	$(PYTHON) -m pytest --cov=eval_toolkit --cov-report=term-missing --cov-fail-under=92
+	$(PYTHON) -m pytest --cov=eval_toolkit --cov-report=term-missing --cov-fail-under=92 -m "not monte_carlo and not benchmark"
 
 ci: lint test coverage
 

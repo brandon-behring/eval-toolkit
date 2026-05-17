@@ -164,9 +164,12 @@
     "plot_confusion_matrix_grid",
     "plot_lift_ci",
     "plot_metric_bars",
+    "plot_pareto_frontier",
     "plot_pr_curve",
     "plot_reliability_diagram",
+    "plot_roc_curve",
     "plot_score_histograms",
+    "plot_slice_metric_heatmap",
     "pr_auc",
     "precision_at_prior",
     "quantile_stratified_pr_auc",
@@ -1001,7 +1004,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'0.32.0'"
+      "value": "'0.33.0'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1326,7 +1329,12 @@
     "plot_metric_bars": {
       "doc_first_line": "Bar chart for a ``{label: metric}`` mapping.",
       "kind": "function",
-      "signature": "(values: 'dict[str, float]', *, color: 'str | None' = None, ylabel: 'str | None' = None, title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, label_formatter: 'Callable[[str], str] | None' = None, sort_key: 'Callable[[str], Any] | None' = None) -> 'Figure'"
+      "signature": "(values: 'dict[str, float]', *, color: 'str | None' = None, ylabel: 'str | None' = None, title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, label_formatter: 'Callable[[str], str] | None' = None, sort_key: 'Callable[[str], Any] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
+    },
+    "plot_pareto_frontier": {
+      "doc_first_line": "Cost-vs-performance scatter with Pareto frontier overlay.",
+      "kind": "function",
+      "signature": "(cost: 'np.ndarray', metric: 'np.ndarray', *, point_labels: 'Sequence[str] | None' = None, higher_metric_is_better: 'bool' = True, xlabel: 'str' = 'cost', ylabel: 'str' = 'metric', title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
     },
     "plot_pr_curve": {
       "doc_first_line": "Precision-recall curve.",
@@ -1338,10 +1346,20 @@
       "kind": "function",
       "signature": "(y_true: 'np.ndarray', y_prob: 'np.ndarray', *, n_bins: 'int' = 10, bin_counts: 'np.ndarray | None' = None, xlabel: 'str' = 'Mean Predicted Probability', ylabel: 'str' = 'Observed Fraction of Positives', title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
     },
+    "plot_roc_curve": {
+      "doc_first_line": "Receiver-operating-characteristic curve.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, label: 'str | None' = None, threshold: 'float | None' = None, baseline_curve: 'tuple[np.ndarray, np.ndarray] | None' = None, baseline_label: 'str' = 'baseline', title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
+    },
     "plot_score_histograms": {
       "doc_first_line": "Overlaid score-distribution histograms, one per slice.",
       "kind": "function",
-      "signature": "(scores_by_slice: 'dict[str, np.ndarray]', *, scorer_name: 'str | None' = None, bins: 'int' = 30, title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, label_formatter: 'Callable[[str], str] | None' = None, sort_key: 'Callable[[str], Any] | None' = None) -> 'Figure'"
+      "signature": "(scores_by_slice: 'dict[str, np.ndarray]', *, scorer_name: 'str | None' = None, bins: 'int' = 30, title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, label_formatter: 'Callable[[str], str] | None' = None, sort_key: 'Callable[[str], Any] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
+    },
+    "plot_slice_metric_heatmap": {
+      "doc_first_line": "Heatmap of a (row \u00d7 col \u00d7 metric) grid with colorbar.",
+      "kind": "function",
+      "signature": "(grid: 'np.ndarray', *, row_labels: 'Sequence[str]', col_labels: 'Sequence[str]', metric_name: 'str' = 'metric', cmap: 'str' = 'viridis', annotate: 'bool' = True, annot_fmt: 'str' = '{:.3f}', title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
     },
     "pr_auc": {
       "doc_first_line": "Average precision (PR-AUC).",

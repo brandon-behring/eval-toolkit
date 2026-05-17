@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable, Container, Iterable, Mapping
+from collections.abc import Callable, Container, Iterable, Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, cast
@@ -34,7 +34,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 from sklearn.calibration import calibration_curve
-from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import precision_recall_curve, roc_curve
 
 if TYPE_CHECKING:
     from eval_toolkit.bootstrap import BootstrapCI
@@ -48,9 +48,12 @@ __all__ = [
     "plot_confusion_matrix_grid",
     "plot_lift_ci",
     "plot_metric_bars",
+    "plot_pareto_frontier",
     "plot_pr_curve",
     "plot_reliability_diagram",
+    "plot_roc_curve",
     "plot_score_histograms",
+    "plot_slice_metric_heatmap",
     "save_figure",
     "set_plot_style",
 ]
@@ -451,6 +454,129 @@ def plot_pr_curve(
     return fig
 
 
+def plot_roc_curve(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    label: str | None = None,
+    threshold: float | None = None,
+    baseline_curve: tuple[np.ndarray, np.ndarray] | None = None,
+    baseline_label: str = "baseline",
+    title: str | None = None,
+    figsize: tuple[float, float] | None = None,
+    ax: Axes | None = None,
+) -> Figure:
+    """Receiver-operating-characteristic curve.
+
+    Sibling of :func:`plot_pr_curve`. Plots the (FPR, TPR) curve with a
+    diagonal chance line. ROC is invariant to class prior, so unlike
+    `plot_pr_curve` there is no ``prevalence`` parameter.
+
+    Parameters
+    ----------
+    y_true, y_score : np.ndarray
+        Labels and scores.
+    label : str or None, optional
+        Legend label for the main curve.
+    threshold : float or None, optional
+        Draw a star marker at the (fpr, tpr) point closest to this
+        threshold.
+    baseline_curve : tuple of (fpr, tpr) np.ndarrays, optional
+        Optional baseline curve to overlay (e.g., a simpler reference model).
+    baseline_label : str, optional
+        Legend label for the baseline overlay (default ``"baseline"``).
+    title : str or None, optional
+    figsize : tuple of float or None, optional
+    ax : matplotlib Axes or None, optional
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+
+    Raises
+    ------
+    ValueError
+        If ``y_true``/``y_score`` fail shape/dtype/value-range checks
+        (re-raised from validators); if ``threshold`` is outside [0, 1];
+        or if ``baseline_curve`` is not a length-2 tuple with
+        matching-shape ``(fpr, tpr)`` arrays.
+    """
+    y_true = _ensure_ndarray("y_true", y_true)
+    y_score = _ensure_ndarray("y_score", y_score)
+    _validate_pair(y_true, y_score, other_name="y_score")
+
+    if threshold is not None and not 0.0 <= threshold <= 1.0:
+        raise ValueError(f"threshold must be in [0, 1], got {threshold}")
+    if baseline_curve is not None:
+        if not (isinstance(baseline_curve, tuple) and len(baseline_curve) == 2):
+            raise ValueError("baseline_curve must be a (fpr, tpr) tuple")
+        bl_fpr = _ensure_ndarray("baseline_curve[0]", baseline_curve[0])
+        bl_tpr = _ensure_ndarray("baseline_curve[1]", baseline_curve[1])
+        if bl_fpr.shape != bl_tpr.shape:
+            raise ValueError(
+                f"baseline_curve fpr and tpr must have same shape, "
+                f"got {bl_fpr.shape} vs {bl_tpr.shape}"
+            )
+
+    fig, axes = _resolve_axes(ax, figsize)
+
+    fpr, tpr, thresholds = roc_curve(y_true, y_score)
+    axes.plot(fpr, tpr, color=PALETTE["negative"], label=label, linewidth=1.5)
+
+    # Diagonal chance line (AUC = 0.5 reference).
+    axes.plot(
+        [0.0, 1.0],
+        [0.0, 1.0],
+        color=PALETTE["baseline"],
+        linestyle="--",
+        linewidth=0.8,
+        alpha=0.7,
+        label="chance",
+    )
+
+    if baseline_curve is not None:
+        bl_fpr = np.asarray(baseline_curve[0])
+        bl_tpr = np.asarray(baseline_curve[1])
+        axes.plot(
+            bl_fpr,
+            bl_tpr,
+            color=PALETTE["baseline"],
+            linewidth=1.0,
+            linestyle="--",
+            label=baseline_label,
+            zorder=1,
+        )
+    if threshold is not None:
+        # roc_curve prepends a sentinel threshold of np.inf; finite-mask it
+        # before picking the closest match so the marker lands on a real point.
+        finite = np.isfinite(thresholds)
+        if not finite.any():
+            raise ValueError("roc_curve returned no finite thresholds")
+        rel_idx = int(np.argmin(np.abs(thresholds[finite] - threshold)))
+        idx = int(np.flatnonzero(finite)[rel_idx])
+        axes.scatter(
+            fpr[idx],
+            tpr[idx],
+            color=PALETTE["accent"],
+            marker="*",
+            s=120,
+            zorder=5,
+            label=f"τ={threshold:.3f}",
+            edgecolor="black",
+            linewidth=0.5,
+        )
+
+    axes.set_xlabel("False Positive Rate")
+    axes.set_ylabel("True Positive Rate")
+    axes.set_xlim(0.0, 1.0)
+    axes.set_ylim(0.0, 1.05)
+    if title is not None:
+        axes.set_title(title)
+    _maybe_add_legend(axes)
+    fig.tight_layout()
+    return fig
+
+
 def plot_reliability_diagram(
     y_true: np.ndarray,
     y_prob: np.ndarray,
@@ -670,6 +796,7 @@ def plot_metric_bars(
     figsize: tuple[float, float] | None = None,
     label_formatter: Callable[[str], str] | None = None,
     sort_key: Callable[[str], Any] | None = None,
+    ax: Axes | None = None,
 ) -> Figure:
     """Bar chart for a ``{label: metric}`` mapping.
 
@@ -684,6 +811,9 @@ def plot_metric_bars(
         Maps raw key → display label. Default is identity.
     sort_key : callable or None, optional
         Maps raw key → sort key. Default is alphabetical.
+    ax : matplotlib Axes or None, optional
+        Render onto this Axes (reuses its parent Figure); otherwise creates a
+        fresh figure.
 
     Returns
     -------
@@ -703,7 +833,7 @@ def plot_metric_bars(
     labels = [fmt(k) for k, _ in sorted_items]
     bar_values = [v for _, v in sorted_items]
 
-    fig, axes = plt.subplots(figsize=figsize or DEFAULT_FIGSIZE)
+    fig, axes = _resolve_axes(ax, figsize)
     bar_color = color or PALETTE["negative"]
     axes.bar(labels, bar_values, color=bar_color, edgecolor="black", linewidth=0.5)
     upper = max(bar_values)
@@ -728,6 +858,7 @@ def plot_score_histograms(
     figsize: tuple[float, float] | None = None,
     label_formatter: Callable[[str], str] | None = None,
     sort_key: Callable[[str], Any] | None = None,
+    ax: Axes | None = None,
 ) -> Figure:
     """Overlaid score-distribution histograms, one per slice.
 
@@ -742,6 +873,9 @@ def plot_score_histograms(
     title, figsize : optional
     label_formatter, sort_key : callable or None, optional
         See :func:`plot_metric_bars`.
+    ax : matplotlib Axes or None, optional
+        Render onto this Axes (reuses its parent Figure); otherwise creates a
+        fresh figure.
 
     Returns
     -------
@@ -778,7 +912,7 @@ def plot_score_histograms(
         PALETTE["baseline"],
     ]
 
-    fig, axes = plt.subplots(figsize=figsize or DEFAULT_FIGSIZE)
+    fig, axes = _resolve_axes(ax, figsize)
     for i, (key, arr) in enumerate(sorted_items):
         color = palette_cycle[i % len(palette_cycle)]
         axes.hist(
@@ -985,6 +1119,232 @@ def plot_bootstrap_distribution(
         _maybe_add_legend(axes)
     axes.set_xlabel(xlabel)
     axes.set_ylabel("count")
+    if title is not None:
+        axes.set_title(title)
+    fig.tight_layout()
+    return fig
+
+
+def plot_pareto_frontier(
+    cost: np.ndarray,
+    metric: np.ndarray,
+    *,
+    point_labels: Sequence[str] | None = None,
+    higher_metric_is_better: bool = True,
+    xlabel: str = "cost",
+    ylabel: str = "metric",
+    title: str | None = None,
+    figsize: tuple[float, float] | None = None,
+    ax: Axes | None = None,
+) -> Figure:
+    """Cost-vs-performance scatter with Pareto frontier overlay.
+
+    Points on the frontier (the running-best metric as cost increases) are
+    drawn in accent color and connected by a dashed polyline; dominated
+    points are drawn in muted baseline color. Cost is always assumed
+    lower-is-better; ``higher_metric_is_better`` controls the metric
+    direction.
+
+    Parameters
+    ----------
+    cost : np.ndarray, shape (n,)
+        Cost values (training/inference/compute proxy; lower-is-better).
+    metric : np.ndarray, shape (n,)
+        Metric values aligned with ``cost``.
+    point_labels : Sequence[str] or None, optional
+        Per-point annotations (e.g., rung names). If provided, must have
+        length ``n``.
+    higher_metric_is_better : bool, optional
+        If True (default), frontier maximises metric at minimum cost. If
+        False, frontier minimises both (e.g., metric is an error/loss).
+    xlabel, ylabel : str, optional
+    title, figsize, ax : optional
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+
+    Raises
+    ------
+    ValueError
+        If ``cost`` and ``metric`` shapes don't match, are not 1-D, are
+        empty, contain NaN/inf, or if ``point_labels`` length disagrees.
+    """
+    cost = _ensure_ndarray("cost", cost)
+    metric = _ensure_ndarray("metric", metric)
+    if cost.ndim != 1 or metric.ndim != 1:
+        raise ValueError(f"cost and metric must be 1-D, got shapes {cost.shape} and {metric.shape}")
+    if cost.shape != metric.shape:
+        raise ValueError(
+            f"cost and metric must have same shape, got {cost.shape} vs {metric.shape}"
+        )
+    if cost.size == 0:
+        raise ValueError("cost and metric must be non-empty")
+    if not (np.isfinite(cost).all() and np.isfinite(metric).all()):
+        raise ValueError("cost and metric must contain finite values only")
+    if point_labels is not None and len(point_labels) != cost.size:
+        raise ValueError(f"point_labels length {len(point_labels)} != n={cost.size}")
+
+    fig, axes = _resolve_axes(ax, figsize)
+
+    # Sweep frontier: sort by cost ascending; a point is on the frontier iff
+    # it improves on the running-best metric. With ties on cost, only the
+    # best metric at that cost can be a frontier member; ``np.lexsort`` keys
+    # so smaller cost wins and within same cost better metric wins. The
+    # ``sign`` multiplier folds the direction (higher/lower-is-better) into
+    # a uniform max-sweep against a -inf baseline.
+    sign = 1.0 if higher_metric_is_better else -1.0
+    order = np.lexsort((-sign * metric, cost))
+    cost_s = cost[order]
+    metric_s = metric[order]
+    on_frontier = np.zeros(cost.size, dtype=bool)
+    best_signed = -np.inf
+    for i in range(cost.size):
+        candidate = sign * float(metric_s[i])
+        if candidate > best_signed:
+            on_frontier[i] = True
+            best_signed = candidate
+
+    # Map back to original indices for plotting labels in input order.
+    frontier_mask = np.zeros(cost.size, dtype=bool)
+    frontier_mask[order[on_frontier]] = True
+
+    axes.scatter(
+        cost[~frontier_mask],
+        metric[~frontier_mask],
+        color=PALETTE["baseline"],
+        s=40,
+        alpha=0.7,
+        zorder=2,
+        label="dominated" if (~frontier_mask).any() else None,
+    )
+    axes.scatter(
+        cost[frontier_mask],
+        metric[frontier_mask],
+        color=PALETTE["accent"],
+        edgecolor="black",
+        linewidth=0.5,
+        s=70,
+        zorder=4,
+        label="frontier",
+    )
+    if frontier_mask.any():
+        axes.plot(
+            cost_s[on_frontier],
+            metric_s[on_frontier],
+            color=PALETTE["accent"],
+            linestyle="--",
+            linewidth=1.0,
+            alpha=0.8,
+            zorder=3,
+        )
+    if point_labels is not None:
+        for label, x, y in zip(point_labels, cost, metric, strict=True):
+            axes.annotate(
+                label,
+                (float(x), float(y)),
+                textcoords="offset points",
+                xytext=(6, 4),
+                fontsize=9,
+            )
+
+    axes.set_xlabel(xlabel)
+    axes.set_ylabel(ylabel)
+    if title is not None:
+        axes.set_title(title)
+    _maybe_add_legend(axes)
+    fig.tight_layout()
+    return fig
+
+
+def plot_slice_metric_heatmap(
+    grid: np.ndarray,
+    *,
+    row_labels: Sequence[str],
+    col_labels: Sequence[str],
+    metric_name: str = "metric",
+    cmap: str = "viridis",
+    annotate: bool = True,
+    annot_fmt: str = "{:.3f}",
+    title: str | None = None,
+    figsize: tuple[float, float] | None = None,
+    ax: Axes | None = None,
+) -> Figure:
+    """Heatmap of a (row × col × metric) grid with colorbar.
+
+    Parameters
+    ----------
+    grid : np.ndarray, shape (n_rows, n_cols)
+        Metric values, one per (row, col) cell. NaN cells render as blank
+        (white) in the heatmap and are skipped from annotations.
+    row_labels, col_labels : Sequence[str]
+        Tick labels for the two axes; lengths must match ``grid.shape``.
+    metric_name : str, optional
+        Used as the colorbar label. Default ``"metric"``.
+    cmap : str, optional
+        Matplotlib colormap name. Default ``"viridis"``.
+    annotate : bool, optional
+        If True (default), write each cell's value on the heatmap.
+    annot_fmt : str, optional
+        Format string for cell annotations. Default ``"{:.3f}"``.
+    title, figsize, ax : optional
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+
+    Raises
+    ------
+    ValueError
+        If ``grid`` is not 2-D, if label lengths disagree with the grid
+        shape, or if the grid is empty.
+    """
+    grid_arr = _ensure_ndarray("grid", grid).astype(np.float64, copy=False)
+    if grid_arr.ndim != 2:
+        raise ValueError(f"grid must be 2-D, got shape {grid_arr.shape}")
+    n_rows, n_cols = grid_arr.shape
+    if n_rows == 0 or n_cols == 0:
+        raise ValueError(f"grid must be non-empty, got shape {grid_arr.shape}")
+    if len(row_labels) != n_rows:
+        raise ValueError(f"row_labels length {len(row_labels)} != grid.shape[0] {n_rows}")
+    if len(col_labels) != n_cols:
+        raise ValueError(f"col_labels length {len(col_labels)} != grid.shape[1] {n_cols}")
+
+    fig, axes = _resolve_axes(ax, figsize)
+
+    masked = np.ma.masked_invalid(grid_arr)
+    im = axes.imshow(masked, cmap=cmap, aspect="auto")
+    fig.colorbar(im, ax=axes, label=metric_name)
+
+    axes.set_xticks(np.arange(n_cols))
+    axes.set_yticks(np.arange(n_rows))
+    axes.set_xticklabels(list(col_labels))
+    axes.set_yticklabels(list(row_labels))
+    axes.tick_params(axis="x", rotation=30)
+    for tick in axes.get_xticklabels():
+        tick.set_horizontalalignment("right")
+
+    if annotate:
+        # Choose text color per cell from luminance midpoint to stay readable.
+        vmin = float(np.nanmin(grid_arr)) if np.isfinite(grid_arr).any() else 0.0
+        vmax = float(np.nanmax(grid_arr)) if np.isfinite(grid_arr).any() else 1.0
+        midpoint = 0.5 * (vmin + vmax)
+        for i in range(n_rows):
+            for j in range(n_cols):
+                v = grid_arr[i, j]
+                if not np.isfinite(v):
+                    continue
+                text_color = "white" if v < midpoint else "black"
+                axes.text(
+                    j,
+                    i,
+                    annot_fmt.format(v),
+                    ha="center",
+                    va="center",
+                    color=text_color,
+                    fontsize=9,
+                )
+
     if title is not None:
         axes.set_title(title)
     fig.tight_layout()

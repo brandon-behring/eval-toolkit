@@ -27,9 +27,12 @@ from eval_toolkit.plotting import (
     plot_confusion_matrix_grid,
     plot_lift_ci,
     plot_metric_bars,
+    plot_pareto_frontier,
     plot_pr_curve,
     plot_reliability_diagram,
+    plot_roc_curve,
     plot_score_histograms,
+    plot_slice_metric_heatmap,
 )
 
 
@@ -138,4 +141,57 @@ def test_plot_bootstrap_distribution_baseline() -> Figure:
     deltas = rng.normal(0.05, 0.02, size=500)
     return plot_bootstrap_distribution(
         deltas, ci_low=0.01, ci_high=0.09, title="lift bootstrap distribution"
+    )
+
+
+@pytest.mark.smoke
+@pytest.mark.mpl_image_compare(
+    baseline_dir="baseline/test_plotting_visual",
+    filename="plot_roc_curve.png",
+    tolerance=15,
+)
+def test_plot_roc_curve_baseline() -> Figure:
+    y, s = _deterministic_data()
+    return plot_roc_curve(y, s, label="model", threshold=0.5)
+
+
+@pytest.mark.smoke
+@pytest.mark.mpl_image_compare(
+    baseline_dir="baseline/test_plotting_visual",
+    filename="plot_pareto_frontier.png",
+    tolerance=15,
+)
+def test_plot_pareto_frontier_baseline() -> Figure:
+    cost = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 2.5])
+    metric = np.array([0.50, 0.70, 0.75, 0.78, 0.79, 0.65])
+    return plot_pareto_frontier(
+        cost,
+        metric,
+        point_labels=["A", "B", "C", "D", "E", "F"],
+        xlabel="compute",
+        ylabel="PR-AUC",
+        title="cost vs PR-AUC",
+    )
+
+
+@pytest.mark.smoke
+@pytest.mark.mpl_image_compare(
+    baseline_dir="baseline/test_plotting_visual",
+    filename="plot_slice_metric_heatmap.png",
+    tolerance=15,
+)
+def test_plot_slice_metric_heatmap_baseline() -> Figure:
+    grid = np.array(
+        [
+            [0.85, 0.78, 0.92],
+            [0.81, np.nan, 0.88],
+            [0.79, 0.83, 0.90],
+        ]
+    )
+    return plot_slice_metric_heatmap(
+        grid,
+        row_labels=("fold_1", "fold_2", "fold_3"),
+        col_labels=("scorer_a", "scorer_b", "scorer_c"),
+        metric_name="PR-AUC",
+        title="per-fold × per-scorer PR-AUC",
     )
