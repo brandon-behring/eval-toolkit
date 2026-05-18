@@ -63,6 +63,13 @@ jobs:
           path: docs/build/html
 
   deploy:
+    # Gate to main + manual dispatch only. The github-pages environment
+    # has a branch-protection rule that rejects tag pushes (every tag
+    # release was producing a red "X" on this workflow). Keeping the
+    # `build` job on tag pushes preserves the docs-build-on-tag
+    # validation (Sphinx renders cleanly at the released commit) while
+    # avoiding the inevitable deploy-step failure.
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
     environment:
