@@ -22,6 +22,7 @@ wheels/
 .coverage.*
 htmlcov/
 coverage.xml
+coverage.json
 .hypothesis/
 
 # Type-checker / linter caches

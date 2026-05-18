@@ -117,10 +117,14 @@ def set_global_seeds(seed: int, *, strict_torch_determinism: bool = False) -> No
             ) from None
         return
 
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    if strict_torch_determinism:
-        torch.use_deterministic_algorithms(True)
+    # Torch-active path: excluded from CI coverage because torch is a
+    # soft dependency intentionally kept out of [dev]/[all] (transitive
+    # cost ~700MB). Exercised in user code with torch installed; audited
+    # via pytorch-lightning seed_everything semantics in the docstring.
+    torch.manual_seed(seed)  # pragma: no cover
+    if torch.cuda.is_available():  # pragma: no cover
+        torch.cuda.manual_seed_all(seed)  # pragma: no cover
+    torch.backends.cudnn.deterministic = True  # pragma: no cover
+    torch.backends.cudnn.benchmark = False  # pragma: no cover
+    if strict_torch_determinism:  # pragma: no cover
+        torch.use_deterministic_algorithms(True)  # pragma: no cover

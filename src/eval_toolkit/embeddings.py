@@ -88,15 +88,18 @@ def make_minilm_embedder(
             "Install via: pip install eval-toolkit[embeddings]"
         ) from e
 
-    _logger.debug(
+    # sentence-transformers-active path: excluded from CI coverage
+    # because [embeddings] is intentionally kept out of [dev]/[all]
+    # (transitive torch cost ~700MB per the v0.33.1 design note).
+    _logger.debug(  # pragma: no cover
         "loading SentenceTransformer model_id=%s device=%s batch_size=%d",
         model_id,
         device,
         batch_size,
     )
-    model = SentenceTransformer(model_id, device=device)
+    model = SentenceTransformer(model_id, device=device)  # pragma: no cover
 
-    def embedder(texts: Sequence[str]) -> np.ndarray:
+    def embedder(texts: Sequence[str]) -> np.ndarray:  # pragma: no cover
         result = model.encode(
             list(texts),
             convert_to_numpy=True,
@@ -105,4 +108,4 @@ def make_minilm_embedder(
         )
         return np.asarray(result, dtype=np.float64)
 
-    return embedder
+    return embedder  # pragma: no cover
