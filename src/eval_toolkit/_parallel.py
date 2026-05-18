@@ -48,6 +48,19 @@ def parallel_map[T, R](
       state (use ``np.random.SeedSequence(seed).spawn(n)`` for resample
       loops so ``n_jobs > 1`` produces identical results to ``n_jobs == 1``
       for the same seed).
+    - **Worker-copy memory model.** Each loky worker receives a full copy
+      of every argument bound at ``delayed(fn)(item)`` call time —
+      loky's worker IPC is pickle-based, so caller objects duplicate
+      rather than alias. For DataFrame-bearing specs this means
+      ``n_jobs × spec_size`` resident memory; a 128-core sweep over a
+      30 GB-per-cell BCa bootstrap will OOM-kill before any cell
+      finishes. Pass DataFrames via file-path indirection (parquet
+      path + reload inside ``fn``) for memory-bounded parallelism, or
+      cap ``n_jobs`` at ``min(N, available_RAM_GB / spec_size_GB)``.
+      NumPy arrays >~1 MB transparently use joblib's memmap fast path
+      and do NOT duplicate. See
+      ``methodology/parallelism.md#memory-model-worker-copy-semantics``
+      for the shared-state pattern with a worked example.
 
     Parameters
     ----------

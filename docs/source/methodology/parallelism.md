@@ -217,6 +217,80 @@ local state do not.
 
 For deeper joblib pickling guidance see the joblib docs (link below).
 
+(worker-copy-memory)=
+## Memory model: worker-copy semantics
+
+When `n_jobs != 1`, joblib's loky backend forks a worker pool and
+**each worker receives a full copy of every argument bound at
+`delayed(fn)(arg)` call time**. There is no shared-memory channel for
+caller objects — loky's worker-to-parent IPC is pickle-based, so the
+parent's memory is duplicated, not aliased.
+
+The implication for memory-bounded parallelism:
+
+- **A `pd.DataFrame` of size N MB held in each work item's spec
+  produces `n_jobs × N` MB of resident memory across the worker
+  pool.** On a 128-core / 247 GB machine, an `n_jobs=-1` sweep where
+  each cell carries a 30 GB working set (BCa bootstrap intermediates
+  on a multi-million-row corpus) projects to ~3.8 TB peak — the OOM
+  killer fires before any cell finishes. This is **not** a joblib bug;
+  it's the cost of the picklability contract (Principle #6).
+- **NumPy arrays** are subject to the same rule but loky transparently
+  uses joblib's memmap-based shared-memory fast path for arrays above
+  a threshold (~1 MB by default). This means small NumPy arrays
+  duplicate; large NumPy arrays auto-share via `/dev/shm`. **No such
+  fast path exists for DataFrames** — pandas objects always duplicate.
+- **Module-level / process-global state** is NOT copied per call.
+  Workers inherit the parent's globals at fork time, then operate
+  independently. State written to a module-level singleton inside one
+  worker is invisible to others.
+
+### Pattern: shared-state via file-path + reload
+
+The standard workaround for "DataFrame shared across many cells" is
+file-path indirection: persist the DataFrame to disk in the parent,
+pass the path (a small string) to workers, and reload inside `fn`.
+The OS page cache means each worker's `read_parquet()` hits warm cache
+after the first; resident memory grows by the size of the materialised
+DataFrame per worker, but that's bounded by `min(n_jobs, n_useful_workers)`
+rather than `n_jobs × spec_size`.
+
+```python
+# Parent:
+import tempfile
+from pathlib import Path
+
+with tempfile.TemporaryDirectory() as tmp:
+    parquet_path = Path(tmp) / "predictions.parquet"
+    df.to_parquet(parquet_path)
+    specs = [(parquet_path, cell_config) for cell_config in cells]
+    results = parallel_map(_compute_cell, specs, n_jobs=8, description="marginal CI")
+
+
+def _compute_cell(spec: tuple[Path, CellConfig]) -> CellResult:
+    parquet_path, cfg = spec
+    df = pd.read_parquet(parquet_path)  # OS page cache amortises after first call
+    return _bootstrap_one_cell(df, cfg)
+```
+
+For numerical-only workloads where the DataFrame's content is convertible
+to a structured NumPy array, casting before parallelisation lets joblib's
+memmap fast-path kick in:
+
+```python
+arr = df[["score", "label"]].to_numpy()  # joblib will memmap this above ~1 MB
+results = parallel_map(_bootstrap_one_cell, [(arr, cfg) for cfg in cells], n_jobs=8)
+```
+
+### Recommended ceiling for DataFrame-bearing workloads
+
+When in doubt, cap `n_jobs` at `min(8, available_RAM_GB / spec_size_GB)`.
+For the 30 GB / cell case above, a 247 GB machine supports
+`min(8, 247/30) ≈ 8` workers — far below the 128 cores available, but
+the limit is RAM, not compute. The `parallel_map` helper does not
+auto-detect this; it's a caller responsibility to size `n_jobs`
+against memory headroom.
+
 ## See also
 
 - {mod}`eval_toolkit.bootstrap` — primary callers
