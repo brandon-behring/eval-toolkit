@@ -32,6 +32,7 @@ v0.7.0 additions:
 from __future__ import annotations
 
 import logging
+import pickle
 import time
 import traceback
 from collections.abc import Mapping, Sequence
@@ -41,6 +42,7 @@ from typing import TYPE_CHECKING, Final, Literal, cast
 
 import numpy as np
 
+from eval_toolkit._parallel import parallel_map
 from eval_toolkit.artifacts import (
     error_metric,
     sanitize_for_json,
@@ -62,7 +64,7 @@ from eval_toolkit.operating_points import (
     fit_operating_points,
 )
 from eval_toolkit.protocols import Scorer, SliceAwareScorer
-from eval_toolkit.thresholds import TargetFPRSelector
+from eval_toolkit.thresholds import TargetFPRSelector, ThresholdSelector
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -276,6 +278,31 @@ def _object_to_dict(obj: object, *, what: str) -> dict[str, object]:
         if isinstance(out, Mapping):
             return dict(out)
     raise TypeError(f"expected {what} mapping or object with to_dict(), got {type(obj).__name__}")
+
+
+def _assert_scorers_picklable(scorers: Mapping[str, Scorer]) -> None:
+    """Strict-pickle sniff for Scorer args when ``n_jobs != 1``.
+
+    joblib's loky backend uses cloudpickle (which absorbs closures + local
+    classes), but the v0.35 Scorer picklability ADR
+    (``methodology/parallelism.md#scorer-picklability``) is a *strict* pickle
+    contract — cloudpickle behavior is platform-dependent and the more
+    permissive failure modes are harder to debug. Fail fast at
+    :func:`evaluate` entry with the same ``TypeError`` style as
+    :func:`eval_toolkit._parallel.parallel_map`'s fn-sniff (no new exception
+    class — single channel for the picklability contract).
+    """
+    for sname, scorer in scorers.items():
+        try:
+            pickle.dumps(scorer)
+        except (pickle.PicklingError, AttributeError, TypeError) as exc:
+            raise TypeError(
+                f"evaluate(n_jobs != 1): scorer {sname!r} "
+                f"({type(scorer).__name__}) is not picklable. See "
+                f"methodology/parallelism.md#scorer-picklability for the "
+                f"contract and worked picklable / broken / fix examples. "
+                f"Underlying error: {exc}"
+            ) from exc
 
 
 def _should_score_slice(scorer: Scorer, slice_name: str) -> bool:
@@ -696,6 +723,36 @@ def _run_leakage_phase(
         )
 
 
+# Tuple shape for the flat `(slice × scorer)` work-unit dispatched to
+# parallel_map by `_score_all_slices`. Defined at module scope so workers
+# can pickle the function reference.
+_ScoreOnePairItem = tuple[EvalSlice, str, Scorer, int, int, Literal["raise", "record"]]
+_ScoreOnePairResult = tuple[str, str, dict[str, object], np.ndarray]
+
+
+def _score_one_pair(item: _ScoreOnePairItem) -> _ScoreOnePairResult:
+    """Picklable step function for ``(slice × scorer)`` parallel dispatch.
+
+    Module-scope so loky workers can serialize the reference (closures over
+    enclosing locals would fail :func:`parallel_map`'s pickle sniff). All
+    inputs flow through the ``item`` tuple — no captured state.
+
+    Returns ``(slice_name, scorer_name, result_dict, scores_array)`` so the
+    caller can reassemble ``by_slice`` + ``score_cache`` in the original
+    iteration order.
+    """
+    slice_, sname, scorer, n_resamples, seed, on_scorer_error = item
+    result = evaluate_scorer_on_slice(
+        scorer,
+        slice_,
+        n_resamples=n_resamples,
+        seed=seed,
+        on_scorer_error=on_scorer_error,
+    )
+    scores = np.asarray(result["scores"], dtype=np.float64)
+    return slice_.name, sname, result, scores
+
+
 def _score_all_slices(
     scorers: dict[str, Scorer],
     slices: Sequence[EvalSlice],
@@ -704,6 +761,7 @@ def _score_all_slices(
     seed: int,
     paired_diffs: list[tuple[str, str]] | None,
     on_scorer_error: Literal["raise", "record"],
+    n_jobs: int = 1,
 ) -> tuple[dict[str, dict[str, object]], dict[tuple[str, str], np.ndarray]]:
     """Score every ``(slice, scorer)`` pair; return ``(by_slice, score_cache)``.
 
@@ -714,10 +772,17 @@ def _score_all_slices(
     ``score_cache`` is keyed ``(slice.name, scorer.name)`` and carries the
     raw score arrays so :func:`_attach_transferred_operating_points` can
     re-use them without re-calling scorers.
-    """
-    by_slice: dict[str, dict[str, object]] = {}
-    score_cache: dict[tuple[str, str], np.ndarray] = {}
 
+    v0.36 added ``n_jobs``: a flat ``(slice × scorer)`` parallel dispatch
+    via :func:`eval_toolkit._parallel.parallel_map`. Default ``1`` preserves
+    bit-identical sequential behavior. ``n_jobs != 1`` requires picklable
+    scorers per the v0.35 ADR
+    (``docs/source/methodology/parallelism.md#scorer-picklability``).
+    """
+    # Pre-filter skipped pairs (allow-list miss) before dispatching parallel
+    # work-units. Logs the same skip messages as the pre-parallel version.
+    work_units: list[_ScoreOnePairItem] = []
+    skipped: dict[tuple[str, str], dict[str, object]] = {}
     for slice_ in slices:
         _logger.info(
             "[slice %s] n=%d, positives=%d",
@@ -725,32 +790,61 @@ def _score_all_slices(
             len(slice_.df),
             int(slice_.y_true.sum()),
         )
-        slice_data: dict[str, dict[str, object]] = {}
-        scores_by_scorer: dict[str, np.ndarray] = {}
         for sname, scorer in scorers.items():
             if not _should_score_slice(scorer, slice_.name):
                 reason = f"slice {slice_.name!r} not in scorer allow-list"
-                slice_data[sname] = _skipped_scorer_result(slice_, reason)
+                skipped[(slice_.name, sname)] = _skipped_scorer_result(slice_, reason)
                 _logger.info("    skipped %s: %s", sname, reason)
                 continue
-            t0 = time.time()
-            slice_data[sname] = evaluate_scorer_on_slice(
-                scorer,
-                slice_,
-                n_resamples=n_resamples,
-                seed=seed,
-                on_scorer_error=on_scorer_error,
-            )
-            # If the scorer raised under on_scorer_error="record", scores is [].
-            # Subsequent paired-diff machinery sees the empty array and will
-            # short-circuit on the same len-check it already does for skipped
-            # scorers; no special-case needed.
-            scores_by_scorer[sname] = np.asarray(slice_data[sname]["scores"], dtype=np.float64)
-            score_cache[(slice_.name, sname)] = scores_by_scorer[sname]
-            elapsed = time.time() - t0
-            pr = slice_data[sname].get("pr_auc")
+            work_units.append((slice_, sname, scorer, n_resamples, seed, on_scorer_error))
+
+    # Parallel scoring. parallel_map at n_jobs=1 is a pure-Python for-loop
+    # (Principle #4) — bit-identical to the pre-v0.36 sequential code.
+    if work_units:
+        t0_total = time.time()
+        results = parallel_map(
+            _score_one_pair,
+            work_units,
+            n_jobs=n_jobs,
+            description="harness _score_all_slices",
+        )
+        elapsed_total = time.time() - t0_total
+        _logger.info(
+            "  scored %d (slice, scorer) pairs in %.1fs (n_jobs=%d)",
+            len(work_units),
+            elapsed_total,
+            n_jobs,
+        )
+    else:
+        results = []
+
+    # Index results for O(1) lookup during reassembly.
+    results_by_key: dict[tuple[str, str], _ScoreOnePairResult] = {
+        (slice_name, sname): (slice_name, sname, result_dict, scores_arr)
+        for slice_name, sname, result_dict, scores_arr in results
+    }
+
+    # Reassemble in the original (slices × scorers.items()) iteration order.
+    by_slice: dict[str, dict[str, object]] = {}
+    score_cache: dict[tuple[str, str], np.ndarray] = {}
+    for slice_ in slices:
+        slice_data: dict[str, dict[str, object]] = {}
+        scores_by_scorer: dict[str, np.ndarray] = {}
+        for sname in scorers:
+            key = (slice_.name, sname)
+            if key in skipped:
+                slice_data[sname] = skipped[key]
+                continue
+            _, _, result_dict, scores_arr = results_by_key[key]
+            slice_data[sname] = result_dict
+            # If the scorer raised under on_scorer_error="record", scores_arr is [].
+            # Paired-diff machinery short-circuits on the same len-check it uses
+            # for skipped scorers; no special-case needed.
+            scores_by_scorer[sname] = scores_arr
+            score_cache[key] = scores_arr
+            pr = result_dict.get("pr_auc")
             pr_display = f"{pr:.4f}" if isinstance(pr, float) else "N/A"
-            _logger.info("    %s: PR-AUC=%s (%.1fs)", sname, pr_display, elapsed)
+            _logger.info("    %s: PR-AUC=%s", sname, pr_display)
 
         diffs = (
             _compute_paired_diffs(
@@ -789,6 +883,7 @@ def evaluate(
     on_leakage: Literal["raise", "record", "skip"] = "raise",
     on_scorer_error: Literal["raise", "record"] = "raise",
     operating_point_specs: Sequence[OperatingPointSpec] = (),
+    n_jobs: int = 1,
 ) -> RunResult:
     """Run every scorer on every slice; return a pure :class:`RunResult` (no IO).
 
@@ -830,6 +925,15 @@ def evaluate(
         Fit thresholds on one mixed-class slice and apply them to named target
         slices. Results are attached under each scorer's
         ``"transferred_operating_points"`` block. Default empty (skip).
+    n_jobs : int, optional
+        Parallel workers (default 1 — sequential). ``n_jobs > 1`` uses
+        joblib loky to parallelize the flat ``(slice × scorer)`` work-unit
+        loop in :func:`_score_all_slices` (and the operating-point fit
+        phase when ``operating_point_specs`` is non-empty). ``n_jobs=-1``
+        uses all cores; ``n_jobs=0`` is rejected. Scorers must be picklable
+        when ``n_jobs != 1`` — see
+        :doc:`methodology/parallelism` § Scorer picklability for the
+        contract + worked examples.
 
     Returns
     -------
@@ -849,6 +953,9 @@ def evaluate(
         raise ValueError("at least one scorer required")
     if not slices:
         raise ValueError("at least one slice required")
+
+    if n_jobs != 1:
+        _assert_scorers_picklable(scorers)
 
     config: dict[str, object] = {
         "n_resamples": n_resamples,
@@ -872,6 +979,7 @@ def evaluate(
         seed=seed,
         paired_diffs=paired_diffs,
         on_scorer_error=on_scorer_error,
+        n_jobs=n_jobs,
     )
 
     if operating_point_specs:
@@ -882,9 +990,43 @@ def evaluate(
             score_cache=score_cache,
             scorer_names=list(scorers.keys()),
             specs=operating_point_specs,
+            n_jobs=n_jobs,
         )
 
     return RunResult(run_id=run_id, git_sha=git_sha, config=config, by_slice=by_slice)
+
+
+_OpPointFitItem = tuple[
+    str,  # spec_name (for reassembly key)
+    str,  # fit_slice_name (passed through to fit_operating_points)
+    str,  # scorer_name
+    np.ndarray,  # fit_y_true
+    np.ndarray,  # fit_scores
+    Sequence[ThresholdSelector],  # spec.selectors (passed through to fit_operating_points)
+]
+_OpPointFitResult = tuple[str, str, object]  # (spec_name, scorer_name, fitted | error_dict)
+
+
+def _fit_one_op_point_pair(item: _OpPointFitItem) -> _OpPointFitResult:
+    """Picklable step function for ``(spec × scorer)`` operating-point fitting.
+
+    Module-scope so loky workers can serialize the reference. All inputs flow
+    through the ``item`` tuple. Returns ``(spec_name, scorer_name, fitted)``
+    where ``fitted`` is either the :func:`fit_operating_points` result or a
+    ``{"error": str}`` dict matching the sequential code path.
+    """
+    spec_name, fit_slice_name, scorer_name, y_true, fit_scores, selectors = item
+    try:
+        fitted = fit_operating_points(
+            y_true,
+            fit_scores,
+            selectors,
+            fitted_on_slice=fit_slice_name,
+            scorer_name=scorer_name,
+        )
+    except (ValueError, RuntimeError) as exc:
+        return spec_name, scorer_name, {"error": str(exc)}
+    return spec_name, scorer_name, fitted
 
 
 def _attach_transferred_operating_points(
@@ -894,34 +1036,73 @@ def _attach_transferred_operating_points(
     score_cache: Mapping[tuple[str, str], np.ndarray],
     scorer_names: Sequence[str],
     specs: Sequence[OperatingPointSpec],
+    n_jobs: int = 1,
 ) -> None:
-    """Mutate ``by_slice`` to attach opt-in cross-slice operating-point metrics."""
+    """Mutate ``by_slice`` to attach opt-in cross-slice operating-point metrics.
+
+    v0.36 added ``n_jobs``: parallelizes the ``(spec × scorer)`` fit phase
+    via :func:`eval_toolkit._parallel.parallel_map`. The apply phase
+    (writing into ``by_slice``) stays sequential — fitting dominates runtime.
+    Default ``n_jobs=1`` preserves bit-identical sequential behavior.
+    """
+    # Pre-flight: handle "fit slice not found" errors (these short-circuit the
+    # entire spec) + collect valid fit work-units. Tracks pre-conditions
+    # ("fit scorer skipped") as separate state so the parallel dispatch only
+    # carries actual work.
+    fit_work: list[_OpPointFitItem] = []
+    fit_skip_reasons: dict[tuple[str, str], dict[str, object]] = {}
+    specs_with_valid_fit: list[OperatingPointSpec] = []
+    names_per_spec: dict[str, list[str]] = {}
+
     for spec in specs:
         names = list(spec.scorer_names) if spec.scorer_names else list(scorer_names)
+        names_per_spec[spec.name] = names
         if spec.fit_slice not in slices_by_name:
             _record_spec_error(by_slice, spec, names, f"fit slice {spec.fit_slice!r} not found")
             continue
-
+        specs_with_valid_fit.append(spec)
         fit_slice = slices_by_name[spec.fit_slice]
-        fitted_by_scorer: dict[str, object] = {}
         for scorer_name in names:
             fit_scores = score_cache.get((spec.fit_slice, scorer_name))
             if fit_scores is None or len(fit_scores) != len(fit_slice.y_true):
-                fitted_by_scorer[scorer_name] = {
+                fit_skip_reasons[(spec.name, scorer_name)] = {
                     "error": "fit scorer skipped, errored, or produced no scores"
                 }
                 continue
-            try:
-                fitted_by_scorer[scorer_name] = fit_operating_points(
+            fit_work.append(
+                (
+                    spec.name,
+                    spec.fit_slice,
+                    scorer_name,
                     fit_slice.y_true,
                     fit_scores,
                     spec.selectors,
-                    fitted_on_slice=spec.fit_slice,
-                    scorer_name=scorer_name,
                 )
-            except (ValueError, RuntimeError) as exc:
-                fitted_by_scorer[scorer_name] = {"error": str(exc)}
+            )
 
+    # Parallel fit phase. parallel_map at n_jobs=1 is a pure-Python for-loop
+    # (Principle #4) — bit-identical to the pre-v0.36 sequential code.
+    fit_results: list[_OpPointFitResult] = (
+        parallel_map(
+            _fit_one_op_point_pair,
+            fit_work,
+            n_jobs=n_jobs,
+            description="harness _attach_transferred_operating_points (fit)",
+        )
+        if fit_work
+        else []
+    )
+
+    # Index by (spec_name, scorer_name) for O(1) lookup in the apply phase.
+    fitted_by_pair: dict[tuple[str, str], object] = {
+        (spec_name, scorer_name): fitted for spec_name, scorer_name, fitted in fit_results
+    }
+    fitted_by_pair.update(fit_skip_reasons)
+
+    # Sequential apply phase — preserves the original by_slice mutation order
+    # and the schema of error / skipped markers.
+    for spec in specs_with_valid_fit:
+        names = names_per_spec[spec.name]
         for target_name in spec.apply_slices:
             if target_name not in slices_by_name:
                 _record_spec_error(
@@ -939,7 +1120,7 @@ def _attach_transferred_operating_points(
                 spec_block: dict[str, object] = {}
                 transfer_block[spec.name] = spec_block
 
-                fitted = fitted_by_scorer.get(scorer_name)
+                fitted = fitted_by_pair.get((spec.name, scorer_name))
                 if not isinstance(fitted, dict) or "error" in fitted:
                     spec_block["error"] = (
                         str(fitted.get("error", "threshold fitting failed"))
@@ -1099,6 +1280,7 @@ def evaluate_folded(
     on_scorer_error: Literal["raise", "record"] = "raise",
     eval_split_names: Sequence[str] = ("test",),
     summary_metrics: Sequence[str] = ("pr_auc", "roc_auc"),
+    n_jobs: int = 1,
 ) -> RunResult:
     """Run a fold aggregator: ``Splitter × seeds → RunResult`` with CV-CI summary.
 
@@ -1128,6 +1310,15 @@ def evaluate_folded(
         RNG seeds for multi-seed × CV. Default ``(42,)`` (single seed).
     n_resamples, paired_diffs, leakage_checks, on_leakage, on_scorer_error :
         Forwarded to :func:`evaluate` per fold.
+    n_jobs : int, optional
+        Parallel workers (default 1 — sequential). Forwarded to
+        :func:`evaluate` per fold; parallelizes the inner
+        ``(slice × scorer)`` work-unit loop within each fold. Folds
+        themselves run sequentially to keep determinism + traceback
+        fidelity simple; for fold-level parallelism, consider an external
+        ``joblib.Parallel`` wrapper at the call site. See
+        :doc:`methodology/parallelism` § Scorer picklability for the
+        Scorer picklability contract when ``n_jobs != 1``.
     eval_split_names : sequence of str, optional
         Subset of each fold-dict's keys to actually evaluate. Default
         ``("test",)`` — train sets are skipped (eval-only K-fold). Pass
@@ -1183,6 +1374,7 @@ def evaluate_folded(
                 leakage_checks=leakage_checks,
                 on_leakage=on_leakage,
                 on_scorer_error=on_scorer_error,
+                n_jobs=n_jobs,
             )
             by_fold[fold_id] = fold_result
 
