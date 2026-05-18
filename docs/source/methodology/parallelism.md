@@ -155,11 +155,67 @@ As of v0.34.0:
 **Not yet parallelised** (filed as follow-up issues):
 
 - ``harness._score_all_slices`` and ``harness.evaluate_folded`` (slice ×
-  scorer loop) — Scorer picklability is the gatekeeper
+  scorer loop) — Scorer picklability is the gatekeeper; see
+  [Scorer picklability](#scorer-picklability) below.
 - ``harness._attach_transferred_operating_points`` (OperatingPointSpec
-  loops)
+  loops) — same Scorer gatekeeper.
 - ``text_dedup.MinHashLSHStrategy`` hash-bucket construction — race-
-  condition design needed for per-worker accumulation
+  condition design needed for per-worker accumulation.
+
+## Scorer picklability
+
+When the harness parallelization issues
+([#29](https://github.com/brandon-behring/eval-toolkit/issues/29),
+[#30](https://github.com/brandon-behring/eval-toolkit/issues/30)) land, the
+work-unit dispatched to each loky worker bundles both a step function AND a
+{class}`~eval_toolkit.protocols.Scorer` instance. ``joblib`` pickles the
+*entire* delayed call — function plus bound arguments — so an unpicklable
+``Scorer`` fails at dispatch even when the step function itself is fine.
+
+The existing ``parallel_map`` sniff (Principle #6 above) covers the function;
+this section establishes the parallel contract for the Scorer surface.
+
+**Rule.** Any ``Scorer`` passed to a parallel-capable harness call
+(``evaluate(..., n_jobs > 1)`` once #29/#30 land) MUST be picklable. The
+toolkit's existing helper raises a clean ``TypeError`` with the underlying
+pickle error attached — no special exception subclass.
+
+**Picklable** (works — top-level class, picklable state):
+
+```text
+class ThresholdScorer:
+    def __init__(self, threshold: float) -> None:
+        self.threshold = threshold
+
+    def predict_proba(self, X):
+        # bound numpy / torch state is fine — both pickle cleanly
+        ...
+```
+
+**Not picklable** (raises ``TypeError`` at dispatch):
+
+```text
+def make_scorer(threshold):
+    def predict_proba(X):
+        # closure over `threshold` — joblib cannot pickle the inner fn
+        ...
+    return predict_proba   # ← returned closure is not picklable
+```
+
+**Fix.** Promote the closure to a top-level class (as in the picklable
+example above). Bound instance attributes pickle naturally; closures over
+local state do not.
+
+**Common non-picklable cases** to watch for in user-supplied Scorers:
+
+- Closures (above) — most common
+- ``lambda`` expressions assigned to instance attributes
+- Local-scope class definitions (defined inside a function or method)
+- Attributes holding open file handles, sockets, or live model-server
+  connections — re-establish these inside ``predict_proba`` instead of
+  caching on ``self``
+
+For deeper joblib pickling guidance see the joblib docs (link below).
 
 ## See also
 

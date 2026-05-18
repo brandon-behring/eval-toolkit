@@ -87,6 +87,7 @@ _EXPORTS: dict[str, str] = {
     "fit_isotonic_calibrator": "eval_toolkit.calibration",
     "fit_platt_calibrator": "eval_toolkit.calibration",
     "fit_temperature": "eval_toolkit.calibration",
+    "fit_temperature_binary": "eval_toolkit.calibration",
     "fit_temperature_oracle": "eval_toolkit.calibration",
     "reliability_curve": "eval_toolkit.calibration",
     "reliability_diagram_data": "eval_toolkit.calibration",

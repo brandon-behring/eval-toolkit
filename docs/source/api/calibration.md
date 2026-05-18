@@ -18,6 +18,7 @@
    fit_isotonic_calibrator
    fit_platt_calibrator
    fit_temperature
+   fit_temperature_binary
    fit_temperature_oracle
    reliability_curve
    reliability_diagram_data

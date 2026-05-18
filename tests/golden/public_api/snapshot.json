@@ -137,6 +137,7 @@
     "fit_operating_points",
     "fit_platt_calibrator",
     "fit_temperature",
+    "fit_temperature_binary",
     "fit_temperature_oracle",
     "from_yaml",
     "frozen_config",
@@ -1202,6 +1203,11 @@
       "doc_first_line": "Single-parameter temperature scaling per Guo et al. 2017 [#guo]_.",
       "kind": "function",
       "signature": "(val_logits: 'np.ndarray', val_labels: 'np.ndarray', bounds: 'tuple[float, float]' = (0.05, 20.0)) -> 'dict[str, float]'"
+    },
+    "fit_temperature_binary": {
+      "doc_first_line": "Binary-probability adapter for :func:`fit_temperature` (Guo et al. 2017 [#guo]_).",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, bounds: 'tuple[float, float]' = (0.05, 20.0)) -> 'tuple[float, Callable[[np.ndarray], np.ndarray]]'"
     },
     "fit_temperature_oracle": {
       "doc_first_line": "**DIAGNOSTIC ONLY** \u2014 fit-on-test oracle T-scaling per Guo et al. 2017 [#guo]_.",

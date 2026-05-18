@@ -16,6 +16,7 @@ from eval_toolkit.calibration import (
     fit_isotonic_calibrator,
     fit_platt_calibrator,
     fit_temperature,
+    fit_temperature_binary,
     fit_temperature_oracle,
     maximum_calibration_error,
     reliability_curve,
@@ -361,3 +362,128 @@ def test_fit_platt_matches_sklearn_canonical() -> None:
     ours_out = ours(grid)
     sk_out = sk_cal.predict(grid)
     np.testing.assert_allclose(ours_out, sk_out, atol=1e-6, rtol=1e-6)
+
+
+# --- fit_temperature_binary (#28) -------------------------------------------------
+
+
+@pytest.mark.unit
+def test_fit_temperature_binary_runs(well_separated: tuple[np.ndarray, np.ndarray]) -> None:
+    """Smoke test: returns positive T + callable; calibrated outputs in (0, 1)."""
+    y, s = well_separated
+    s_clipped = np.clip(s, 0.01, 0.99)
+    T, apply = fit_temperature_binary(y, s_clipped)
+    assert T > 0
+    out = apply(s_clipped)
+    assert out.shape == s_clipped.shape  # scalar (n,) in/out contract
+    assert (out > 0.0).all() and (out < 1.0).all()
+
+
+@pytest.mark.unit
+def test_fit_temperature_binary_shape_contract() -> None:
+    """Apply returns shape (n,), never (n, 2). Guards against 2-col regressions."""
+    rng = np.random.default_rng(0)
+    y = rng.binomial(1, 0.3, size=200).astype(int)
+    s = np.clip(y * 0.6 + rng.normal(0, 0.2, 200), 0.01, 0.99)
+    _, apply = fit_temperature_binary(y, s)
+    for shape in [(1,), (3,), (50,)]:
+        p_test = rng.uniform(0.05, 0.95, size=shape)
+        assert apply(p_test).shape == shape
+
+
+@pytest.mark.unit
+def test_fit_temperature_binary_handles_extremes() -> None:
+    """Probas at exactly 0 and 1 produce finite outputs (clipping covers the logit pole).
+
+    Contract: ``logit(0)`` and ``logit(1)`` are infinite, but the internal
+    clipping to ``[1e-7, 1-1e-7]`` keeps the math finite. Outputs may hit the
+    float64 boundary (0.0 or 1.0) at extreme inputs with small T — that is
+    correct behavior, not a violation. The real failure mode this test guards
+    against is ``inf`` / ``nan`` in either fit or apply.
+    """
+    rng = np.random.default_rng(0)
+    n = 200
+    y = rng.binomial(1, 0.5, size=n).astype(int)
+    s = y.astype(float)  # exact 0s and 1s in val data
+    T, apply = fit_temperature_binary(y, s)
+    assert np.isfinite(T)
+    # Apply to extremes — must be finite + in [0, 1] (boundary-inclusive)
+    p_test = np.array([0.0, 0.5, 1.0])
+    out = apply(p_test)
+    assert np.isfinite(out).all()
+    assert (out >= 0.0).all() and (out <= 1.0).all()
+
+
+@pytest.mark.unit
+def test_fit_temperature_binary_parity_with_multiclass() -> None:
+    """fit_temperature_binary(y, p) matches manual fit_temperature(2-col-logits, y).
+
+    Establishes the contract that the binary adapter is a thin wrapper, not a
+    re-implementation: identical T, identical applied probabilities.
+    """
+    rng = np.random.default_rng(7)
+    n = 400
+    y = rng.binomial(1, 0.4, size=n).astype(int)
+    p_val = np.clip(y * 0.5 + rng.normal(0, 0.25, n), 0.01, 0.99)
+    p_test = rng.uniform(0.05, 0.95, size=50)
+
+    T_binary, apply_binary = fit_temperature_binary(y, p_val)
+
+    # Manual multi-class path: build 2-col logits, fit T, apply via softmax row 1.
+    logit_val = np.log(p_val / (1.0 - p_val))
+    val_logits_2col = np.column_stack([np.zeros_like(logit_val), logit_val])
+    result_mc = fit_temperature(val_logits_2col, y)
+    T_mc = result_mc["temperature"]
+
+    logit_test = np.log(p_test / (1.0 - p_test))
+    test_logits_2col = np.column_stack([np.zeros_like(logit_test), logit_test]) / T_mc
+    # softmax row 1 = exp(z1) / (exp(0) + exp(z1)) = sigmoid(z1)
+    expected = 1.0 / (1.0 + np.exp(-test_logits_2col[:, 1]))
+
+    assert T_binary == pytest.approx(T_mc, rel=1e-9)
+    np.testing.assert_allclose(apply_binary(p_test), expected, rtol=1e-9, atol=1e-12)
+
+
+@pytest.mark.unit
+def test_fit_temperature_binary_improves_nll() -> None:
+    """T_post NLL ≤ T_pre NLL (T=1 is always a feasible point in the bracket)."""
+    rng = np.random.default_rng(0)
+    n = 500
+    y = rng.binomial(1, 0.4, size=n).astype(int)
+    # Overconfident probabilities: push away from 0.5
+    raw = y * 0.7 + rng.normal(0, 0.15, n)
+    p = np.clip(0.5 + 2.5 * (raw - 0.5), 0.01, 0.99)
+    T, apply = fit_temperature_binary(y, p)
+    eps = 1e-12
+
+    def _binary_nll(probs: np.ndarray, labels: np.ndarray) -> float:
+        c = np.clip(probs, eps, 1 - eps)
+        return float(-(labels * np.log(c) + (1 - labels) * np.log(1 - c)).mean())
+
+    nll_pre = _binary_nll(p, y)
+    nll_post = _binary_nll(apply(p), y)
+    assert nll_post <= nll_pre + 1e-9
+
+
+@pytest.mark.unit
+def test_fit_temperature_binary_validates() -> None:
+    """Error paths inherit from _validate_calibrator_inputs."""
+    with pytest.raises(ValueError, match="shape mismatch"):
+        fit_temperature_binary(np.zeros(5, dtype=int), np.zeros(7))
+    with pytest.raises(ValueError, match="empty"):
+        fit_temperature_binary(np.array([], dtype=int), np.array([]))
+    with pytest.raises(ValueError, match="NaN or inf"):
+        fit_temperature_binary(np.array([0, 1, 0, 1]), np.array([0.1, np.nan, 0.3, 0.7]))
+    with pytest.raises(ValueError, match="both classes"):
+        fit_temperature_binary(np.ones(50, dtype=int), np.linspace(0.1, 0.9, 50))
+
+
+@pytest.mark.unit
+def test_fit_temperature_binary_apply_rejects_nonfinite() -> None:
+    """Apply rejects non-finite test-time scores (does not silently mask)."""
+    rng = np.random.default_rng(0)
+    y = rng.binomial(1, 0.3, size=200).astype(int)
+    s = np.clip(y * 0.6 + rng.normal(0, 0.2, 200), 0.01, 0.99)
+    _, apply = fit_temperature_binary(y, s)
+    with pytest.raises(ValueError, match="NaN or inf"):
+        apply(np.array([0.5, np.nan, 0.7]))

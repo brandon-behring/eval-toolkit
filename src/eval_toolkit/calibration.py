@@ -57,6 +57,7 @@ __all__ = [
     "fit_isotonic_calibrator",
     "fit_platt_calibrator",
     "fit_temperature",
+    "fit_temperature_binary",
     "fit_temperature_oracle",
     "maximum_calibration_error",
     "reliability_curve",
@@ -1036,6 +1037,102 @@ def _negative_log_likelihood(t: float, logits: np.ndarray, labels: np.ndarray) -
         return float("inf")
     log_probs = log_softmax(logits / t, axis=-1)
     return float(-log_probs[np.arange(len(labels)), labels].mean())
+
+
+def fit_temperature_binary(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    bounds: tuple[float, float] = (0.05, 20.0),
+) -> tuple[float, Callable[[np.ndarray], np.ndarray]]:
+    r"""Binary-probability adapter for :func:`fit_temperature` (Guo et al. 2017 [#guo]_).
+
+    Fits a scalar T > 0 on *validation* probabilities of class 1 and returns
+    both T and a callable that applies the same T-scaling to test
+    probabilities. Internally:
+
+    1. Clips ``y_score`` to ``[1e-7, 1-1e-7]`` for finite logit inversion.
+    2. Builds a 2-column logit array ``[0, logit(p)]`` so softmax row 1
+       reproduces ``p`` exactly.
+    3. Delegates to :func:`fit_temperature` for the bounded NLL minimization.
+    4. Returns ``(T, apply)`` where ``apply(p_test) = sigmoid(logit(p_test)/T)``.
+
+    Unlike :func:`fit_temperature_oracle`, this does NOT emit a warning — the
+    contract is that ``y_true`` / ``y_score`` come from a held-out validation
+    set and ``apply`` is invoked on a separate test set (deployment-quality
+    calibration, not fit-on-test).
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary validation labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Validation predicted probabilities of class 1, in [0, 1]. Values at
+        the extremes are clipped to ``[1e-7, 1 - 1e-7]``.
+    bounds : tuple of float, optional
+        ``(lo, hi)`` bracket for T. Default ``(0.05, 20.0)``, matches
+        :func:`fit_temperature`.
+
+    Returns
+    -------
+    tuple
+        ``(T_optimal, apply)`` where ``apply: (n,) -> (n,)`` maps any input
+        probability array through :math:`\sigma(\mathrm{logit}(p) / T)`.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, empty input, non-finite scores, or single-class
+        ``y_true``.
+    RuntimeError
+        If the bounded scalar optimizer fails to converge.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> y_val = rng.binomial(1, 0.3, size=n).astype(int)
+    >>> p_val = np.clip(y_val * 0.6 + rng.normal(0, 0.2, n), 0.01, 0.99)
+    >>> T, apply = fit_temperature_binary(y_val, p_val)
+    >>> T > 0
+    True
+    >>> p_test = np.array([0.1, 0.5, 0.9])
+    >>> apply(p_test).shape == (3,)
+    True
+
+    See Also
+    --------
+    fit_temperature : underlying multi-class fitter (operates on 2-col logits)
+    fit_temperature_oracle : diagnostic-only variant that fits T on the same
+        probabilities it scores
+
+    References
+    ----------
+    .. [#guo] Guo, C., Pleiss, G., Sun, Y., & Weinberger, K. Q. "On
+       calibration of modern neural networks." ICML 2017. arXiv:1706.04599.
+    """
+    y_true_arr, y_score_arr = _validate_calibrator_inputs(y_true, y_score)
+
+    # Build 2-col logits [0, logit(p)] so softmax([0, logit(p)])[1] == p exactly.
+    s_clipped = np.clip(y_score_arr, _SCORE_CLIP_LO, _SCORE_CLIP_HI)
+    logit_pos = np.log(s_clipped / (1.0 - s_clipped))
+    val_logits_2col = np.column_stack([np.zeros_like(logit_pos), logit_pos])
+
+    result = fit_temperature(val_logits_2col, y_true_arr, bounds=bounds)
+    t_optimal = float(result["temperature"])
+
+    def apply(scores: np.ndarray) -> np.ndarray:
+        arr = np.asarray(scores, dtype=float).ravel()
+        if not np.isfinite(arr).all():
+            raise ValueError("scores contains NaN or inf")
+        clipped = np.clip(arr, _SCORE_CLIP_LO, _SCORE_CLIP_HI)
+        logit = np.log(clipped / (1.0 - clipped))
+        scaled = logit / t_optimal
+        out: np.ndarray = (1.0 / (1.0 + np.exp(-scaled))).astype(float)
+        return out
+
+    return t_optimal, apply
 
 
 def fit_temperature_oracle(

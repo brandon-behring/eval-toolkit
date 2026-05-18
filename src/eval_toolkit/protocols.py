@@ -31,6 +31,16 @@ class Scorer(Protocol):
     Accepts ``list[str]``, ``np.ndarray``, or ``pd.Series`` of features.
     Pandas is imported under ``TYPE_CHECKING`` only, so this Protocol
     has no runtime pandas dependency.
+
+    Notes
+    -----
+    When passed to a parallel-capable harness call (``n_jobs > 1``), Scorer
+    instances MUST be picklable — joblib's loky backend serializes the entire
+    delayed call (function plus bound arguments) before worker dispatch.
+    Closures, lambdas, local-scope classes, and attributes holding live
+    sockets / file handles break pickling. See
+    ``docs/source/methodology/parallelism.md#scorer-picklability`` for the
+    full contract and worked examples.
     """
 
     def predict_proba(  # pragma: no cover
