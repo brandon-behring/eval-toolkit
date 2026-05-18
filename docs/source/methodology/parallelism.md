@@ -255,7 +255,7 @@ after the first; resident memory grows by the size of the materialised
 DataFrame per worker, but that's bounded by `min(n_jobs, n_useful_workers)`
 rather than `n_jobs × spec_size`.
 
-```python
+```text
 # Parent:
 import tempfile
 from pathlib import Path
@@ -277,7 +277,7 @@ For numerical-only workloads where the DataFrame's content is convertible
 to a structured NumPy array, casting before parallelisation lets joblib's
 memmap fast-path kick in:
 
-```python
+```text
 arr = df[["score", "label"]].to_numpy()  # joblib will memmap this above ~1 MB
 results = parallel_map(_bootstrap_one_cell, [(arr, cfg) for cfg in cells], n_jobs=8)
 ```
