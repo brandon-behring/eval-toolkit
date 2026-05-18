@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-05-18 — `fit_temperature_binary` + Scorer picklability ADR
+
+Small, additive release. Adds a binary-classification calibration helper
+that lets consumers drop the ~50 LOC scalar-proba adapter many were
+carrying, plus a design ADR that unblocks the v0.36 harness / operating-
+point parallelization work (#29, #30) without re-litigating picklability.
+
+### Added
+
+- `eval_toolkit.fit_temperature_binary(y_true, y_score)` — scalar-proba
+  adapter for the multi-class `fit_temperature` fitter. Converts `(n,)`
+  probabilities of class 1 to a 2-column logit array via clipped logit
+  (`[0, logit(p)]` so softmax row 1 reproduces `p`), delegates to the
+  deployment-quality fitter, and returns `(T_opt, apply)` where
+  `apply: (n,) -> (n,)` does scalar-in / scalar-out T-scaling. Unlike
+  `fit_temperature_oracle`, no warning — the contract assumes val / test
+  separation (deployment-quality calibration, not fit-on-test). Closes
+  #28.
+
+### Documentation
+
+- `docs/source/methodology/parallelism.md` — new `## Scorer picklability`
+  sub-section documenting the Scorer protocol's picklability contract
+  for `n_jobs > 1` usage. Includes worked picklable / broken-closure /
+  fix examples plus a list of common non-picklable patterns to watch for
+  in user-supplied Scorers (closures, lambdas on instances, local-scope
+  classes, attributes holding live sockets / file handles). Anchors on
+  the existing v0.34.0 `parallel_map` pickle sniff + `TypeError`
+  channel — no new exception class. Unblocks v0.36 implementation of
+  #29 and #30.
+- `eval_toolkit.protocols.Scorer` docstring — Notes block pointing at
+  the new methodology section.
+
 ## [0.34.0] — 2026-05-17 — Phase 4 stats unblockers + unified parallelism + cookbook (BREAKING)
 
 Closes all 7 open backlog issues in one consumer-closing release. Also
