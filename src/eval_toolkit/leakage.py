@@ -38,9 +38,9 @@ from __future__ import annotations
 import logging
 import unicodedata
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -70,6 +70,7 @@ __all__ = [
     "NormalizedFormLeakageCheck",
     "Severity",
     "TemporalLeakageCheck",
+    "TokenizationLeakageCheck",
     "Versioned",
     "run_leakage_checks",
 ]
@@ -554,6 +555,145 @@ class NormalizedFormLeakageCheck:
             ),
             n_affected=n_affected,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class TokenizationLeakageCheck:
+    """Detect duplicates that collide post-tokenization.
+
+    Tokenizes each row's text via the supplied tokenizer and hashes the
+    resulting ``input_ids`` tuple to detect rows that produce identical
+    token sequences. Catches encoding-obfuscated dupes that survive raw-
+    text normalization but collapse to the same tokens once a transformer's
+    BPE / SentencePiece / WordPiece tokenizer is applied.
+
+    Optional dependency: the canonical tokenizer source is
+    :mod:`transformers`. Install via ``pip install eval-toolkit[transformers]``.
+    Any ``Callable[[str], Mapping[str, object]]`` returning HuggingFace-style
+    output with an ``"input_ids"`` key works — the check accepts a callable
+    directly and does not itself import ``transformers``.
+
+    Parameters
+    ----------
+    tokenizer : Callable[[str], Mapping[str, object]]
+        Tokenizer callable. Must accept a single ``str`` and return a
+        mapping with an ``"input_ids"`` key whose value is a
+        ``Sequence[int]`` (or a one-level-nested sequence — the check
+        unwraps a leading batch dim of length 1).
+        HuggingFace's :class:`~transformers.PreTrainedTokenizerBase`
+        instances satisfy this contract directly.
+    target_splits : sequence of str or None, optional
+        Splits to scan. ``None`` = all.
+    severity : {"error", "warning", "info"}, optional
+        Default ``"error"`` — tokenization-level overlap is as dangerous
+        as encoding-obfuscated overlap (see
+        :class:`NormalizedFormLeakageCheck`).
+
+    Notes
+    -----
+    **Tokenizer determinism.** For audit reproducibility, pin the
+    tokenizer by version (the ``transformers`` release that produced it)
+    and by ``tokenizer.json`` SHA-256 hash. Different tokenizer versions
+    can emit different ``input_ids`` for the same text (e.g. when
+    added-vocab tokens change), which would flip dedup outcomes silently.
+    Capture both in your run manifest.
+
+    **Performance.** Each row is tokenized once; the check is O(n) per
+    split. For corpora > 100k rows or tokenizers that download model
+    weights on first use, instantiate the tokenizer eagerly and pass a
+    pre-built callable.
+
+    References
+    ----------
+    .. [1] PI_HackAPrompt_SQuAD 2025 — motivates encoding-obfuscated
+           dedup; tokenization-level overlap is the analogous attack on
+           subword tokenizers. See :class:`NormalizedFormLeakageCheck`
+           for the raw-text variant.
+
+    See Also
+    --------
+    NormalizedFormLeakageCheck :
+        Raw-text encoding-obfuscated dedup. Run both for defense in depth.
+
+    Examples
+    --------
+    >>> from eval_toolkit.leakage import TokenizationLeakageCheck
+    >>> # In production: pass an HF tokenizer.
+    >>> # from transformers import AutoTokenizer
+    >>> # tok = AutoTokenizer.from_pretrained("bert-base-uncased")
+    >>> # check = TokenizationLeakageCheck(tokenizer=tok)
+    >>> # Stub for doctest (deterministic byte-level "tokenizer"):
+    >>> def byte_tok(text):
+    ...     return {"input_ids": list(text.encode())}
+    >>> check = TokenizationLeakageCheck(tokenizer=byte_tok)
+    >>> check.name
+    'TokenizationLeakageCheck'
+    """
+
+    tokenizer: Callable[[str], Mapping[str, object]]
+    target_splits: Sequence[str] | None = None
+    severity: Severity = "error"
+
+    @property
+    def name(self) -> str:
+        """Stable check identifier."""
+        return "TokenizationLeakageCheck"
+
+    def validate(self, splits: Mapping[str, EvalSlice]) -> LeakageFinding:
+        """Drop rows whose tokenized input_ids collide with another row's."""
+        targets = _select_targets(splits, self.target_splits)
+        drop: dict[str, list[int]] = {}
+        collisions: dict[str, list[tuple[int, int]]] = {}
+        n_affected = 0
+        for split_name in targets:
+            slice_ = splits[split_name]
+            texts = slice_.features
+            if len(texts) <= 1:
+                continue
+            seen: dict[tuple[int, ...], int] = {}
+            split_drops: list[int] = []
+            split_collisions: list[tuple[int, int]] = []
+            for i, text in enumerate(texts):
+                key = self._token_key(text)
+                if key in seen:
+                    split_drops.append(i)
+                    split_collisions.append((i, seen[key]))
+                else:
+                    seen[key] = i
+            if split_drops:
+                drop[split_name] = sorted(set(split_drops))
+                collisions[split_name] = split_collisions
+                n_affected += len(drop[split_name])
+        return LeakageFinding(
+            check_name=self.name,
+            severity=self.severity,
+            drop_indices=drop,
+            evidence={"collisions_by_split": collisions},
+            message=(
+                f"tokenization-level duplicates: {n_affected} rows tokenize "
+                f"to identical input_ids"
+                if n_affected
+                else "no tokenization-level duplicates found"
+            ),
+            n_affected=n_affected,
+        )
+
+    def _token_key(self, text: str) -> tuple[int, ...]:
+        """Tokenize text and return the input_ids as a hashable tuple.
+
+        Unwraps one level of batching if the tokenizer returns a list of
+        lists for a single-string call (some wrappers always emit batched
+        output). ``Any``-typed locally because tokenizer outputs follow
+        the HF BatchEncoding duck-type rather than a static ``Mapping``.
+        """
+        out = self.tokenizer(text)
+        ids: Any = out["input_ids"]
+        if not ids:
+            return ()
+        first = ids[0]
+        if isinstance(first, (list, tuple)):
+            ids = first
+        return tuple(int(x) for x in ids)
 
 
 @dataclass(frozen=True, slots=True)

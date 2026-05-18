@@ -56,6 +56,13 @@ parquet = ["pyarrow>=15.0"]
 # setup small. The canonical semantic-dedup recipe (all-MiniLM-L6-v2 +
 # cosine@0.80) is what this factory pre-wires for callers.
 embeddings = ["sentence-transformers>=3.0"]
+# v0.37.0: TokenizationLeakageCheck — HF-tokenizer-aware dedup.
+# transformers transitively pulls torch + tokenizers (~700MB) so we
+# follow the [embeddings] precedent: opt-in only, NOT in [all] / [dev].
+# Consumers pass an already-instantiated tokenizer callable; the check
+# itself does not import transformers, so the optional install is
+# strictly for callers wanting AutoTokenizer.from_pretrained(...).
+transformers = ["transformers>=4.0"]
 # DEPRECATED (announced v0.30.1, removal v0.33.0).
 #
 # Retained as a transitive no-op so `pip install eval-toolkit[validation]`

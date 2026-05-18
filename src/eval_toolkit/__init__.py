@@ -147,6 +147,7 @@ _EXPORTS: dict[str, str] = {
     "NearDuplicateCheck": "eval_toolkit.leakage",
     "NormalizedFormLeakageCheck": "eval_toolkit.leakage",
     "TemporalLeakageCheck": "eval_toolkit.leakage",
+    "TokenizationLeakageCheck": "eval_toolkit.leakage",
     "run_leakage_checks": "eval_toolkit.leakage",
     # --- loaders ---
     "DataFrameLoader": "eval_toolkit.loaders",

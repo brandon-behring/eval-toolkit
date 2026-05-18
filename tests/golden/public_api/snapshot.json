@@ -96,6 +96,7 @@
     "ThresholdSelector",
     "ThresholdedMetricFn",
     "TimeSeriesSplitter",
+    "TokenizationLeakageCheck",
     "Versioned",
     "WilsonInterval",
     "YoudenJSelector",
@@ -988,6 +989,14 @@
       "doc_first_line": "Time-aware K-fold via :class:`sklearn.model_selection.TimeSeriesSplit`.",
       "kind": "class",
       "signature": "(k: 'int' = 5, time_col: 'str | None' = None) -> None"
+    },
+    "TokenizationLeakageCheck": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Detect duplicates that collide post-tokenization.",
+      "kind": "class",
+      "signature": "(tokenizer: 'Callable[[str], Mapping[str, object]]', target_splits: 'Sequence[str] | None' = None, severity: 'Severity' = 'error') -> None"
     },
     "Versioned": {
       "bases": [

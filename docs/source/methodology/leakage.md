@@ -309,21 +309,41 @@ concerns. The pointers above are required reading.
 ### Tokenization-level duplicates
 
 Two strings can look distinct in plain text but tokenize identically once
-a transformer's BPE / SentencePiece tokenizer is applied. Don't dedup on
-raw text only when your downstream model is a transformer — dedup on the
-tokenizer's output too.
+a transformer's BPE / SentencePiece / WordPiece tokenizer is applied.
+Don't dedup on raw text only when your downstream model is a transformer
+— dedup on the tokenizer's output too.
 
-```python
-# Pseudocode-ish: replace with your tokenizer.
-# tokens = [tokenizer.encode(t) for t in texts]
-# token_strings = [" ".join(map(str, t)) for t in tokens]
-# Then run an ExactDuplicateCheck over token_strings as a synthetic feature.
+Since v0.37.0 the toolkit ships `TokenizationLeakageCheck` for this
+directly. It takes a tokenizer callable (any HuggingFace
+`PreTrainedTokenizerBase`, or any `Callable[[str], Mapping]` returning
+HF-style `{"input_ids": [...]}` output) and dedups on the `input_ids`
+tuple per row:
+
+```text
+from transformers import AutoTokenizer
+from eval_toolkit.leakage import TokenizationLeakageCheck
+
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+check = TokenizationLeakageCheck(tokenizer=tokenizer)
+finding = check.validate(splits)
 ```
 
-The toolkit doesn't ship a tokenizer-aware check (would force a
-transformers dep) — emulate one by adding a `tokens` column to your
-dataframe and pointing `ExactDuplicateCheck` at it via a custom
-`feature_col` on the `EvalSlice`.
+Optional install via the `[transformers]` extra (intentionally **not**
+in `[all]` / `[dev]` — transformers transitively pulls torch (~700MB)
+per the [embeddings] precedent). The check itself does not import
+transformers; consumers pass an already-instantiated tokenizer.
+
+**Pin the tokenizer for audit reproducibility.** Different `transformers`
+releases can emit different `input_ids` for the same text (added-vocab
+changes between minors), which would silently flip dedup outcomes.
+Capture both the package version and a SHA-256 of the `tokenizer.json`
+in your `RunManifest`.
+
+For consumers who want to avoid the `[transformers]` extra entirely:
+emulate the check by adding a `tokens` column to your dataframe and
+pointing `ExactDuplicateCheck` at it via a custom feature view on the
+`EvalSlice`. The `TokenizationLeakageCheck` is just sugar over that
+pattern with explicit tokenizer-pin guidance.
 
 ### Pretraining contamination
 
