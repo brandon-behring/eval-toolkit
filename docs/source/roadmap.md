@@ -8,10 +8,25 @@ This document is **descriptive of intent, not a commitment**. The
 priorities reflect today's understanding of what consumers need;
 order may change as feedback comes in.
 
-## Currently shipped (as of v0.8.0)
+## Currently shipped (as of v0.36.0)
 
 See [`CHANGELOG.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/CHANGELOG.md) for the full release history.
-The state-of-the-toolkit summary:
+Highlights since v0.33:
+
+- **v0.34.0** — Phase 4 stats unblockers (CV-aware block bootstrap,
+  generalized `mde_from_ci`, multi-comparisons correction); unified
+  internal `parallel_map` helper + `n_jobs` kwarg on all 5 public
+  bootstrap functions; cookbook docs (3 compositional patterns).
+  Closed the entire prior backlog in one release.
+- **v0.35.0** — `fit_temperature_binary` (scalar-proba adapter for
+  binary calibration; closes #28); Scorer picklability ADR in
+  `methodology/parallelism.md` (unblocks v0.36 harness parallelism).
+- **v0.36.0** — `evaluate(n_jobs=)` + `evaluate_folded(n_jobs=)` wire
+  the unified parallelism pattern into the harness loop (closes #29,
+  #30). CI actions bumped to Node 24 ahead of the 2026-06-02
+  deprecation.
+
+State-of-the-toolkit:
 
 - 5 Tier-2 Protocols (`Scorer`, `LeakageCheck`, `Splitter`,
   `ThresholdSelector`, `DatasetLoader`) + 1 opt-in (`Versioned`).
@@ -22,57 +37,46 @@ The state-of-the-toolkit summary:
   Croissant-compatible loader metadata.
 - Versioned JSON schemas at `src/eval_toolkit/schemas/`.
 - Multi-file methodology curriculum:
-  [12 chapters](methodology/README.md) covering leakage, splits,
+  [16 chapters](methodology/README.md) covering leakage, splits,
   thresholds, calibration, comparison, fairness, reproducibility,
-  testing, bootstrap, text dedup, versioning, length stratification.
+  testing, bootstrap, text dedup, versioning, length stratification,
+  artifacts, claims, evidence, parallelism.
 - Reference-equivalence tests against sklearn / scipy for the wrapped
   primitives (`pr_auc`, `roc_auc`, `brier_score`, `reliability_curve`,
   `bootstrap_ci`, `fit_isotonic_calibrator`, `fit_platt_calibrator`).
 - 90 % global coverage gate; per-module breakdown in CI.
-- Sybil-validated doc-blocks across `docs/methodology/`,
-  `docs/extending.md`, `docs/migration/`, `docs/examples/`,
-  `README.md`.
-- Two release-vehicle migration guides
-  ([`docs/MIGRATION.md`](MIGRATION.md)).
+- Sybil-validated doc-blocks across `docs/source/methodology/`,
+  `docs/source/extending.md`, `docs/source/migration/`,
+  `docs/source/examples/`, `README.md`.
+- Per-version migration guides
+  ([`migration/v0.7.md`](migration/v0.7.md),
+  [`migration/v0.8.md`](migration/v0.8.md),
+  [`migration/v0.9.md`](migration/v0.9.md))
+  + general [`MIGRATION.md`](MIGRATION.md).
 
 ## Consumer gap docs (input)
 
-External projects track upstream wishes in their own gap docs:
-
-- **`prompt-injection-clean/docs/eval_toolkit_gaps.md`** — confirms
-  the v0.7.0/0.7.1 release closed Gap 1 (`TargetPrecisionSelector`)
-  and Gap 4 (`Versioned` adoption pattern); records Gap 2
-  (`length_stratified_report` wrapper, **closed in v0.8.0** as
-  `quantile_stratified_report`); flags Gap 3 (cost-matrix preset,
-  YAGNI / probably WONTFIX).
-
 If you maintain a downstream consumer of eval-toolkit and have an
 upstream wish, the convention is to put a `docs/eval_toolkit_gaps.md`
-in your repo and link it from this roadmap on PR.
+in your repo, open an issue or PR against `eval-toolkit` linking it,
+and we'll reconcile against the tracked-candidates list below.
+Historical gap-closure status (Gaps 1–4 from the v0.7 era) is
+preserved in CHANGELOG entries for v0.7.x / v0.8.0.
 
-## v0.9 candidates (next minor)
+## Tracked candidates (see GitHub Issues)
 
-Items deferred from v0.8.0 or surfaced post-v0.8 release. None are
-release-blockers; ship as feedback dictates.
+The previously-untracked "v0.9 candidates" list has been filed as
+GitHub Issues. Issue state is the source of truth; this section is a
+navigational gloss.
 
-- **Optional `fit_platt_calibrator(canonical: bool = True)` flag.** v0.8
-  ships docstring-only acknowledgment of the (now non-divergent;
-  v0.3.0 already canonicalized) Platt impl. The flag is now low-value;
-  may be dropped entirely if no consumer demand surfaces.
-- **Bootstrap CI inline on every metric.** Inspect-AI / lm-eval pattern.
-  Useful for scorecard-oriented harnesses; not the toolkit's primary
-  use case but worth surfacing if a consumer needs it.
-- **Tokenizer-aware leakage check.** A
-  `TokenizationLeakageCheck` that dedupes on a HuggingFace tokenizer's
-  output rather than raw text. Requires the optional `transformers`
-  install. Consumer-side stub today (see
-  [`methodology/leakage.md` §"PyTorch & transformer-specific"](methodology/leakage.md#pytorch-pitfalls)).
-- **Per-module coverage floors.** v0.8 restored the global 90 % gate
-  but per-module floors (especially `seeds.py` at 70 % due to
-  optional torch path) are uneven. v0.9 candidate: pragma the
-  unreachable-without-torch lines OR add torch as a CI dep.
-- **`paths.py` / `provenance.py` / `seeds.py` / `docs.py` doctests in
-  CI.** Currently CI doctests only the math kernels.
+- [#35](https://github.com/brandon-behring/eval-toolkit/issues/35) (P2) — `TokenizationLeakageCheck` (HF-tokenizer-aware dedup; complements `NormalizedFormLeakageCheck`).
+- [#31](https://github.com/brandon-behring/eval-toolkit/issues/31) (P3) — Migrate `docs/source/examples/` from static MD to executable myst-nb cells.
+- [#36](https://github.com/brandon-behring/eval-toolkit/issues/36) (P3) — Inline bootstrap CI on every metric (Inspect-AI / lm-eval scorecard pattern).
+- [#37](https://github.com/brandon-behring/eval-toolkit/issues/37) (P3) — Restore per-module coverage floors (`seeds.py` 70 % due to optional torch path).
+- [#38](https://github.com/brandon-behring/eval-toolkit/issues/38) (P3) — CI doctests for `paths.py` / `provenance.py` / `seeds.py` / `docs.py`.
+
+Run `gh issue list -R brandon-behring/eval-toolkit --label P2` or
+`--label P3` for live state.
 
 ## v1-prelude evidence core
 
@@ -94,19 +98,18 @@ or markdown report generator.
 v1.0.0 signals API stability — breaking changes after v1.0 require
 v2.0. Gated on:
 
-1. **All four `prompt_injection_*` consumers fully migrated** to v0.7+
-   and **running in production for ≥ 1 review cycle.** As of
-   v0.8.0: 3 of 4 (`prompt_injection_detector`,
-   `prompt_injection_classifier_showcase`, `prompt-injection-sdd`)
-   are migrated and committed; `prompt-injection-clean` was
-   scaffolded against v0.7.1 from the start.
+1. **Real consumer running v0.7+ in production for ≥ 1 review cycle.**
+   The canonical consumer is `prompt-injection-detection-submission`.
+   Other `prompt_injection_*` / `prompt-injection-*` repos in the
+   author's workspace are experiments, scaffolds, or earlier
+   prototypes — only the detection-submission repo gates v1.0.
 2. **Protocol shapes survive ≥ 1 "should we change this?" review
    cycle.** v0.7.x added 5 new Protocols; v0.8.0 didn't change any.
    v0.9 might (e.g., the Versioned-canonical-impl shape if v0.9 ships
    the canonical Platt flag). v1.0 means we're *confident* the shapes
    are durable.
-   The v1-prelude evidence APIs must also survive one V3-shaped and one
-   SDD-shaped consumer migration check.
+   The v1-prelude evidence APIs must also survive one real-consumer
+   migration check (the `prompt-injection-detection-submission` repo).
 3. **Methodology docs peer-reviewed** by an external reader (statistics
    / methodology background, ideally not part of the
    `prompt_injection_*` core team).
@@ -140,6 +143,11 @@ These are valuable but **not** on the roadmap:
   own CLI (e.g., the `prompt_injection_*` repos' `evaluate.py` scripts).
 - **A formal plugin registry / setuptools entry-points system.** The
   Protocol-based seam is sufficient.
+- **Optional `fit_platt_calibrator(canonical: bool = True)` flag.**
+  v0.3.0 already canonicalized the impl per Platt 1999 §2.2; the flag
+  would re-introduce the non-canonical variant for backward
+  compatibility but no consumer demand has surfaced. WONTFIX unless
+  asked.
 
 ## How to file an upstream wish
 
