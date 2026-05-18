@@ -75,6 +75,7 @@
     "RecallAtFprResult",
     "RunManifest",
     "RunResult",
+    "SINGLE_CLASS_INCOMPATIBLE_METRICS",
     "Scorer",
     "SimilarityAuditFinding",
     "SimilarityAuditReport",
@@ -144,6 +145,7 @@
     "frozen_config",
     "headline_metrics",
     "headline_present_gate",
+    "is_metric_defined_for_slice",
     "iter_folds_with_pool",
     "load_prediction_arrays",
     "low_fpr_feasibility_gate",
@@ -827,6 +829,12 @@
       "kind": "class",
       "signature": "(run_id: 'str', git_sha: 'str | None', config: 'dict[str, object]', by_slice: 'dict[str, dict[str, object]]' = <factory>, by_fold: 'dict[str, RunResult]' = <factory>, fold_summary: 'dict[str, dict[str, object]]' = <factory>, claim_report: 'dict[str, object]' = <factory>, prediction_artifacts: 'list[dict[str, object]]' = <factory>, evidence_axes: 'list[dict[str, object]]' = <factory>, pairing_metadata: 'dict[str, object]' = <factory>, aggregate_evidence: 'dict[str, object]' = <factory>, threshold_policy: 'dict[str, object]' = <factory>, schema_version: 'str' = 'v1') -> None"
     },
+    "SINGLE_CLASS_INCOMPATIBLE_METRICS": {
+      "doc_first_line": "Build an immutable unordered collection of unique elements.",
+      "kind": "value",
+      "type": "frozenset",
+      "value": "['auprc', 'auroc']"
+    },
     "Scorer": {
       "bases": [
         "Protocol"
@@ -1242,6 +1250,11 @@
       "doc_first_line": "Require a non-null headline/comparison block at an arbitrary path.",
       "kind": "function",
       "signature": "(path: 'str' = 'headline', *, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "is_metric_defined_for_slice": {
+      "doc_first_line": "Return ``True`` iff a metric is well-defined for the given class distribution.",
+      "kind": "function",
+      "signature": "(metric_name: 'str', *, is_single_class: 'bool', incompatible_metrics: 'Collection[str]' = frozenset({'auprc', 'auroc'})) -> 'bool'"
     },
     "iter_folds_with_pool": {
       "doc_first_line": "Compose a :class:`Splitter` with a :class:`PoolBuilder`.",

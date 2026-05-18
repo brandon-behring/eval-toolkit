@@ -164,6 +164,7 @@ _EXPORTS: dict[str, str] = {
     "write_manifest": "eval_toolkit.manifest",
     # --- metrics ---
     "DEFAULT_ASSUMED_PRIORS": "eval_toolkit.metrics",
+    "SINGLE_CLASS_INCOMPATIBLE_METRICS": "eval_toolkit.metrics",
     "ThresholdResult": "eval_toolkit.metrics",
     "brier_decomposition": "eval_toolkit.metrics",
     "brier_score": "eval_toolkit.metrics",
@@ -173,6 +174,7 @@ _EXPORTS: dict[str, str] = {
     "expected_calibration_error_l2": "eval_toolkit.metrics",
     "expected_calibration_error_l2_debiased": "eval_toolkit.metrics",
     "headline_metrics": "eval_toolkit.metrics",
+    "is_metric_defined_for_slice": "eval_toolkit.metrics",
     "metrics_at_threshold": "eval_toolkit.metrics",
     "pr_auc": "eval_toolkit.metrics",
     "precision_at_prior": "eval_toolkit.metrics",

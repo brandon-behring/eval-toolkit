@@ -8,7 +8,7 @@ JSON-serializable values.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal, overload
 
@@ -95,6 +95,7 @@ def _empty_strategy_guard(
 
 __all__ = [
     "DEFAULT_ASSUMED_PRIORS",
+    "SINGLE_CLASS_INCOMPATIBLE_METRICS",
     "ThresholdResult",
     "brier_decomposition",
     "brier_score",
@@ -104,6 +105,7 @@ __all__ = [
     "expected_calibration_error_l2",
     "expected_calibration_error_l2_debiased",
     "headline_metrics",
+    "is_metric_defined_for_slice",
     "metrics_at_threshold",
     "pr_auc",
     "precision_at_prior",
@@ -114,6 +116,88 @@ __all__ = [
     "single_class_threshold_metrics",
     "stratified_recall",
 ]
+
+SINGLE_CLASS_INCOMPATIBLE_METRICS: Final[frozenset[str]] = frozenset({"auroc", "auprc"})
+"""Metrics that are mathematically undefined on single-class slices.
+
+AUROC and AUPRC are *ranking* metrics — both require at least one
+positive AND one negative example to produce a well-defined score.
+sklearn's implementations return degenerate ``1.0`` or ``0.0`` (or
+warn) when called on single-class input; those values entering
+bootstrap/CI artifacts produce misleading downstream evidence.
+
+Overridable per call to :func:`is_metric_defined_for_slice` via the
+``incompatible_metrics`` kwarg. Surfaced by v0.39.0 / closes #39.
+"""
+
+
+def is_metric_defined_for_slice(
+    metric_name: str,
+    *,
+    is_single_class: bool,
+    incompatible_metrics: Collection[str] = SINGLE_CLASS_INCOMPATIBLE_METRICS,
+) -> bool:
+    """Return ``True`` iff a metric is well-defined for the given class distribution.
+
+    Use at the per-cell layer to filter ``(metric, slice)`` combinations
+    BEFORE bootstrap so degenerate values never pollute the downstream
+    artifacts (CI bands, MDE estimates, marginal-effect summaries).
+
+    Parameters
+    ----------
+    metric_name : str
+        Metric identifier. Case-insensitive. Common values:
+        ``"auroc"``, ``"auprc"``, ``"ece"``, ``"brier"``, ``"recall"``,
+        ``"precision"``, ``"recall_at_fpr"``.
+    is_single_class : bool
+        Whether the slice has only one observed class (all-positive
+        or all-negative ``y_true``). Caller computes this from the
+        slice's label vector — the function does not inspect data.
+    incompatible_metrics : Collection[str], optional
+        Metric names that are undefined on single-class slices. Default
+        :data:`SINGLE_CLASS_INCOMPATIBLE_METRICS` (``{"auroc", "auprc"}``).
+        Override to widen (e.g., add ``"recall_at_fpr"`` if your threshold
+        selector also requires both classes) or narrow per call. Compared
+        case-insensitively.
+
+    Returns
+    -------
+    bool
+        ``True`` if the metric is well-defined for the slice's class
+        distribution; ``False`` if it would be degenerate.
+
+    Examples
+    --------
+    >>> is_metric_defined_for_slice("auroc", is_single_class=True)
+    False
+    >>> is_metric_defined_for_slice("auroc", is_single_class=False)
+    True
+    >>> is_metric_defined_for_slice("ece", is_single_class=True)
+    True
+    >>> is_metric_defined_for_slice("AUROC", is_single_class=True)
+    False
+    >>> is_metric_defined_for_slice(
+    ...     "recall_at_fpr",
+    ...     is_single_class=True,
+    ...     incompatible_metrics=frozenset({"auroc", "auprc", "recall_at_fpr"}),
+    ... )
+    False
+
+    Notes
+    -----
+    The function takes ``is_single_class`` rather than inspecting
+    ``y_true`` directly to keep the primitive cheap (no array
+    materialisation) and composable with caller-side slice taxonomies
+    where the single-class property is known a priori from slice
+    semantics (e.g., a benign-only or attack-only split).
+
+    See Also
+    --------
+    SINGLE_CLASS_INCOMPATIBLE_METRICS : the default incompatibility set.
+    """
+    if not is_single_class:
+        return True
+    return metric_name.lower() not in {m.lower() for m in incompatible_metrics}
 
 
 @dataclass(frozen=True, slots=True)
