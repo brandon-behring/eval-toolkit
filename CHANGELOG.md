@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.39.0] — 2026-05-18 — consumer-feedback batch (closes #39, #40, #41)
+
+Three issues lifted from `prompt-injection-detection-prototype v1.0.0`
+consumer-side workarounds into upstream toolkit primitives + docs.
+All small scope; the consumer had filed each with a "Rationale for
+upstream landing" section per the *"Working around a library
+limitation without filing an upstream issue"* anti-pattern discipline.
+
+### Added
+
+- **`eval_toolkit.metrics.is_metric_defined_for_slice`** + module-level
+  constant **`SINGLE_CLASS_INCOMPATIBLE_METRICS`** (`frozenset({"auroc",
+  "auprc"})`). AUROC and AUPRC are mathematically undefined on
+  single-class slices — ranking metrics require both classes. The
+  primitive takes ``is_single_class: bool`` (caller computes from the
+  slice's class distribution) and returns whether the metric is
+  defined. Use at the per-cell layer to filter `(metric, slice)`
+  combinations BEFORE bootstrap so degenerate values never pollute
+  downstream artifacts. Default incompatible set overridable per call.
+  Closes #39.
+
+### Changed
+
+- **`LeakageCheck.name` Protocol member redeclared as `@property`**
+  (was `name: str` class-level annotation). Strictly contract-
+  tightening: existing consumers who *read* `check.name` keep working;
+  this fixes the `mypy --strict` rejection of
+  `list[LeakageCheck] = [CrossSplitLeakageCheck()]` that surfaced when
+  consumers built lists of frozen-dataclass leakage checks. Runtime
+  `isinstance(check, LeakageCheck)` was always fine — only mypy strict
+  was unhappy with read-only-vs-settable Protocol semantics (PEP 544).
+  Closes #40.
+
+### Documentation
+
+- **`docs/source/methodology/parallelism.md` §"Memory model:
+  worker-copy semantics"** — new section documenting joblib loky's
+  pickle-based worker IPC and its memory implications for DataFrame-
+  bearing specs (`n_jobs × spec_size` resident memory; the bug that
+  OOM-killed a 128-core BCa bootstrap sweep on prompt-injection-
+  detection-prototype's marginal-CI regen). Worked example of the
+  file-path-shared-state pattern + recommended ceiling formula
+  (`min(N, available_RAM_GB / spec_size_GB)`). Cross-referenced from
+  the `parallel_map` docstring in `_parallel.py`. Closes #41.
+
+### Why bundled
+
+Three small consumer-feedback items from the same downstream project;
+ship as one minor rather than three patches. Pattern matches the
+v0.37.0 "TokenizationLeakageCheck + per-module floors" bundling —
+small consumer-driven fixes consolidated to keep release-prep
+overhead per item low.
+
 ## [0.38.0] — 2026-05-18 — executable examples (myst-nb migration)
 
 Docs-only minor. Migrates the 14 walkthrough pages in
