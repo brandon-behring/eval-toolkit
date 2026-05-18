@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] — 2026-05-18 — TokenizationLeakageCheck + per-module coverage floors
+
+Two-issue bundle (#35 + #37) plus housekeeping closure of stale items
+(PR #27, #38) that turned out to have been resolved in v0.33.x without
+being checked off. Roadmap refresh in `3d40796` (this minor's
+predecessor commit) replaced the version-keyed candidate list with
+issue-keyed tracking, so this class of stale-roadmap bug shouldn't
+recur.
+
+### Added
+
+- **`eval_toolkit.leakage.TokenizationLeakageCheck`** — new within-split
+  `LeakageCheck` that dedups on tokenizer output rather than raw text.
+  Catches encoding-obfuscated dupes that survive
+  `NormalizedFormLeakageCheck` but collapse to identical `input_ids`
+  under a transformer's BPE / SentencePiece / WordPiece tokenizer.
+  Accepts any `Callable[[str], Mapping[str, object]]` returning HF-style
+  output with an `"input_ids"` key — does **not** import `transformers`
+  itself; consumers pass an already-instantiated tokenizer. Default
+  severity `"error"` (mirrors `NormalizedFormLeakageCheck`). Closes #35.
+- New optional install extra **`[transformers]`** (`transformers>=4.0`).
+  Intentionally **not** in `[all]` / `[dev]` — mirrors the `[embeddings]`
+  precedent from v0.33.1 to keep contributor setup small (transformers
+  transitively pulls torch ~700MB).
+
+### Test
+
+- **Per-module coverage floors restored.** `scripts/check_module_floors.py`
+  enforces an 85 % per-file floor (coverage.py natively only ships
+  global `--fail-under`). Hooked into `make coverage` via a post-pytest
+  invocation. Closes #37.
+- **`# pragma: no cover` on optional-dep-active paths** in `seeds.py`
+  (torch) and `embeddings.py` (sentence-transformers). Reflects the
+  reality that these branches execute in user code, not CI. Both
+  modules now report 100 % coverage; previously sat at ~70 % which
+  obscured per-module floor enforcement.
+
+### Fixed
+
+- **`make coverage` Makefile parity with PR CI.** PR #27 (external
+  contributor @leno23, draft) proposed adding `-m "not monte_carlo and
+  not benchmark"` to the `coverage` target. Audit found the same fix
+  had landed in v0.33.0 commit `9e375a8` ahead of the PR being filed;
+  closed PR #27 as superseded with thanks. No change in this release.
+
+### Closed (already-resolved)
+
+- **#38 — CI doctests for `paths.py` / `provenance.py` / `seeds.py` /
+  `docs.py`.** All four modules were added to `.doctest-modules` in
+  `a26fd44` (2026-05-14, v0.32.x era); 7 doctests collected across the
+  named modules in current CI. Closed as already-resolved.
+
+### Test coverage
+
+Test count 1376 → 1387 (+11). Aggregate 95.65 % → 95.69 %. All 28
+modules ≥ 90 % individually post-pragma.
+
 ## [0.36.0] — 2026-05-18 — harness parallelization (#29, #30) + Node 24 actions
 
 Wires the v0.34.0 unified parallelism pattern into the harness evaluation
