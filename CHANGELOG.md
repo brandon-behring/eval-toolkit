@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.38.0] — 2026-05-18 — executable examples (myst-nb migration)
+
+Docs-only minor. Migrates the 14 walkthrough pages in
+`docs/source/examples/` from sybil-validated `` ```python `` blocks to
+myst-nb `{code-cell}` directives. Cells now execute during
+`sphinx-build` (`nb_execution_mode = "cache"`) rather than during
+`pytest` via sybil. Cell outputs (printed text, tables, figures)
+render inline in the published HTML, so the docs site reflects the
+actual library behavior rather than a snapshot from the last manual
+screenshot. Closes #31 (deferred from v0.34.1 and v0.35).
+
+No public API changes.
+
+### Changed
+
+- **14 example pages migrated** to myst-nb (`kernelspec` frontmatter +
+  `{code-cell}` directives in place of `` ```python ``). 73 code blocks
+  converted in total.
+- **Two pages skip execution at page level** (`mystnb.execution_mode:
+  'off'`) because they require optional deps kept out of `[dev]`:
+  - `pytorch_scorer_example.md` (needs `torch`)
+  - `callable_embedder_dedup.md` (needs `[embeddings]` /
+    `sentence-transformers`)
+  Both pages render their code statically.
+- **`docs/source/examples/index.md`** — "How these run" section
+  rewritten to reflect myst-nb instead of sybil; new "skip-execed
+  pages" callout.
+- **`conftest.py`** — dropped `docs/source/examples/*.md` from sybil
+  patterns. Sybil still covers `README`, `methodology/`, `migration/`,
+  `getting-started`, etc. (parts without executable-notebook value).
+
+### Why this matters
+
+myst-nb infrastructure has been wired since v0.31.0 (the Sphinx docs
+migration) but was underutilized — all example pages used static
+`` ```python `` blocks. This release closes that gap. API drift in
+the future will fail the docs build via runtime-output verification
+(in addition to sybil's existing Python-level error catch on the
+other doc trees).
+
 ## [0.37.0] — 2026-05-18 — TokenizationLeakageCheck + per-module coverage floors
 
 Two-issue bundle (#35 + #37) plus housekeeping closure of stale items
