@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.0] — 2026-05-18 — harness parallelization (#29, #30) + Node 24 actions
+
+Wires the v0.34.0 unified parallelism pattern into the harness evaluation
+loop. `evaluate()` and `evaluate_folded()` now accept an `n_jobs` kwarg
+(default `1` preserves bit-identical sequential behavior); under
+`n_jobs != 1`, the `(slice × scorer)` work-unit loop in
+`_score_all_slices` and the `(spec × scorer)` fit phase in
+`_attach_transferred_operating_points` dispatch through joblib loky via
+the existing `_parallel.parallel_map` helper.
+
+### Added
+
+- `evaluate(..., n_jobs: int = 1)` and `evaluate_folded(..., n_jobs: int = 1)`
+  — keyword-only kwarg per Principle #3 of `methodology/parallelism.md`.
+  `n_jobs=1` (default) runs the existing pure-Python sequential loop
+  (Principle #4 — bit-identical to v0.35). `n_jobs > 1` uses joblib loky;
+  `n_jobs=-1` uses all cores; `n_jobs=0` is rejected. Closes #29, #30.
+- Strict-pickle Scorer sniff at `evaluate()` entry when `n_jobs != 1`:
+  raises a clean `TypeError` referencing
+  `methodology/parallelism.md#scorer-picklability` with the underlying
+  pickle error attached. Reuses the v0.35 ADR contract; no new exception
+  class. Catches non-picklable scorers up front rather than relying on
+  joblib's more permissive cloudpickle path (which would silently absorb
+  closures and obscure the contract documented in v0.35).
+
+### Internal
+
+- New module-scope step functions `_score_one_pair` and
+  `_fit_one_op_point_pair` in `harness.py` (picklable; required by loky).
+- `_score_all_slices` and `_attach_transferred_operating_points`
+  refactored to use flat work-unit dispatch via `parallel_map`.
+
+### Tests
+
+- New `tests/test_harness_parallelism.py` (7 tests): bit-identical
+  reproducibility across `n_jobs=1` vs `n_jobs=2` for `evaluate`
+  (basic, paired-diffs, operating-points), `evaluate_folded`,
+  picklability rejection (closure scorer), `n_jobs=0` rejection,
+  `n_jobs=-1` smoke. All 66 harness tests pass (7 new + 59 existing).
+
+### Infrastructure
+
+- Bumped `actions/upload-artifact` and `actions/download-artifact` from
+  `@v5` → `@v6` across `publish.yml` / `nightly-mc.yml` /
+  `nightly-benchmarks.yml`. The v6 majors run on Node.js 24
+  (GitHub deprecates Node 20 actions from 2026-06-02). Other pinned
+  actions (`checkout@v6`, `setup-uv@v8.1.0`, `codeql-action@v3`,
+  `deploy-pages@v4`, `upload-pages-artifact@v3`) were not flagged in
+  the v0.35 publish annotation and are deferred to a separate audit.
+
 ## [0.35.0] — 2026-05-18 — `fit_temperature_binary` + Scorer picklability ADR
 
 Small, additive release. Adds a binary-classification calibration helper

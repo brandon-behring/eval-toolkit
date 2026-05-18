@@ -1017,7 +1017,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'0.35.0'"
+      "value": "'0.36.0'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1117,7 +1117,7 @@
     "evaluate": {
       "doc_first_line": "Run every scorer on every slice; return a pure :class:`RunResult` (no IO).",
       "kind": "function",
-      "signature": "(scorers: 'dict[str, Scorer]', slices: 'Sequence[EvalSlice]', *, run_id: 'str', git_sha: 'str | None' = None, n_resamples: 'int' = 1000, paired_diffs: 'list[tuple[str, str]] | None' = None, seed: 'int' = 42, extra_config: 'Mapping[str, object] | None' = None, leakage_checks: 'Sequence[LeakageCheck]' = (), on_leakage: \"Literal['raise', 'record', 'skip']\" = 'raise', on_scorer_error: \"Literal['raise', 'record']\" = 'raise', operating_point_specs: 'Sequence[OperatingPointSpec]' = ()) -> 'RunResult'"
+      "signature": "(scorers: 'dict[str, Scorer]', slices: 'Sequence[EvalSlice]', *, run_id: 'str', git_sha: 'str | None' = None, n_resamples: 'int' = 1000, paired_diffs: 'list[tuple[str, str]] | None' = None, seed: 'int' = 42, extra_config: 'Mapping[str, object] | None' = None, leakage_checks: 'Sequence[LeakageCheck]' = (), on_leakage: \"Literal['raise', 'record', 'skip']\" = 'raise', on_scorer_error: \"Literal['raise', 'record']\" = 'raise', operating_point_specs: 'Sequence[OperatingPointSpec]' = (), n_jobs: 'int' = 1) -> 'RunResult'"
     },
     "evaluate_claims": {
       "doc_first_line": "Evaluate claim specs against a result payload and optional manifest.",
@@ -1127,7 +1127,7 @@
     "evaluate_folded": {
       "doc_first_line": "Run a fold aggregator: ``Splitter \u00d7 seeds \u2192 RunResult`` with CV-CI summary.",
       "kind": "function",
-      "signature": "(scorers: 'dict[str, Scorer]', splitter: 'Splitter', slice_: 'EvalSlice', *, run_id: 'str', git_sha: 'str | None' = None, seeds: 'Sequence[int]' = (42,), n_resamples: 'int' = 1000, paired_diffs: 'list[tuple[str, str]] | None' = None, leakage_checks: 'Sequence[LeakageCheck]' = (), on_leakage: \"Literal['raise', 'record', 'skip']\" = 'raise', on_scorer_error: \"Literal['raise', 'record']\" = 'raise', eval_split_names: 'Sequence[str]' = ('test',), summary_metrics: 'Sequence[str]' = ('pr_auc', 'roc_auc')) -> 'RunResult'"
+      "signature": "(scorers: 'dict[str, Scorer]', splitter: 'Splitter', slice_: 'EvalSlice', *, run_id: 'str', git_sha: 'str | None' = None, seeds: 'Sequence[int]' = (42,), n_resamples: 'int' = 1000, paired_diffs: 'list[tuple[str, str]] | None' = None, leakage_checks: 'Sequence[LeakageCheck]' = (), on_leakage: \"Literal['raise', 'record', 'skip']\" = 'raise', on_scorer_error: \"Literal['raise', 'record']\" = 'raise', eval_split_names: 'Sequence[str]' = ('test',), summary_metrics: 'Sequence[str]' = ('pr_auc', 'roc_auc'), n_jobs: 'int' = 1) -> 'RunResult'"
     },
     "evaluate_scorer_on_slice": {
       "doc_first_line": "Score one scorer on one slice; return headline + bootstrap CI on PR-AUC.",
