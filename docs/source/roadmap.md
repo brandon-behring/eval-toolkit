@@ -104,10 +104,16 @@ v2.0. Gated on:
    author's workspace are experiments, scaffolds, or earlier
    prototypes — only the detection-submission repo gates v1.0.
 2. **Protocol shapes survive ≥ 1 "should we change this?" review
-   cycle.** v0.7.x added 5 new Protocols; v0.8.0 didn't change any.
-   v0.9 might (e.g., the Versioned-canonical-impl shape if v0.9 ships
-   the canonical Platt flag). v1.0 means we're *confident* the shapes
-   are durable.
+   cycle.** v0.7.x added 5 Tier-2 Protocols (`Scorer`, `LeakageCheck`,
+   `Splitter`, `ThresholdSelector`, `DatasetLoader`) + 1 opt-in
+   (`Versioned`). As of v0.39.0, all six have been stable across 32
+   minor releases (v0.7 → v0.39) except for one contract-tightening
+   edit to `LeakageCheck.name` in v0.39.0 (#40) — changing the
+   Protocol declaration from a settable class-level attribute to a
+   `@property` to align with the `@dataclass(frozen=True)`
+   implementation pattern. That edit reset the stability window;
+   v1.0 will ship after **≥ 2 minor releases without Protocol shape
+   edits** (target: v0.41 or later).
    The v1-prelude evidence APIs must also survive one real-consumer
    migration check (the `prompt-injection-detection-submission` repo).
 3. **Methodology docs peer-reviewed** by an external reader (statistics
