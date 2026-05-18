@@ -38,7 +38,7 @@ s_a = rng.uniform(0, 1, size=200)
 s_b = np.clip(0.6 * y + rng.normal(0, 0.25, size=200), 0, 1)
 ```
 
-(bca-vs-percentile)=
+(bootstrap-bca-vs-percentile)=
 ## BCa vs percentile
 Two CI-construction methods ship in `bootstrap_ci`:
 
@@ -66,7 +66,7 @@ distribution is skewed. For roughly-symmetric metrics on moderate n
 the difference is < 1 %; for highly-skewed cases (small n, rare-positive)
 BCa's correction matters.
 
-(paired-bootstrap)=
+(bootstrap-paired-bootstrap)=
 ## Paired bootstrap for two-model comparison
 When comparing two models on the *same* eval rows, the metric
 difference Δ has *less variance* than each metric individually because
@@ -108,7 +108,7 @@ single-level CI when the deployment refits is overconfident — see
 [thresholds.md §"When to refit threshold per resample"](thresholds.md#bootstrap-refit)
 for the operational decision.
 
-(mde)=
+(bootstrap-mde)=
 ## Minimum detectable effect (MDE)
 A wide CI overlapping zero isn't evidence the two models perform the
 same — it's evidence you don't have power to tell. Quantify with MDE:
@@ -124,7 +124,7 @@ If your MDE is 0.03 and the difference you care about is 0.01, you
 need more eval data — running a different statistical test won't
 help.
 
-(cv-ci)=
+(bootstrap-cv-ci)=
 ## CV-CI: K-fold bootstrap
 [`cv_clt_ci`](../api/bootstrap.md) computes a
 CLT-corrected confidence interval over per-fold metric values. Per-fold
@@ -157,7 +157,7 @@ explodes — pre-compute scores once, then resample on the score arrays
 (the toolkit's pattern: caller produces `(y_true, y_score)` arrays
 externally and feeds them in).
 
-(pitfalls)=
+(bootstrap-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Treating non-overlapping CIs as significance.** Non-overlap implies
   significance, but overlap does NOT imply non-significance. Always

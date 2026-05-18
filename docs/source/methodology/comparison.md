@@ -28,7 +28,7 @@ s_a = rng.uniform(0, 1, size=300)
 s_b = np.clip(0.6 * y + rng.normal(0, 0.25, size=300), 0, 1)
 ```
 
-(bca-vs-percentile)=
+(comparison-bca-vs-percentile)=
 ## Single-condition CI: BCa vs percentile
 A bootstrap CI for a metric resamples paired `(y_true, y_score)` indices
 with replacement, computes the metric per resample, and reports a
@@ -59,7 +59,7 @@ print(f"pct: PR-AUC={ci_p.point_estimate:.3f} CI [{ci_p.ci_low:.3f}, {ci_p.ci_hi
 > almost always the right choice for ML eval; reserve percentile for
 > the explicit fallback case (`n < 30`, constant scores, BCa raises).
 
-(paired-bootstrap)=
+(comparison-paired-bootstrap)=
 ## Paired bootstrap for two-model comparison
 When comparing two models on the same eval set, the metric difference
 $\Delta = M_B - M_A$ has *less variance* than each metric individually
@@ -120,7 +120,7 @@ The interval is wider — it captures both metric variance AND
 threshold-selection variance — which is the honest story when the
 deployment isn't fixing the threshold once and forever.
 
-(mde)=
+(comparison-mde)=
 ## MDE: "we couldn't detect a difference" claims
 A wide CI that overlaps zero is *not* evidence the two models perform
 the same — it's evidence you don't have enough data to tell. Quantify
@@ -139,7 +139,7 @@ If the MDE is comparable to or larger than the differences you care
 about, you need more eval data — running a different statistical test
 won't help.
 
-(cv-ci)=
+(comparison-cv-ci)=
 ## CV-CI: confidence intervals from K-fold
 For K-fold CV results, use
 [`cv_clt_ci`](../api/bootstrap.md): a CLT-corrected
@@ -157,7 +157,7 @@ The CLT correction (Bates et al. 2024) accounts for the fact that
 per-fold metrics are *not* independent — they share training data.
 Naive Student's-t CIs over fold metrics are anti-conservative.
 
-(out-of-scope)=
+(comparison-out-of-scope)=
 ## What's NOT in eval-toolkit (and why)
 Two classical paired tests are *deliberately* out of scope:
 
@@ -189,7 +189,7 @@ If you need them anyway, both are fine to compute alongside
 eval-toolkit — they'll generally agree with the bootstrap result on
 informative data.
 
-(pitfalls)=
+(comparison-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Comparing two unpaired CIs visually.** "B's CI starts above A's CI
   ceiling, so B is better." Mathematically: non-overlap implies

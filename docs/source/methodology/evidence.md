@@ -50,7 +50,7 @@ manifest = build_manifest(
 assert manifest.source_roles[0]["role"] == "train"
 ```
 
-(threshold-transfer)=
+(evidence-threshold-transfer)=
 ## Threshold Transfer
 For operating-point evidence, fit the threshold on a mixed-class
 validation slice and apply that exact threshold elsewhere. This is the
@@ -216,7 +216,7 @@ assert gate.evidence["n_negative"] == 25
 assert gate.evidence["best_case_fpr_ci_high"] > 0.05
 ```
 
-(pitfalls)=
+(evidence-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Fitting a threshold on the target OOD slice.** If that slice is part
   of claim evidence, this leaks target information into the operating

@@ -37,7 +37,7 @@ stable on-disk contract. That artifact then carries enough metadata
 (`uri`, `media_type`, `columns`, `sha256`, `n_rows`) for any future
 analysis pipeline to load, validate, and recompute against it.
 
-(data-model)=
+(artifacts-data-model)=
 ## The data model
 Three frozen dataclasses make up the public contract:
 
@@ -116,7 +116,7 @@ trusting `value`. The point is to make the *absence* of a number an
 explicit, JSON-typed state instead of a `null` that could mean a
 dozen different things.
 
-(worked-walkthrough)=
+(artifacts-worked-walkthrough)=
 ## Worked walkthrough
 Producing predictions, registering them as an artifact, computing a
 bootstrap CI from the artifact, and computing a paired diff against a
@@ -249,7 +249,7 @@ The schemas live at `eval_toolkit/schemas/*.json` and follow the
 consumers see new fields as inert; new consumers see old payloads as
 valid.
 
-(pitfalls)=
+(artifacts-pitfalls)=
 ## Pitfalls / Common mistakes
 **Do include `content_hash` when running paired diffs.** Without it,
 `paired_diff_from_prediction_refs` can only check `row_id` equality —

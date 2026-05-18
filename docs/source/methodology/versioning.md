@@ -92,7 +92,7 @@ metric's interpretation changes**. Conventions that work:
 project. The whole point of the field is to *change* when the recipe
 changes; a frozen string defeats it.
 
-(when)=
+(versioning-when)=
 ## When to expose `version`
 Expose it on every Tier-2 implementation whose output your reports
 depend on. In practice that's:
@@ -162,7 +162,7 @@ m = build_manifest(run_id="r", config={}, versioned=scorers)
 print(m.versioned_objects)
 ```
 
-(pitfalls)=
+(versioning-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Static version strings.** A scorer with `version = "v1"` that
   never changes is worse than no version at all — it gives a false

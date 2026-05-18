@@ -39,3 +39,23 @@ optional dependencies that aren't in `[dev]`:
 - `callable_embedder_dedup.md` needs `[embeddings]` (sentence-transformers)
 
 These pages render their code statically.
+
+```{toctree}
+:hidden:
+:maxdepth: 1
+
+metrics_and_bootstrap
+evaluate_harness
+calibration
+leakage_detection
+claims_and_gates
+paired_comparison
+prompt_injection_walkthrough
+pytorch_scorer_example
+nested_seed_split
+callable_embedder_dedup
+cross_corpus_contamination_scan
+plot_roc_curve_walkthrough
+plot_pareto_frontier_walkthrough
+plot_slice_metric_heatmap_walkthrough
+```

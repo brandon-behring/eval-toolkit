@@ -361,7 +361,7 @@ backbone is rarely a generalization claim. Two mitigations:
    pretraining contamination but *does* catch your own train-set
    contamination of an eval set.
 
-(pitfalls)=
+(leakage-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Running checks AFTER training.** By then the harm is done. Run
   leakage checks at *load time*, before any model fits anything. The

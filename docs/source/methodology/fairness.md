@@ -167,7 +167,7 @@ class _DummyExpensiveScorer:
 The harness records `{"skipped": "<reason>"}` in `RunResult.by_slice`
 for slices the scorer opted out of, so the audit trail is complete.
 
-(out-of-scope)=
+(fairness-out-of-scope)=
 ## What's NOT in eval-toolkit (and why)
 - **Demographic parity / equalized odds metrics as named functions.**
   They're trivial one-liners on top of `metrics_at_threshold`; baking
@@ -181,7 +181,7 @@ for slices the scorer opted out of, so the audit trail is complete.
   See [Snorkel Sliceline](https://github.com/HazyResearch/snorkel)
   and [DOMINO](https://github.com/HazyResearch/domino) for that.
 
-(pitfalls)=
+(fairness-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Using one threshold but reporting subgroup metrics as if it were
   the per-group operating point.** Acceptable, but document explicitly:

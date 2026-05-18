@@ -26,7 +26,7 @@ Don't use claims for exploratory metrics ("how did model A do?"),
 ablations, or score-distribution audits. Those produce numbers; claims
 produce booleans.
 
-(data-model)=
+(claims-data-model)=
 ## The data model
 A `ClaimSpec` bundles a claim's name with one or more `EvidenceGate`s.
 Each gate runs a `check(result, manifest) -> GateResult`. The full
@@ -77,7 +77,7 @@ aggregated `has_failures` field — drop that into your `results.json`
 under `claim_report` (the v0.9-added `RunResult` field) or pass it
 through `with_claim_report(...)`.
 
-(worked-walkthrough)=
+(claims-worked-walkthrough)=
 ## Worked walkthrough
 Start from a real `RunResult` shape: two scorers, two slices, mixed
 metrics. The claim is "the new model beats the baseline on the dev
@@ -225,7 +225,7 @@ assert report.has_failures() is False
 assert report.has_failures(include_warnings=True) is True
 ```
 
-(pitfalls)=
+(claims-pitfalls)=
 ## Pitfalls / Common mistakes
 **Do attach the report.** `evaluate_claims` doesn't mutate the
 `RunResult` for you. Either set `RunResult.claim_report =

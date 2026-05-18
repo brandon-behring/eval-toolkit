@@ -216,7 +216,7 @@ If you're on a different GPU architecture than the original (CUDA major
 version mismatch in `cuda_version`), expect statistical-but-not-bit
 reproducibility — metrics within the BCa CI width.
 
-(pitfalls)=
+(reproducibility-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Setting seed AFTER imports.** Some libraries (e.g., `transformers`,
   `tokenizers`) seed their RNG at import time. Call `set_global_seeds`

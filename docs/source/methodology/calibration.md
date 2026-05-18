@@ -239,7 +239,7 @@ deploy; don't reuse a temperature from a previous epoch.
 [Reproducibility.md](reproducibility.md) discusses why the checkpoint
 hash should land in the manifest's `code_versions`.
 
-(pitfalls)=
+(calibration-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Reporting ECE on uncalibrated logits.** ECE is only meaningful when
   scores are in [0, 1] and interpretable as P(y=1 | x). The toolkit's

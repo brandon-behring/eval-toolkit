@@ -79,7 +79,7 @@ Common extras:
 This guide uses `dataframe` and `validation`. Plotting is optional
 section [(9)](#plot).
 
-(scorer)=
+(getting-started-scorer)=
 ## The Scorer concept
 **A `Scorer`** is anything that exposes a `predict_proba(X)` method
 returning one probability per input row, where `probability` ∈ [0, 1]

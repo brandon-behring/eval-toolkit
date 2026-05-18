@@ -218,7 +218,7 @@ diff = paired_bootstrap_op_point_diff(
 print(f"Δ F1: {diff.delta:.3f}  CI [{diff.ci_low:.3f}, {diff.ci_high:.3f}]")
 ```
 
-(threshold-transfer)=
+(thresholds-threshold-transfer)=
 ## Applying validation thresholds to other slices
 For OOD or diagnostic slices, the common pattern is to fit the
 threshold on a mixed-class validation slice and apply it elsewhere.
@@ -231,7 +231,7 @@ specificity.
 See [evidence.md](evidence.md#threshold-transfer) for the full
 claim-evidence framing.
 
-(pitfalls)=
+(thresholds-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Reporting metrics at threshold = 0.5 by default.** sklearn defaults
   to 0.5 for `predict()`. For an imbalanced classifier with a calibrated

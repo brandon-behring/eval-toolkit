@@ -231,7 +231,7 @@ projects copying this pattern get the same defensive depth: math-
 invariant correctness, behavioral parity with canonical libraries,
 serialization stability, and visual stability.
 
-(pitfalls)=
+(testing-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Property tests with no actual invariants.** "PR-AUC is a number" is
   not a property. The property tests in

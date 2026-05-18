@@ -85,7 +85,7 @@ The 0.05 threshold is the SDD reporting convention; tune for your
 domain. A gap of 0.02 is usually noise; 0.10+ is almost always real
 confound exploitation.
 
-(when)=
+(length_stratification-when)=
 ## When to use
 Use `quantile_stratified_report` whenever you suspect the score
 correlates with a continuous covariate that's *also* correlated with
@@ -144,7 +144,7 @@ legitimate signal in your domain (longer documents really are more
 likely to be one class). The gap-flag is a *prompt for inspection*,
 not a verdict.
 
-(pitfalls)=
+(length_stratification-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Reporting `full` without `trimmed`.** A single PR-AUC number is
   uninspectable. Always pair with the stratified version when a

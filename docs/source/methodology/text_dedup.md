@@ -182,7 +182,7 @@ For `bands=20, rows_per_band=5` (default), the inflection is around
 Jaccard ≈ 0.55. For tighter near-duplicate detection (e.g., target
 Jaccard ≈ 0.85), use `bands=10, rows_per_band=10`.
 
-(pitfalls)=
+(text_dedup-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Using `JaccardNgramStrategy` on > 1 k texts.** O(n²) brute force;
   hangs for hours on real corpora. Use `MinHashLSHStrategy` for the

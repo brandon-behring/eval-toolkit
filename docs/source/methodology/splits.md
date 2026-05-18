@@ -210,7 +210,7 @@ two is what the literature calls *underspecification* — see Recht et al.
 [Hidden Leaks in Time Series](https://arxiv.org/html/2512.06932v1) work
 on validation-strategy leakage.
 
-(pitfalls)=
+(splits-pitfalls)=
 ## Pitfalls / Common mistakes
 - **Tuning hyperparameters on the test fold.** If your fold loop is
   outermost and your inner loop tunes hyperparameters using the test
