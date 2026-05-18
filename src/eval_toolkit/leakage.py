@@ -218,9 +218,16 @@ class LeakageCheck(Protocol):
     name : str
         Stable identifier for the check, written into the
         :class:`LeakageFinding` and used for downstream filtering.
+        Read-only (a ``@property`` on the Protocol) so the natural
+        ``@dataclass(frozen=True)`` implementation pattern is
+        compatible with ``mypy --strict``: a frozen attribute satisfies
+        a read-only Protocol member but not a settable one (PEP 544).
     """
 
-    name: str
+    @property
+    def name(self) -> str:  # pragma: no cover
+        """Stable check identifier (read-only)."""
+        ...
 
     def validate(self, splits: Mapping[str, EvalSlice]) -> LeakageFinding:  # pragma: no cover
         """Validate the splits and return one :class:`LeakageFinding`."""
