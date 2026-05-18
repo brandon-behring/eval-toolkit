@@ -1,3 +1,14 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Worked example: nested seed-split composition over `SourceDisjointKFoldSplitter`
 
 > **What this shows.** The canonical OOD-CV protocol per Bayle 2020 +
@@ -22,7 +33,7 @@ and composes with stdlib + sklearn for the loops that wrap it.
 
 ## Setup
 
-```python
+```{code-cell}
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -32,7 +43,7 @@ set_global_seeds(42)
 
 ## Synthetic data: 4 sources, balanced labels
 
-```python
+```{code-cell}
 rng = np.random.default_rng(42)
 n_per_source = 50
 df = pd.DataFrame({
@@ -45,7 +56,7 @@ parent = EvalSlice(df=df, name="full_corpus")
 
 ## LODO k-fold × multi-seed × stratified train/val
 
-```python
+```{code-cell}
 splitter = SourceDisjointKFoldSplitter(source_col="source", k=4, seed=42)
 seeds = (42, 43, 44)
 

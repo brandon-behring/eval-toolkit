@@ -1,3 +1,16 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+mystnb:
+  execution_mode: 'off'
+---
+
 # Worked example: callable-embedder pattern for `EmbeddingCosineStrategy`
 
 > **What this shows.** Semantic dedup with a caller-owned embedder. The
@@ -16,7 +29,7 @@ The first thing to know is that **any** callable `Callable[[Sequence[str]],
 np.ndarray]` that returns a 2-D array of shape `(n, d)` works. Use this
 for unit tests:
 
-```python
+```{code-cell}
 import numpy as np
 from eval_toolkit.text_dedup import EmbeddingCosineStrategy, near_dedup
 
@@ -47,7 +60,7 @@ v0.33.1 ships {func}`~eval_toolkit.embeddings.make_minilm_embedder` as the
 pre-wired factory — no embedder boilerplate needed:
 
 <!-- skip: next -->
-```python
+```{code-cell}
 from eval_toolkit import make_minilm_embedder, EmbeddingCosineStrategy
 from eval_toolkit.text_dedup import near_dedup
 
@@ -72,7 +85,7 @@ The factory pattern generalises — wrap any embedder API in a `Callable`
 that takes `Sequence[str]` and returns `np.ndarray` of shape `(n, d)`:
 
 <!-- skip: next -->
-```python
+```{code-cell}
 import numpy as np
 from openai import OpenAI
 from eval_toolkit.text_dedup import EmbeddingCosineStrategy, near_dedup

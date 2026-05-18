@@ -1,3 +1,14 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Worked example: claims + evidence gates
 
 > **What this shows.** Compose `EvidenceGate`s to drive a binary
@@ -9,7 +20,7 @@
 
 ## Setup
 
-```python
+```{code-cell}
 import numpy as np
 import pandas as pd
 from eval_toolkit import (
@@ -26,7 +37,7 @@ set_global_seeds(42)
 (See [`evaluate_harness.md`](evaluate_harness.md) for the full pipeline;
 here we just need a `RunResult` to run claims on.)
 
-```python
+```{code-cell}
 rng = np.random.default_rng(42)
 n = 100
 y = np.concatenate([np.zeros(50), np.ones(50)]).astype(int)
@@ -59,7 +70,7 @@ claim to pass. The toolkit ships a library of reusable gates; you can
 also write custom ones (any callable matching the `EvidenceGate`
 Protocol). Two common ones:
 
-```python
+```{code-cell}
 claim = ClaimSpec(
     name="model_a_releasable",
     gates=(
@@ -83,7 +94,7 @@ claim = ClaimSpec(
 `RunResult` and produces a `ClaimReport` keyed by claim name → list of
 `GateResult`:
 
-```python
+```{code-cell}
 report = evaluate_claims(result, [claim])
 for gate_result in report.claims["model_a_releasable"]:
     status = "PASS" if gate_result.passed else "FAIL"
@@ -101,7 +112,7 @@ claim as a whole fails.
 The pattern for shipping a release: every `ClaimSpec` must pass.
 `report.has_failures()` returns `True` if any gate failed:
 
-```python
+```{code-cell}
 if report.has_failures():
     print("BLOCK: at least one gate failed — see evidence above")
 else:

@@ -1,3 +1,14 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Worked example: `plot_roc_curve` — annotated ROC with threshold marker
 
 > **What this shows.** ROC curve rendering for a binary classifier, with
@@ -9,7 +20,7 @@
 
 ## Setup
 
-```python
+```{code-cell}
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")  # headless backend for docs build
@@ -20,7 +31,7 @@ set_global_seeds(42)
 
 ## Synthetic data: discriminative scorer
 
-```python
+```{code-cell}
 rng = np.random.default_rng(42)
 n = 200
 y = np.concatenate([np.zeros(100, dtype=int), np.ones(100, dtype=int)])
@@ -31,7 +42,7 @@ score = y * 0.5 + rng.uniform(0, 0.5, size=n)
 
 ## Basic ROC
 
-```python
+```{code-cell}
 fig = plot_roc_curve(y, score, title="Synthetic discriminative scorer")
 # fig is a matplotlib.figure.Figure — caller owns lifecycle.
 assert fig is not None
@@ -47,7 +58,7 @@ The `threshold=` kwarg marks the (FPR, TPR) pair closest to the requested
 score-threshold — useful for showing where a deployed decision boundary
 sits on the ROC.
 
-```python
+```{code-cell}
 fig = plot_roc_curve(
     y, score,
     threshold=0.5,  # deployment threshold
@@ -61,7 +72,7 @@ plt.close(fig)
 For comparing against a baseline scorer's ROC (e.g., last release vs
 current), pass `baseline_curve=(fpr, tpr)`:
 
-```python
+```{code-cell}
 from sklearn.metrics import roc_curve as sklearn_roc
 
 # A weaker baseline scorer for comparison.
@@ -86,7 +97,7 @@ the current scorer in the accent color.
 For composite figures (e.g., side-by-side ROC + PR), pass an existing
 `Axes`:
 
-```python
+```{code-cell}
 fig, (ax_roc, ax_pr) = plt.subplots(1, 2, figsize=(10, 4))
 plot_roc_curve(y, score, ax=ax_roc, title="ROC")
 # (plot_pr_curve(y, score, ax=ax_pr) — analogous)

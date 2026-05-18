@@ -1,3 +1,14 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Worked example: slice-aware `evaluate` harness
 
 > **What this shows.** Run two scorers across two slices via
@@ -9,7 +20,7 @@
 
 ## Setup
 
-```python
+```{code-cell}
 import json
 import numpy as np
 import pandas as pd
@@ -27,7 +38,7 @@ set_global_seeds(42)
 A "validation" slice (in-distribution) and an "ood" slice (lower-signal
 out-of-distribution). The harness scores each slice independently:
 
-```python
+```{code-cell}
 rng = np.random.default_rng(42)
 
 def _make_slice(name: str, n: int, signal: float) -> EvalSlice:
@@ -52,7 +63,7 @@ Any object with `predict_proba(X) -> np.ndarray` satisfies the
 (sklearn estimators, PyTorch transformers, LLM judges); for this example
 we use two minimal stubs:
 
-```python
+```{code-cell}
 class _DiscriminativeStub:
     """Returns scores correlated with label + Gaussian noise."""
     def __init__(self, signal: float, noise: float, seed: int) -> None:
@@ -78,7 +89,7 @@ challenger = _DiscriminativeStub(signal=0.4, noise=0.15, seed=43)
 `evaluate` is the pure (no IO) orchestrator: scorers × slices →
 `RunResult`. Bootstrap CIs on each (slice, scorer) cell:
 
-```python
+```{code-cell}
 result = evaluate(
     scorers={"baseline": baseline, "challenger": challenger},
     slices=[val_slice, ood_slice],
@@ -97,7 +108,7 @@ print(f"scorers per slice: {list(result.by_slice['validation']['by_scorer'].keys
 one strips per-row prediction arrays so it's small enough to git-commit;
 the full one keeps everything for offline analysis:
 
-```python
+```{code-cell}
 with TemporaryDirectory() as tmpdir:
     run_dir = Path(tmpdir) / "example_run"
     compact_path, full_path = write_run_result(result, run_dir)

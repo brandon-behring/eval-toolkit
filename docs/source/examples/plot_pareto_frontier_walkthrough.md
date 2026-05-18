@@ -1,3 +1,14 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Worked example: `plot_pareto_frontier` — cost vs performance
 
 > **What this shows.** Cost-vs-performance scatter with the Pareto
@@ -11,7 +22,7 @@
 
 ## Setup
 
-```python
+```{code-cell}
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -24,7 +35,7 @@ from eval_toolkit import plot_pareto_frontier
 Build a scenario where 8 model rungs trade off compute cost against AUPRC
 — some dominated, some on the frontier:
 
-```python
+```{code-cell}
 # (cost, auprc) per rung — cost in arbitrary units.
 cost = np.array([1.0, 2.0, 3.0, 5.0, 8.0, 10.0, 15.0, 25.0])
 auprc = np.array([0.60, 0.70, 0.71, 0.78, 0.82, 0.81, 0.85, 0.86])
@@ -38,7 +49,7 @@ than rung 5. Pareto frontier highlights this.
 
 ## Basic frontier
 
-```python
+```{code-cell}
 fig = plot_pareto_frontier(
     cost, auprc,
     point_labels=labels,
@@ -53,7 +64,7 @@ defensible-points obvious at a glance.
 
 ## With caller-managed `ax`
 
-```python
+```{code-cell}
 fig, ax = plt.subplots(figsize=(7, 5))
 plot_pareto_frontier(
     cost, auprc,
@@ -70,7 +81,7 @@ By default `higher_metric_is_better=True` (higher metric = preferred).
 For metrics where lower is better (latency, calibration error, etc.) flip
 the flag:
 
-```python
+```{code-cell}
 latency_ms = np.array([10.0, 15.0, 25.0, 50.0, 80.0])
 ece = np.array([0.08, 0.05, 0.04, 0.03, 0.04])  # lower ECE = better calibration
 

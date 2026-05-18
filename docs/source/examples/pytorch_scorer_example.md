@@ -1,3 +1,16 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+mystnb:
+  execution_mode: 'off'
+---
+
 # Worked example: PyTorch + LoRA `Scorer` adapter
 
 > **What this shows.** How to wrap a PyTorch transformer with a LoRA
@@ -19,7 +32,7 @@
 
 ## Setup (CPU baseline; runs in CI)
 
-```python
+```{code-cell}
 import numpy as np
 import pandas as pd
 from eval_toolkit import EvalSlice, evaluate
@@ -29,7 +42,7 @@ from eval_toolkit import EvalSlice, evaluate
 
 The Protocol is just `predict_proba(X) -> np.ndarray`:
 
-```python
+```{code-cell}
 class _UniformBaseline:
     """Reference shape — not a real model, just shows the Protocol."""
     version = "0.0.0"
@@ -57,7 +70,7 @@ with `predict_proba` doing tokenize → forward → softmax → numpy in
 batches.
 
 <!-- skip: next -->
-```python
+```{code-cell}
 # Requires: torch, transformers. Marked skip for Sybil.
 from __future__ import annotations
 
@@ -125,7 +138,7 @@ If you fine-tuned with [PEFT](https://huggingface.co/docs/peft/), load
 the base model + adapter and otherwise reuse the wrapper above:
 
 <!-- skip: next -->
-```python
+```{code-cell}
 # Requires: torch, transformers, peft. Marked skip for Sybil.
 from peft import PeftModel  # noqa
 
@@ -148,7 +161,7 @@ them on the headline `test` slice. Implement
 `should_score_slice` hook:
 
 <!-- skip: next -->
-```python
+```{code-cell}
 # Requires: torch, transformers. Marked skip for Sybil.
 class CostControlledTransformerScorer(TransformerScorer):
     """Skip subgroup slices to save GPU minutes."""
@@ -175,7 +188,7 @@ seeding rules in
 apply:
 
 <!-- skip: next -->
-```python
+```{code-cell}
 # Requires: torch. Marked skip for Sybil.
 import random  # noqa
 import numpy as np  # noqa
@@ -214,7 +227,7 @@ identity does not. Two implications:
   delta is well within fp16/bf16 noise on moderate-size eval sets.
 
 <!-- skip: next -->
-```python
+```{code-cell}
 # Requires: torch. Marked skip for Sybil.
 # bf16 inference:
 # self.model = self.model.to(dtype=torch.bfloat16)
@@ -227,7 +240,7 @@ Drop-in replacement for `_UniformBaseline` in the [PI
 walkthrough](prompt_injection_walkthrough.md):
 
 <!-- skip: next -->
-```python
+```{code-cell}
 # Requires: torch, transformers, peft. Marked skip for Sybil.
 # from eval_toolkit import evaluate_folded, SourceDisjointKFoldSplitter
 #
@@ -254,7 +267,7 @@ If you just want to start scoring with a public injection-detector
 checkpoint:
 
 <!-- skip: next -->
-```python
+```{code-cell}
 # Requires: torch, transformers. Marked skip for Sybil.
 # import os; os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 # import torch

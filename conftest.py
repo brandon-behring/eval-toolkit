@@ -48,7 +48,9 @@ pytest_collect_file = Sybil(
         "docs/source/repo-strategy.md",
         "docs/source/schemas.md",
         "docs/source/methodology/*.md",
-        "docs/source/examples/*.md",
+        # v0.38.0: docs/source/examples/*.md migrated to myst-nb
+        # {code-cell} directives — execution happens during sphinx-build
+        # (nb_execution_mode = "cache"), not via sybil. Closes #31.
         "docs/source/migration/*.md",
     ),
 ).pytest()

@@ -1,7 +1,8 @@
 # Examples
 
 Minimal, focused worked examples — one concept per file. Each is
-runnable end-to-end under Sybil (every code block executes in CI).
+runnable end-to-end under myst-nb (cells execute during
+`sphinx-build`; outputs render inline in the rendered HTML).
 
 ## By capability
 
@@ -24,11 +25,17 @@ runnable end-to-end under Sybil (every code block executes in CI).
 
 ## How these run
 
-Sybil parses Python code blocks from each Markdown file and executes
-them in CI (`make test-doctest`). Failures break the build —
-documentation that doesn't run goes stale fast, so we don't ship it.
+Since v0.38.0, examples are myst-nb notebooks (Markdown source with
+`{code-cell}` directives). Cells execute during `sphinx-build` with
+`nb_execution_mode = "cache"` — re-execution is triggered only when
+the source page changes. Cell outputs (printed text, tables, figures)
+render inline in the published HTML, so the docs site reflects the
+actual library behavior.
 
-`<!-- skip: next -->` comments mark blocks that should NOT execute
-(e.g., illustrative pseudocode, expensive examples, optional-dep
-demos). Always test the runnable blocks against the latest installed
-version.
+Two pages have execution disabled at page level because they require
+optional dependencies that aren't in `[dev]`:
+
+- `pytorch_scorer_example.md` needs `torch` (~700MB transitive)
+- `callable_embedder_dedup.md` needs `[embeddings]` (sentence-transformers)
+
+These pages render their code statically.

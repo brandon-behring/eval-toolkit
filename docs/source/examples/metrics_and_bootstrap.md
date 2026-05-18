@@ -1,3 +1,14 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Worked example: metrics + bootstrap CIs
 
 > **What this shows.** Compute `pr_auc` / `roc_auc` / `brier_score` on a
@@ -9,7 +20,7 @@
 
 ## Setup
 
-```python
+```{code-cell}
 import numpy as np
 from eval_toolkit import (
     pr_auc, roc_auc, brier_score,
@@ -23,7 +34,7 @@ set_global_seeds(42)
 A toy ground-truth labels + scores from a discriminative-but-noisy
 model. The signal is `+0.3` on the positives, plus Gaussian noise.
 
-```python
+```{code-cell}
 rng = np.random.default_rng(42)
 n = 200
 y_true = np.concatenate([np.zeros(100), np.ones(100)]).astype(int)
@@ -38,7 +49,7 @@ y_score = np.clip(
 
 Each is a single function call returning a float:
 
-```python
+```{code-cell}
 ap = pr_auc(y_true, y_score)
 auc = roc_auc(y_true, y_score)
 bs = brier_score(y_true, y_score)
@@ -57,7 +68,7 @@ calibration on this fixture because the scores are well-spread).
 method and produces a `BootstrapCI` dataclass with `point_estimate`,
 `ci_low`, `ci_high`:
 
-```python
+```{code-cell}
 ci_ap = bootstrap_ci(y_true, y_score, metric=pr_auc, n_resamples=200, seed=42)
 print(f"pr_auc = {ci_ap.point_estimate:.3f}  [95% CI: {ci_ap.ci_low:.3f}, {ci_ap.ci_high:.3f}]")
 assert ci_ap.ci_low <= ci_ap.point_estimate <= ci_ap.ci_high
@@ -70,7 +81,7 @@ assert ci_ap.method == "BCa"
 BCa is the default. Fall back to `method="percentile"` for very small
 samples where BCa's jackknife step can degenerate:
 
-```python
+```{code-cell}
 ci_perc = bootstrap_ci(
     y_true, y_score, metric=pr_auc,
     n_resamples=200, method="percentile", seed=42,

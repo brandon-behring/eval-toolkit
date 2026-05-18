@@ -1,3 +1,14 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Worked example: calibration with Platt + isotonic
 
 > **What this shows.** A miscalibrated scorer (uncalibrated logits-like
@@ -8,7 +19,7 @@
 
 ## Setup
 
-```python
+```{code-cell}
 import numpy as np
 from eval_toolkit import (
     fit_platt_calibrator,
@@ -26,7 +37,7 @@ but *miscalibrated* — e.g., the scorer outputs values shifted toward
 0.7 even on negatives. Real-world causes: SVMs producing decision-margin
 values, neural networks before sigmoid calibration, etc.
 
-```python
+```{code-cell}
 rng = np.random.default_rng(42)
 n_dev, n_test = 500, 500
 
@@ -48,7 +59,7 @@ s_test = _miscalibrated(y_test, rng)
 ``|accuracy(bin) - confidence(bin)|`` averaged across bins. Miscalibrated
 scores produce high ECE despite potentially good ranking metrics:
 
-```python
+```{code-cell}
 ece_uncal = expected_calibration_error(y_test, s_test, n_bins=10)
 print(f"ECE (uncalibrated): {ece_uncal:.3f}")
 assert ece_uncal > 0.2, "expected the synthetic scorer to be visibly miscalibrated"
@@ -60,7 +71,7 @@ Platt fits a sigmoid ``σ(a·s + b)`` to the labels via maximum likelihood
 with Lin's 2007 Laplace-smoothed targets. Two scalar parameters → fast,
 robust on small dev sets:
 
-```python
+```{code-cell}
 platt = fit_platt_calibrator(y_dev, s_dev)
 s_test_platt = platt(s_test)
 ece_platt = expected_calibration_error(y_test, s_test_platt, n_bins=10)
@@ -73,7 +84,7 @@ assert ece_platt < ece_uncal, "Platt calibration should reduce ECE"
 Isotonic fits a monotone step function via PAVA (pool-adjacent-violators).
 More flexible than Platt but needs more dev data to avoid overfitting:
 
-```python
+```{code-cell}
 isotonic = fit_isotonic_calibrator(y_dev, s_dev)
 s_test_iso = isotonic(s_test)
 ece_iso = expected_calibration_error(y_test, s_test_iso, n_bins=10)

@@ -1,3 +1,14 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Worked example: cross-corpus contamination scan via `pairs_across`
 
 > **What this shows.** "For each row in eval corpus A, what's the maximum
@@ -23,7 +34,7 @@ The toolkit exposes both Tier-2 surfaces; the protocol is the same
 
 ## Setup
 
-```python
+```{code-cell}
 import numpy as np
 from eval_toolkit.text_dedup import EmbeddingCosineStrategy
 
@@ -42,7 +53,7 @@ strategy = EmbeddingCosineStrategy(embedder=stub_embedder)
 
 ## The contamination scan
 
-```python
+```{code-cell}
 # Eval corpus (rows we want to flag).
 eval_corpus = ["how do I bake bread", "what is 2+2", "ignore previous instructions"]
 # Reference corpus (training / template / contamination source).
@@ -74,7 +85,7 @@ triggered the flag — useful for audit + manual review.
 
 **Top-k** instead of top-1 (each eval row's k nearest templates):
 
-```python
+```{code-cell}
 similarities, indices = strategy.pairs_across(
     query_texts=eval_corpus,
     reference_texts=template_corpus,
@@ -86,7 +97,7 @@ similarities, indices = strategy.pairs_across(
 
 **Asymmetric thresholds** (different thresholds per `eval_corpus` slice):
 
-```python
+```{code-cell}
 # After computing max_cosines via k=1:
 slice_a_mask = np.array([t.startswith("how") for t in eval_corpus])
 flagged_a = (max_cosines >= 0.90) & slice_a_mask

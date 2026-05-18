@@ -1,3 +1,14 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Worked example: `plot_slice_metric_heatmap` — stratified metric grid
 
 > **What this shows.** A 2-D heatmap of `(row_label × col_label → metric)`
@@ -9,7 +20,7 @@
 
 ## Setup
 
-```python
+```{code-cell}
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
@@ -22,7 +33,7 @@ from eval_toolkit import plot_slice_metric_heatmap
 Build an AUPRC grid where some rungs are uniformly strong, some are
 slice-specific:
 
-```python
+```{code-cell}
 rung_labels = ["baseline", "minilm", "deberta", "gpt4_zs", "gpt4_fs"]
 slice_labels = ["ood_a", "ood_b", "ood_c", "ood_d", "ood_e", "id_holdout"]
 
@@ -38,7 +49,7 @@ grid[:, 4] = np.minimum(grid[:, 4], 0.65)
 
 ## Basic heatmap
 
-```python
+```{code-cell}
 fig = plot_slice_metric_heatmap(
     grid,
     row_labels=rung_labels,
@@ -58,7 +69,7 @@ the supplied `metric_name` for its label.
 For dense grids (e.g., 20 rungs × 30 slices = 600 cells) annotations get
 visually busy. Disable them:
 
-```python
+```{code-cell}
 big_grid = rng.uniform(0.5, 0.95, size=(20, 30))
 fig = plot_slice_metric_heatmap(
     big_grid,
@@ -77,7 +88,7 @@ Some `(rung, slice)` pairs may be intentionally un-evaluated (e.g., rung
 doesn't apply to certain slice types). Pass `np.nan` for those cells; the
 heatmap masks them in a neutral color:
 
-```python
+```{code-cell}
 grid_with_gaps = grid.copy()
 grid_with_gaps[0, 5] = np.nan  # baseline rung not evaluated on id_holdout
 grid_with_gaps[1, 4] = np.nan  # minilm not evaluated on ood_e
@@ -93,7 +104,7 @@ plt.close(fig)
 
 ## With caller-managed `ax`
 
-```python
+```{code-cell}
 fig, ax = plt.subplots(figsize=(8, 5))
 plot_slice_metric_heatmap(
     grid,

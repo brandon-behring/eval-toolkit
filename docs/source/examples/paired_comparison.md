@@ -1,3 +1,14 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Worked example: paired bootstrap comparison
 
 > **What this shows.** Compare two scorers on the same slice via
@@ -22,7 +33,7 @@ two near-identical distributions and concludes "no signal."
 
 ## Setup
 
-```python
+```{code-cell}
 import numpy as np
 from eval_toolkit import paired_bootstrap_diff, pr_auc, set_global_seeds
 set_global_seeds(42)
@@ -33,7 +44,7 @@ set_global_seeds(42)
 Build a scenario where scorer B is *slightly* better than A (small but
 real signal). The labels are shared; only the score arrays differ:
 
-```python
+```{code-cell}
 rng = np.random.default_rng(42)
 n = 200
 y_true = np.concatenate([np.zeros(100), np.ones(100)]).astype(int)
@@ -57,7 +68,7 @@ returns a `PairedBootstrapCI` with the **delta**'s CI bounds. If the CI
 excludes zero, the difference is significant at the configured
 confidence level (default 95%):
 
-```python
+```{code-cell}
 result = paired_bootstrap_diff(
     y_true, s_a, s_b, metric=pr_auc, n_resamples=500, seed=42,
 )
@@ -83,7 +94,7 @@ print(f"Significant at 95% confidence: {significant}")
 result is "no significant difference" and you want to claim "we would
 have caught at least a delta of X if there were one":
 
-```python
+```{code-cell}
 from eval_toolkit import mde_from_ci
 mde = mde_from_ci(result, alpha=0.05, power=0.80)
 print(f"MDE at 80% power: {mde.mde:.3f}")
