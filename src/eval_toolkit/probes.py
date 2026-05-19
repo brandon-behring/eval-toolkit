@@ -236,8 +236,8 @@ class ActivationDeltaProbe:
     def _build_default_extractor(self) -> ActivationExtractor:
         """Build the default HF-backed extractor (lazy import)."""
         try:
-            import torch  # type: ignore[import-not-found]
-            from transformers import AutoModel, AutoTokenizer  # type: ignore[import-not-found]
+            import torch
+            from transformers import AutoModel, AutoTokenizer
         except ImportError as exc:
             raise ImportError(
                 "ActivationDeltaProbe requires torch + transformers. "
