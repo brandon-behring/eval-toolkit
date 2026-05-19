@@ -35,12 +35,13 @@ def _load_schema(filename: str) -> dict:
 
 @pytest.mark.unit
 def test_schemas_exist() -> None:
-    """The shipped JSON schemas (both manifest versions, results) are present."""
+    """The shipped JSON schemas (both manifest versions, results, OOD manifest) are present."""
     for name in (
         "results.v1.json",
         "results_full.v1.json",
         "manifest.v1.json",
         "manifest.v3.json",
+        "ood_manifest.v1.json",
     ):
         assert (SCHEMAS_DIR / name).exists(), f"missing schema: {name}"
 
@@ -53,6 +54,7 @@ def test_schemas_are_valid_json_schemas() -> None:
         "results_full.v1.json",
         "manifest.v1.json",
         "manifest.v3.json",
+        "ood_manifest.v1.json",
     ):
         schema = _load_schema(name)
         # Constructor validates the schema against the meta-schema.

@@ -622,6 +622,9 @@ plotting = [
 property = [
     { name = "hypothesis" },
 ]
+transformers = [
+    { name = "transformers" },
+]
 yaml = [
     { name = "pyyaml" },
 ]
@@ -668,8 +671,9 @@ requires-dist = [
     { name = "sphinx-copybutton", marker = "extra == 'docs'", specifier = ">=0.5" },
     { name = "sphinx-design", marker = "extra == 'docs'", specifier = ">=0.6" },
     { name = "sybil", marker = "extra == 'dev'", specifier = ">=10.0" },
+    { name = "transformers", marker = "extra == 'transformers'", specifier = ">=4.0" },
 ]
-provides-extras = ["all", "dataframe", "dev", "docs", "embeddings", "parquet", "plotting", "property", "validation", "yaml"]
+provides-extras = ["all", "dataframe", "dev", "docs", "embeddings", "parquet", "plotting", "property", "transformers", "validation", "yaml"]
 
 [[package]]
 name = "executing"

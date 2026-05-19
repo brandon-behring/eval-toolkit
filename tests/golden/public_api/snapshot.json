@@ -58,6 +58,7 @@
     "MinHashLSHStrategy",
     "NearDuplicateCheck",
     "NormalizedFormLeakageCheck",
+    "OodManifestLoader",
     "OperatingPointSpec",
     "PALETTE",
     "PLOT_STYLE",
@@ -163,6 +164,7 @@
     "no_leakage_errors_gate",
     "no_scorer_errors_gate",
     "normalize_text_for_dedup",
+    "ood_dataset_from_manifest",
     "paired_bootstrap_diff",
     "paired_bootstrap_ece_diff",
     "paired_bootstrap_op_point_diff",
@@ -670,6 +672,14 @@
       "doc_first_line": "Encoding-obfuscated duplicate detection.",
       "kind": "class",
       "signature": "(target_splits: 'Sequence[str] | None' = None, severity: 'Severity' = 'error') -> None"
+    },
+    "OodManifestLoader": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Wrap :func:`ood_dataset_from_manifest` as a :class:`DatasetLoader`.",
+      "kind": "class",
+      "signature": "(yaml_path: 'str | Path', slices: 'Sequence[str] | None' = None, cache_dir: 'str | Path | None' = None, name: 'str' = '', description: 'str' = '', cite_as: 'str' = '', license: 'str' = '', url: 'str' = '') -> None"
     },
     "OperatingPointSpec": {
       "bases": [
@@ -1343,6 +1353,11 @@
       "doc_first_line": "Canonical text normalization for hashing and deduplication.",
       "kind": "function",
       "signature": "(text: 'str') -> 'str'"
+    },
+    "ood_dataset_from_manifest": {
+      "doc_first_line": "Load multiple OOD eval slates declaratively from a YAML manifest.",
+      "kind": "function",
+      "signature": "(yaml_path: 'str | Path', *, slices: 'Sequence[str] | None' = None, cache_dir: 'str | Path | None' = None) -> 'pd.DataFrame'"
     },
     "paired_bootstrap_diff": {
       "doc_first_line": "Paired-bootstrap CI on ``metric(B) \u2212 metric(A)`` using the same resample indices.",
