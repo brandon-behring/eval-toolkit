@@ -23,6 +23,7 @@ runnable end-to-end under myst-nb (cells execute during
 | [`plot_pareto_frontier` walkthrough](plot_pareto_frontier_walkthrough.md) | Cost-vs-performance scatter with frontier overlay | `[plotting]` |
 | [`plot_slice_metric_heatmap` walkthrough](plot_slice_metric_heatmap_walkthrough.md) | `(row × col → metric)` grid with colorbar + annotations | `[plotting]` |
 | [OOD manifest loader](ood_dataset_from_manifest.md) | `ood_dataset_from_manifest` — declarative loader for multiple OOD slates with sha256 caching | `[dataframe]`, `[yaml]`, `[parquet]` |
+| [Character-injection sweep](character_injection_sweep.md) | `eval_toolkit.adversarial` — six character-level techniques + Scorer-Protocol sweep for adversarial robustness | `[dataframe]` |
 
 ## How these run
 
@@ -60,4 +61,5 @@ plot_roc_curve_walkthrough
 plot_pareto_frontier_walkthrough
 plot_slice_metric_heatmap_walkthrough
 ood_dataset_from_manifest
+character_injection_sweep
 ```

@@ -30,6 +30,7 @@ examples/paired_comparison
 examples/prompt_injection_walkthrough
 examples/pytorch_scorer_example
 examples/ood_dataset_from_manifest
+examples/character_injection_sweep
 ```
 
 ## Methodology

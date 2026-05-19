@@ -4,6 +4,9 @@
     "AggregateEvidence",
     "BootstrapCI",
     "CISafeThresholdSelector",
+    "CORE_TECHNIQUES",
+    "CaseRandomization",
+    "CharacterInjectionStrategy",
     "ClaimReport",
     "ClaimSpec",
     "CorrectionMethod",
@@ -29,6 +32,7 @@
     "DatasetLoader",
     "DeLongResult",
     "DedupReport",
+    "DiacriticInjection",
     "EmbeddingCosineStrategy",
     "EvalSlice",
     "EvalSliceLike",
@@ -44,6 +48,7 @@
     "GroupLeakageCheck",
     "HFDatasetsLoader",
     "HoldoutSplitter",
+    "HomoglyphSubstitution",
     "JaccardNgramStrategy",
     "JsonlPredictionReader",
     "LabelConflictCheck",
@@ -70,6 +75,7 @@
     "PredictionArtifactRef",
     "PredictionColumns",
     "PredictionReader",
+    "PunctuationInjection",
     "PurgedKFoldSplitter",
     "RECOMMENDED_SOURCE_ROLES",
     "RUN_RESULT_SCHEMA_VERSION",
@@ -100,8 +106,10 @@
     "TimeSeriesSplitter",
     "TokenizationLeakageCheck",
     "Versioned",
+    "WhitespaceInjection",
     "WilsonInterval",
     "YoudenJSelector",
+    "ZeroWidthSpaceInjection",
     "__version__",
     "apply_operating_points",
     "audit_source_label_similarity",
@@ -114,6 +122,7 @@
     "brier_score",
     "build_manifest",
     "capture_git_sha",
+    "character_injection",
     "compute_file_hash",
     "compute_label_overlap",
     "correct_p_values",
@@ -251,6 +260,27 @@
       "doc_first_line": "Select a threshold whose rate confidence bounds satisfy constraints.",
       "kind": "class",
       "signature": "(max_fpr: 'float | None' = None, max_fpr_ci_upper: 'float | None' = None, min_recall: 'float | None' = None, min_recall_ci_lower: 'float | None' = None, confidence: 'float' = 0.95, criterion: 'str' = 'ci_safe', metadata: 'Mapping[str, object]' = <factory>) -> None"
+    },
+    "CORE_TECHNIQUES": {
+      "doc_first_line": "Built-in immutable sequence.",
+      "kind": "value",
+      "type": "tuple"
+    },
+    "CaseRandomization": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Randomly flip the case of alphabetic characters.",
+      "kind": "class",
+      "signature": "(ratio: 'float' = 0.5, seed: 'int' = 42, name: 'str' = 'case_random') -> None"
+    },
+    "CharacterInjectionStrategy": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Apply a deterministic character-level adversarial transformation.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
     },
     "ClaimReport": {
       "bases": [
@@ -446,6 +476,14 @@
       "kind": "class",
       "signature": "(kept_indices: 'list[int]', dropped_pairs: 'list[tuple[int, int, float]]', threshold: 'float', n_input: 'int') -> None"
     },
+    "DiacriticInjection": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Insert combining diacritic marks after random characters.",
+      "kind": "class",
+      "signature": "(ratio: 'float' = 0.3, seed: 'int' = 42, name: 'str' = 'diacritic') -> None"
+    },
     "EmbeddingCosineStrategy": {
       "bases": [
         "object"
@@ -565,6 +603,14 @@
       "doc_first_line": "Single-iteration (k=1) holdout split via sklearn ``train_test_split``.",
       "kind": "class",
       "signature": "(test_size: 'float' = 0.2, stratify: 'bool' = True, seed: 'int' = 42) -> None"
+    },
+    "HomoglyphSubstitution": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Substitute Latin characters with Cyrillic/Greek homoglyph lookalikes.",
+      "kind": "class",
+      "signature": "(ratio: 'float' = 0.3, seed: 'int' = 42, name: 'str' = 'homoglyph') -> None"
     },
     "JaccardNgramStrategy": {
       "bases": [
@@ -798,6 +844,14 @@
       "kind": "class",
       "signature": "(*args, **kwargs)"
     },
+    "PunctuationInjection": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Insert non-semantic punctuation between characters.",
+      "kind": "class",
+      "signature": "(ratio: 'float' = 0.1, seed: 'int' = 42, name: 'str' = 'punctuation') -> None"
+    },
     "PurgedKFoldSplitter": {
       "bases": [
         "object"
@@ -1027,6 +1081,14 @@
       "kind": "class",
       "signature": "(*args, **kwargs)"
     },
+    "WhitespaceInjection": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Insert / substitute whitespace variants (regular, non-breaking, tab).",
+      "kind": "class",
+      "signature": "(pad_ratio: 'float' = 0.1, substitute_ratio: 'float' = 0.5, seed: 'int' = 42, name: 'str' = 'whitespace') -> None"
+    },
     "WilsonInterval": {
       "bases": [
         "object"
@@ -1042,6 +1104,14 @@
       "doc_first_line": "Argmax of Youden's J statistic ``J = TPR \u2212 FPR`` over the ROC curve.",
       "kind": "class",
       "signature": "(criterion: 'str' = 'youden_j') -> None"
+    },
+    "ZeroWidthSpaceInjection": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Insert U+200B zero-width spaces between characters at the given ratio.",
+      "kind": "class",
+      "signature": "(ratio: 'float' = 0.5, seed: 'int' = 42, name: 'str' = 'zero_width_space') -> None"
     },
     "__version__": {
       "doc_first_line": "str(object='') -> str",
@@ -1103,6 +1173,11 @@
       "doc_first_line": "Current HEAD full SHA, or ``None`` if not in a git repo.",
       "kind": "function",
       "signature": "(repo_root: 'Path | str | None' = None) -> 'str | None'"
+    },
+    "character_injection": {
+      "doc_first_line": "A simple attribute-based namespace.",
+      "kind": "value",
+      "type": "types.SimpleNamespace"
     },
     "compute_file_hash": {
       "doc_first_line": "SHA-256 hex digest of an existing file (sentinel-typed).",
