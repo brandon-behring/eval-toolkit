@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.42.0] — 2026-05-19 — fit_isotonic_binary completes 4-calibrator family (closes #44)
+
+Final element of the binary scalar-prob calibrator family started by
+`fit_temperature_binary` (v0.35.0). All four now uniformly return
+`(params, apply)`:
+
+| Function | Params | Shipped |
+|---|---|---|
+| `fit_temperature_binary` | `(T,)` — single float | v0.35.0 |
+| `fit_isotonic_binary`    | `None` — non-parametric | **v0.42.0** |
+| `fit_platt_binary`       | `(a, b)` | v0.40.0 |
+| `fit_beta_binary`        | `(a, b, c)` | v0.40.0 |
+
+Consumer code can now iterate the family with a single shape, used
+to distinguish parametric from non-parametric via
+`if params is not None`:
+
+```text
+CALIBRATORS = {
+    "temperature": fit_temperature_binary,
+    "isotonic":    fit_isotonic_binary,
+    "platt":       fit_platt_binary,
+    "beta":        fit_beta_binary,
+}
+for name, fit_fn in CALIBRATORS.items():
+    params, apply = fit_fn(y_val, p_val)
+    calibrated = apply(p_test)
+    if params is not None:
+        manifest.record(f"{name}_params", params)
+```
+
+This matches the consumer's calibration-battery pattern in
+`prompt-injection-detection-prototype` (their ADR-056 supersedes
+ADR-023 to adopt the canonical `(params, apply)` shape across the
+full 4-calibrator audit battery).
+
+### Added
+
+- **`eval_toolkit.fit_isotonic_binary(y_true, y_score) -> (None,
+  apply)`** — thin wrapper over `fit_isotonic_calibrator`. The
+  `None` in the params slot encodes "non-parametric" (isotonic
+  regression is a monotone step function, no scalar params to log).
+- 6 new unit tests in `tests/test_calibration_binary_adapters.py`
+  including a 4-calibrator family-iteration integration test that
+  verifies the `None`-vs-tuple convention.
+
+### Protocol stability
+
+Additive only. No Tier-2 Protocol shape edits. v0.42 is minor 3 of
+consecutive-without-Protocol-changes (v0.40 + v0.41 + v0.42). Gate 2
+stays MET.
+
 ## [0.41.0] — 2026-05-18 — Croissant end-to-end (closes #42, v1.0 Gate 4 MET)
 
 Closes v1.0 readiness Gate 4 — "Croissant interop verified end-to-end."
