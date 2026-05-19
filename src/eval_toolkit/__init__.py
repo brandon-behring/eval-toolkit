@@ -40,6 +40,13 @@ _EXPORTS: dict[str, str] = {
     "WhitespaceInjection": "eval_toolkit.adversarial",
     "ZeroWidthSpaceInjection": "eval_toolkit.adversarial",
     "character_injection": "eval_toolkit.adversarial",
+    # --- losses ---
+    "RecallAtLowFPR": "eval_toolkit.losses",
+    # --- preprocessing ---
+    "datamark": "eval_toolkit.preprocessing",
+    "delimit": "eval_toolkit.preprocessing",
+    "encode": "eval_toolkit.preprocessing",
+    "spotlighting": "eval_toolkit.preprocessing",
     # --- probes ---
     "ActivationDeltaProbe": "eval_toolkit.probes",
     "ActivationExtractor": "eval_toolkit.probes",

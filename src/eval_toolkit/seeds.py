@@ -109,7 +109,7 @@ def set_global_seeds(seed: int, *, strict_torch_determinism: bool = False) -> No
     np.random.seed(seed)
 
     try:
-        import torch  # type: ignore[import-not-found]  # noqa: PLC0415
+        import torch  # noqa: PLC0415
     except ImportError:
         if strict_torch_determinism:
             raise RuntimeError(

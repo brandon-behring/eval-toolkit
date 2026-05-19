@@ -32,6 +32,8 @@ examples/pytorch_scorer_example
 examples/ood_dataset_from_manifest
 examples/character_injection_sweep
 examples/activation_delta_probe
+examples/spotlighting
+examples/recall_at_low_fpr
 ```
 
 ## Methodology

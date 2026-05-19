@@ -25,6 +25,8 @@ runnable end-to-end under myst-nb (cells execute during
 | [OOD manifest loader](ood_dataset_from_manifest.md) | `ood_dataset_from_manifest` — declarative loader for multiple OOD slates with sha256 caching | `[dataframe]`, `[yaml]`, `[parquet]` |
 | [Character-injection sweep](character_injection_sweep.md) | `eval_toolkit.adversarial` — six character-level techniques + Scorer-Protocol sweep for adversarial robustness | `[dataframe]` |
 | [ActivationDeltaProbe](activation_delta_probe.md) | `eval_toolkit.probes.ActivationDeltaProbe` — TaskTracker-style linear probe on transformer activation deltas | `[probes]` for real backbones; mocked illustration here |
+| [Spotlighting variants](spotlighting.md) | `eval_toolkit.preprocessing` — delimit / datamark / encode structural defenses + batch sweep | none |
+| [RecallAtLowFPR loss](recall_at_low_fpr.md) | `eval_toolkit.losses.RecallAtLowFPR` — Meta Prompt Guard 2 training recipe (differentiable recall-at-fixed-FPR) | `[losses]`; static render in docs CI |
 
 ## How these run
 
@@ -64,4 +66,6 @@ plot_slice_metric_heatmap_walkthrough
 ood_dataset_from_manifest
 character_injection_sweep
 activation_delta_probe
+spotlighting
+recall_at_low_fpr
 ```
