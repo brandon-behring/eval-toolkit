@@ -44,6 +44,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   function-style API from the upstream issue spec
   (`character_injection.zero_width_space(text)`,
   `character_injection.sweep(...)`, etc.).
+- `eval_toolkit.probes` — new module with `ActivationDeltaProbe`:
+  TaskTracker-style linear probe over HuggingFace transformer
+  hidden-state activation deltas (Abdelnabi et al. 2024,
+  arXiv 2406.00799). Backbone-agnostic (encoder OR decoder).
+  Sklearn-compatible API: `.fit(clean_texts, injected_texts)`,
+  `.predict()` → `(n,)`, `.predict_proba()` → `(n, 2)`,
+  `.coef_`, `.classes_`. Activations cached to
+  `$XDG_CACHE_HOME/eval-toolkit/probes/` keyed by
+  `(backbone, layer_index, aggregate, sha256(text))` so re-runs are
+  near-instant. Aggregate modes: `mean`, `max`, `cls`. Closes #53.
+- `Probe` Protocol — minimal sklearn-shaped probe surface (`fit`,
+  `predict`, `predict_proba`, `coef_`, `classes_`). Distinct from
+  `Scorer` (which returns 1-D `P(positive)`); wrap with
+  `lambda p, X: p.predict_proba(X)[:, 1]` to adapt.
+- `ActivationExtractor` Protocol — pluggable hidden-state-extraction
+  contract for `ActivationDeltaProbe`; injectable for tests to avoid
+  loading a real backbone.
+- New optional extra `[probes] = torch>=2.0, transformers>=4.40`.
+  Follows the `[embeddings]` precedent — opt-in only, NOT in
+  `[all]` or `[dev]`, since the transitive install is ~600MB+.
+  Module is base-install-safe: a friendly `ImportError` fires only
+  if you try to use the default HF extractor without the extra.
 
 ## [0.42.0] — 2026-05-19 — fit_isotonic_binary completes 4-calibrator family (closes #44)
 
