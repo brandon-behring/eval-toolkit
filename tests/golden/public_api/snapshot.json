@@ -553,7 +553,7 @@
       ],
       "doc_first_line": "Load a HuggingFace ``datasets`` repo as ``{split: EvalSlice}``.",
       "kind": "class",
-      "signature": "(repo_id: 'str', splits: 'Sequence[str] | None' = None, feature_col: 'str' = 'text', label_col: 'str' = 'label', strata_col: 'str | None' = None, config_name: 'str | None' = None, name: 'str' = '', description: 'str' = '', cite_as: 'str' = '', license: 'str' = '', url: 'str' = '') -> None"
+      "signature": "(repo_id: 'str', splits: 'Sequence[str] | None' = None, feature_col: 'str' = 'text', label_col: 'str' = 'label', strata_col: 'str | None' = None, config_name: 'str | None' = None, name: 'str' = '', description: 'str' = '', cite_as: 'str' = '', license: 'str' = '', url: 'str' = '', fetch_remote_metadata: 'bool' = True) -> None"
     },
     "HoldoutSplitter": {
       "bases": [

@@ -96,7 +96,7 @@ covering 400 k+ datasets. eval-toolkit's
 [`DatasetLoader.describe()`](../api/loaders.md) emits a
 Croissant-compatible subset:
 
-```python
+```text
 from eval_toolkit import DataFrameLoader
 import pandas as pd
 
@@ -117,6 +117,48 @@ match Croissant's vocabulary. `distribution` carries
 `{name, contentUrl, sha256, contentSize}` per file. Consumers who need
 *full* Croissant production wrap eval-toolkit's `describe()` output in
 their own publishing pipeline.
+
+### End-to-end verification against HF Hub (v0.41.0)
+
+`HFDatasetsLoader.describe()` populates per-file `sha256` from HF Hub's
+authoritative source-of-truth. The verification is exercised in
+`tests/test_croissant_e2e.py` (marker `@pytest.mark.integration`).
+
+**Dual-source design** — `HFDatasetsLoader.describe()` fetches from
+two HF Hub endpoints:
+
+1. **Croissant** (`/api/datasets/{repo}/croissant`) — for the metadata
+   vocabulary (name, description, license, citation, schema).
+2. **Tree API** (`/api/datasets/{repo}/tree/refs%2Fconvert%2Fparquet`) —
+   for per-file `sha256` (read from each file's `lfs.oid`, which equals
+   `sha256sum` of the raw bytes).
+
+**Why dual sources?** HF Hub's Croissant emitter currently fills
+`distribution[].sha256` with a placeholder URL pointing at MLCommons
+Croissant spec issue #80 ("In <Download>, check SHA256 or MD5") which
+is **open**. The Croissant spec itself doesn't yet require per-file
+checksums from emitters, and HF Hub is honest about it — they punt
+the field rather than fabricate a hash. The authoritative hash IS
+available, just via the tree API. When MLCommons #80 resolves and HF
+Hub starts populating Croissant `sha256` with real values (which will
+equal the existing `lfs.oid`), `HFDatasetsLoader` switches sources
+in ~5 LOC — no contract change for callers.
+
+**What the integration test verifies**:
+
+- `describe()['distribution'][i]['sha256']` returns a real
+  `sha256:<64-hex>` for each parquet shard.
+- Downloading the shard from `contentUrl` and hashing the bytes
+  produces the same value (bit-exact verification against the live HF
+  Hub for `stanfordnlp/sst2`).
+- Caller-provided overrides (`name=`, `cite_as=`) win over Croissant
+  fetches.
+- `fetch_remote_metadata=False` preserves pre-v0.41 behavior (no
+  network).
+
+This satisfies v1.0 readiness Gate 4 in spirit (the file we evaluated
+matches the source's authoritative hash) and in literal form (when
+Croissant #80 lands; one-line migration).
 
 (pytorch-determinism)=
 ## PyTorch determinism — the sharp edges

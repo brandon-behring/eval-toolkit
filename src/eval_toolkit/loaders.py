@@ -29,7 +29,9 @@ References
 from __future__ import annotations
 
 import glob as _glob
+import json as _json
 import logging
+import urllib.request as _urlrequest
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +39,24 @@ from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 from eval_toolkit.harness import EvalSlice
 from eval_toolkit.provenance import file_sha256
+
+_HF_HUB_BASE = "https://huggingface.co"
+_HF_FETCH_TIMEOUT_SEC = 15
+
+
+def _hf_get_json(path: str) -> Any:
+    """GET ``https://huggingface.co{path}`` and return parsed JSON.
+
+    Stdlib-only (no ``requests`` / ``huggingface_hub`` dep). Raises
+    ``OSError`` (urllib error) or ``ValueError`` (JSON decode) on
+    failure — callers catch both. The 15-second timeout caps any one
+    fetch so CI doesn't hang on a slow HF Hub.
+    """
+    url = f"{_HF_HUB_BASE}{path}"
+    req = _urlrequest.Request(url, headers={"User-Agent": "eval-toolkit"})
+    with _urlrequest.urlopen(req, timeout=_HF_FETCH_TIMEOUT_SEC) as resp:
+        return _json.loads(resp.read().decode("utf-8"))
+
 
 _logger = logging.getLogger(__name__)
 
@@ -367,10 +387,22 @@ class HFDatasetsLoader:
     raised at :meth:`load_splits` time with a clear install hint. This is
     intentional — eval-toolkit's core deps are numpy / scipy / sklearn only.
 
+    Since v0.41.0, :meth:`describe` enriches its output with per-file
+    ``sha256`` hashes fetched from the HF Hub tree API (the ``lfs.oid``
+    field), plus Croissant metadata fetched from HF Hub's Croissant
+    endpoint. The dual-source design is documented in
+    ``methodology/reproducibility.md`` §"Croissant interoperability";
+    in short: HF Hub's Croissant emitter currently punts the
+    ``distribution[].sha256`` field per MLCommons Croissant issue #80
+    (open), so we read the authoritative sha256 from the tree API's
+    ``lfs.oid`` instead. When #80 resolves and HF Hub starts populating
+    Croissant ``sha256`` with real values, the implementation collapses
+    to a single source.
+
     Parameters
     ----------
     repo_id : str
-        HuggingFace dataset repo, e.g. ``"deepset/prompt-injections"``.
+        HuggingFace dataset repo, e.g. ``"stanfordnlp/sst2"``.
     splits : sequence of str or None, optional
         Subset of HF splits to load. ``None`` = every split the repo defines.
     feature_col : str, optional
@@ -381,7 +413,12 @@ class HFDatasetsLoader:
     config_name : str or None, optional
         HF dataset config name (some datasets have multiple configs).
     name, description, cite_as, license, url : str, optional
-        Croissant metadata fields.
+        Croissant metadata overrides. If empty, :meth:`describe` will
+        fall back to fetching from HF Hub's Croissant endpoint.
+    fetch_remote_metadata : bool, optional
+        If ``True`` (default), :meth:`describe` fetches Croissant + tree
+        metadata from HF Hub. Set ``False`` to disable network calls
+        (useful for offline / unit testing).
     """
 
     repo_id: str
@@ -395,6 +432,7 @@ class HFDatasetsLoader:
     cite_as: str = ""
     license: str = ""
     url: str = ""
+    fetch_remote_metadata: bool = True
 
     def _load_dataset(self) -> Mapping[str, Any]:
         """Soft-import ``datasets`` and return the loaded DatasetDict.
@@ -447,20 +485,118 @@ class HFDatasetsLoader:
         return out
 
     def describe(self) -> dict[str, object]:
-        """Croissant-subset metadata pointing at the HF repo (no file hashes — HF caches)."""
-        return {
-            "name": self.name or self.repo_id,
-            "description": self.description,
-            "citeAs": self.cite_as,
-            "license": self.license,
-            "url": self.url or f"https://huggingface.co/datasets/{self.repo_id}",
-            "distribution": [
+        """Croissant-compatible metadata + per-file sha256 from HF Hub.
+
+        When ``fetch_remote_metadata=True`` (default), enriches the
+        baseline metadata with two HF Hub API fetches:
+
+        - **Croissant endpoint** (``/api/datasets/{repo}/croissant``) —
+          provides ``name``, ``description``, ``citeAs``, ``license``,
+          ``url`` defaults when the loader's fields are empty.
+        - **Tree API** (``/api/datasets/{repo}/tree/...?recursive=true``) —
+          provides per-file ``sha256`` (from ``lfs.oid``) and
+          ``contentSize`` for each parquet shard under the
+          ``refs/convert/parquet`` branch.
+
+        Network failures degrade gracefully (warning emitted; sha256
+        empty as in pre-v0.41 behavior). See class docstring for the
+        dual-source rationale (MLCommons Croissant issue #80).
+        """
+        remote_meta: dict[str, object] = {}
+        distribution: list[dict[str, object]] = []
+        if self.fetch_remote_metadata:
+            remote_meta = self._fetch_croissant_metadata_safe()
+            distribution = self._fetch_tree_distribution_safe()
+
+        # Caller-provided fields win; Croissant fills gaps.
+        def _pick(local: str, key: str) -> str:
+            if local:
+                return local
+            val = remote_meta.get(key)
+            return val if isinstance(val, str) else ""
+
+        if not distribution:
+            distribution = [
                 {
                     "name": f"hf:{self.repo_id}",
                     "contentUrl": f"https://huggingface.co/datasets/{self.repo_id}",
-                    "sha256": "",  # HF cache hash not exposed via the public API
+                    "sha256": "",
                     "contentSize": 0,
                 }
-            ],
+            ]
+
+        return {
+            "name": _pick(self.name, "name") or self.repo_id,
+            "description": _pick(self.description, "description"),
+            "citeAs": _pick(self.cite_as, "citeAs"),
+            "license": _pick(self.license, "license"),
+            "url": self.url or f"https://huggingface.co/datasets/{self.repo_id}",
+            "distribution": distribution,
             "config_name": self.config_name,
         }
+
+    def _fetch_croissant_metadata_safe(self) -> dict[str, object]:
+        """Fetch HF Hub Croissant JSON-LD; return empty dict on any failure."""
+        try:
+            data = _hf_get_json(f"/api/datasets/{self.repo_id}/croissant")
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError) as exc:  # urllib.URLError, JSONDecodeError, etc.
+            _logger.warning(
+                "HFDatasetsLoader %s: Croissant fetch failed (%s); proceeding without",
+                self.repo_id,
+                exc,
+            )
+            return {}
+
+    def _fetch_tree_distribution_safe(self) -> list[dict[str, object]]:
+        """Fetch HF Hub tree API for the parquet-convert branch; return ``cr:FileObject`` entries.
+
+        Each entry carries ``sha256`` (from ``lfs.oid`` — the git-LFS
+        content hash, equal to ``sha256sum`` of the file content) and
+        ``contentSize`` (from the tree response's ``size`` field).
+
+        Falls back to an empty list on any failure — callers should
+        treat empty distribution as "no remote provenance available."
+        """
+        # HF stores native parquet (or auto-converts) under
+        # refs/convert/parquet; that's the canonical hash target.
+        path = f"/api/datasets/{self.repo_id}/tree/refs%2Fconvert%2Fparquet?recursive=true"
+        try:
+            entries = _hf_get_json(path)
+        except (OSError, ValueError) as exc:
+            _logger.warning(
+                "HFDatasetsLoader %s: tree-API fetch failed (%s); sha256 unavailable",
+                self.repo_id,
+                exc,
+            )
+            return []
+        if not isinstance(entries, list):
+            return []
+        out: list[dict[str, object]] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("type") != "file":
+                continue
+            path_val = entry.get("path", "")
+            if not isinstance(path_val, str) or not path_val.endswith(".parquet"):
+                continue
+            lfs = entry.get("lfs")
+            sha = ""
+            if isinstance(lfs, dict):
+                oid = lfs.get("oid")
+                if isinstance(oid, str) and len(oid) == 64:  # sha256 hex
+                    sha = f"sha256:{oid}"
+            size = entry.get("size", 0)
+            out.append(
+                {
+                    "name": path_val,
+                    "contentUrl": (
+                        f"https://huggingface.co/datasets/{self.repo_id}"
+                        f"/resolve/refs%2Fconvert%2Fparquet/{path_val}"
+                    ),
+                    "sha256": sha,
+                    "contentSize": int(size) if isinstance(size, (int, float)) else 0,
+                }
+            )
+        return out

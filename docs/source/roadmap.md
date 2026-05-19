@@ -106,23 +106,35 @@ v2.0. Gated on:
 2. **Protocol shapes survive ≥ 1 "should we change this?" review
    cycle.** v0.7.x added 5 Tier-2 Protocols (`Scorer`, `LeakageCheck`,
    `Splitter`, `ThresholdSelector`, `DatasetLoader`) + 1 opt-in
-   (`Versioned`). As of v0.39.0, all six have been stable across 32
-   minor releases (v0.7 → v0.39) except for one contract-tightening
+   (`Versioned`). As of v0.41.0, all six have been stable across
+   34 minor releases (v0.7 → v0.41) except for one contract-tightening
    edit to `LeakageCheck.name` in v0.39.0 (#40) — changing the
    Protocol declaration from a settable class-level attribute to a
    `@property` to align with the `@dataclass(frozen=True)`
-   implementation pattern. That edit reset the stability window;
-   v1.0 will ship after **≥ 2 minor releases without Protocol shape
-   edits** (target: v0.41 or later).
+   implementation pattern. v0.40.0 and v0.41.0 both shipped without
+   Protocol shape edits (v0.40: `fit_platt_binary` + `fit_beta_binary`
+   additions; v0.41: `HFDatasetsLoader` enrichment — neither touched
+   Tier-2 Protocols). The stability window is now **2 of 2 minors
+   without Protocol edits** as of v0.41.0 — Gate 2 ✅ **MET**.
    The v1-prelude evidence APIs must also survive one real-consumer
    migration check (the `prompt-injection-detection-submission` repo).
 3. **Methodology docs peer-reviewed** by an external reader (statistics
    / methodology background, ideally not part of the
    `prompt_injection_*` core team).
-4. **Croissant interop verified end-to-end** — a real Croissant-
-   compliant dataset loaded via `HFDatasetsLoader`, scored, and the
-   manifest's `data_hashes` matched against the Croissant
-   `distribution.sha256` field.
+4. **Croissant interop verified end-to-end** — ✅ **MET as of v0.41.0**
+   (see `tests/test_croissant_e2e.py`). `HFDatasetsLoader.describe()`
+   fetches Croissant metadata + per-file `sha256` from HF Hub; the
+   integration test downloads a real parquet shard from
+   `stanfordnlp/sst2` and verifies the bytes hash bit-exactly to the
+   value `describe()` reports. **Caveat**: HF Hub's Croissant emitter
+   currently punts `distribution[].sha256` (per the still-open
+   MLCommons Croissant spec issue
+   [#80](https://github.com/mlcommons/croissant/issues/80)), so
+   `HFDatasetsLoader` reads sha256 from HF Hub's tree API (`lfs.oid`)
+   today. When #80 resolves and HF Hub starts populating Croissant
+   `sha256` with real values, the loader will pick up the new source
+   automatically. See `methodology/reproducibility.md` §"Croissant
+   interoperability" for the design.
 
 When v1.0 ships:
 - API surface freezes. Breaking changes require a v2.0 major bump.

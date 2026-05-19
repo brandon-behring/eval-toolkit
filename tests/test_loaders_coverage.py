@@ -156,8 +156,12 @@ def test_hf_datasets_loader_subset_splits() -> None:
 
 @pytest.mark.unit
 def test_hf_datasets_loader_describe_uses_url_or_default() -> None:
-    """Describe(): url falls back to huggingface.co/datasets/<repo_id>."""
-    loader = HFDatasetsLoader(repo_id="dummy/example")
+    """Describe(): url falls back to huggingface.co/datasets/<repo_id>.
+
+    ``fetch_remote_metadata=False`` keeps this a unit test (no network).
+    The network-enabled path is exercised in test_croissant_e2e.py.
+    """
+    loader = HFDatasetsLoader(repo_id="dummy/example", fetch_remote_metadata=False)
     out = loader.describe()
     assert out["url"] == "https://huggingface.co/datasets/dummy/example"
     assert out["distribution"][0]["sha256"] == ""
@@ -165,6 +169,10 @@ def test_hf_datasets_loader_describe_uses_url_or_default() -> None:
 
 @pytest.mark.unit
 def test_hf_datasets_loader_describe_with_explicit_url() -> None:
-    loader = HFDatasetsLoader(repo_id="dummy/example", url="https://example.com")
+    loader = HFDatasetsLoader(
+        repo_id="dummy/example",
+        url="https://example.com",
+        fetch_remote_metadata=False,
+    )
     out = loader.describe()
     assert out["url"] == "https://example.com"
