@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.41.0] — 2026-05-18 — Croissant end-to-end (closes #42, v1.0 Gate 4 MET)
+
+Closes v1.0 readiness Gate 4 — "Croissant interop verified end-to-end."
+`HFDatasetsLoader.describe()` now fetches per-file `sha256` hashes
+from HF Hub and exposes them in `distribution[].sha256`. The
+integration test (`tests/test_croissant_e2e.py`) downloads a real
+parquet shard from `stanfordnlp/sst2` and verifies the bytes hash
+bit-exactly to the value `describe()` reports.
+
+### Added
+
+- **`HFDatasetsLoader.describe()` Croissant + tree-API enrichment.**
+  When `fetch_remote_metadata=True` (default), the loader fetches from
+  two HF Hub endpoints:
+  - `/api/datasets/{repo}/croissant` — JSON-LD metadata (name,
+    description, license, citeAs, schema).
+  - `/api/datasets/{repo}/tree/refs%2Fconvert%2Fparquet?recursive=true`
+    — per-file `sha256` (read from each file's `lfs.oid` field — the
+    git-LFS content hash, equal to `sha256sum` of the raw bytes).
+  Caller-provided fields (`name=`, `cite_as=`, etc.) win over
+  Croissant fetches; Croissant fills only gaps. Network failures
+  degrade gracefully (warning emitted; sha256 empty as in pre-v0.41).
+- **`fetch_remote_metadata: bool = True`** constructor field on
+  `HFDatasetsLoader`. Set `False` for offline / unit-test paths.
+- **`tests/test_croissant_e2e.py`** — 5 integration tests against
+  live HF Hub:
+  1. `describe()` returns real `sha256:<64-hex>` per shard.
+  2. **Bit-exact verification**: download shard from `contentUrl`,
+     hash bytes, assert equals `describe()`'s sha256. This is the
+     literal v1.0 Gate 4 check.
+  3. Croissant metadata enriches name/citeAs/license/description.
+  4. Caller overrides win over remote.
+  5. `fetch_remote_metadata=False` preserves v0.40 behavior.
+  All pass against `stanfordnlp/sst2` (~3 MB train shard).
+- **New `integration` pytest marker** for network-dependent tests.
+  Excluded from `make coverage` (PR CI); runs explicitly via
+  `pytest -m integration`.
+
+### Why dual-sourced
+
+HF Hub's Croissant emitter currently fills `distribution[].sha256`
+with a placeholder URL pointing at MLCommons Croissant spec issue
+[#80](https://github.com/mlcommons/croissant/issues/80) ("In
+<Download>, check SHA256 or MD5"), which is **open**. The Croissant
+spec doesn't yet require per-file checksums from emitters; HF Hub is
+honest and punts the field. The authoritative hash IS available via
+HF Hub's tree API: `lfs.oid` is precisely sha256 of the file content
+(verified bit-exact via `sha256sum`).
+
+When MLCommons #80 resolves and HF Hub starts populating Croissant
+`sha256` with real values (which will equal the existing `lfs.oid`),
+the loader's source switches in ~5 LOC. Same downstream contract.
+
+### Documentation
+
+- `docs/source/methodology/reproducibility.md` §"Croissant
+  interoperability": replaces v0.7-era "subset" framing with the
+  end-to-end-verified narrative + dual-source rationale.
+- `docs/source/roadmap.md` §"v1.0.0 path":
+  - **Gate 2 (Protocol stability) ✅ MET** — v0.41 = minor 2 of 2
+    without Protocol shape edits (v0.40 fit_*_binary additives +
+    v0.41 HFDatasetsLoader enrichment leave Tier-2 Protocols
+    untouched).
+  - **Gate 4 (Croissant end-to-end) ✅ MET** — with dual-source caveat
+    documented; one-line migration path when MLCommons #80 resolves.
+
+### v1.0 readiness state after v0.41.0
+
+- Gate 1 (real consumer ≥1 review cycle on v0.7+): partial — consumer
+  pinned to v0.34.0; needs bump + cycle. **External**.
+- Gate 2 ✅ MET (v0.41 is minor 2 of 2 stable).
+- Gate 3 (methodology peer review): not met — needs external reader.
+  **External**.
+- Gate 4 ✅ MET — see this release.
+
+Two of four gates closed in-repo. The remaining two require external
+coordination (consumer review cycle, methodology peer reviewer).
+
 ## [0.40.0] — 2026-05-18 — fit_platt_binary + fit_beta_binary (closes #43)
 
 Completes the binary scalar-prob calibrator family started in v0.35.0
