@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.40.0] — 2026-05-18 — fit_platt_binary + fit_beta_binary (closes #43)
+
+Completes the binary scalar-prob calibrator family started in v0.35.0
+with `fit_temperature_binary` (#28). Consumers running the canonical
+4-calibrator audit battery (temperature + isotonic + Platt + Beta) now
+have library-first primitives for all four, eliminating ~100 LOC of
+hand-roll across the calibration battery pattern.
+
+### Added
+
+- **`eval_toolkit.fit_platt_binary(y_true, y_score)`** — binary-
+  probability adapter for `fit_platt_calibrator`. Returns
+  `((a, b), apply)` where `(a, b)` are the fitted Platt slope and
+  intercept and `apply: (n,) -> (n,)` is the scalar-in / scalar-out
+  callable that maps probabilities through `σ(a·s + b)`. Trivially
+  wraps `fit_platt_calibrator`; exposes `(a, b)` explicitly so
+  consumers can log the parameters in a `RunManifest` without
+  introspecting the `PlattFit` dataclass.
+- **`eval_toolkit.fit_beta_binary(y_true, y_score)`** — 3-parameter
+  Beta calibration per Kull et al. 2017. Returns `((a, b, c), apply)`
+  where `(a, b, c)` are the coefficients on `log(s)`, `log(1-s)`, and
+  the intercept respectively. Implemented directly (rather than
+  wrapping `fit_beta_calibrator` which returns only the callable) so
+  the fitted coefficients are captured alongside the apply function.
+- Both functions: 5 doctest examples each (run in CI via
+  `.doctest-modules`) + 15 unit tests covering shape contracts, param
+  exposure, parity with the underlying calibrators, single-class
+  rejection, and a family-consistency test verifying all 3 binary
+  adapters (temperature, Platt, Beta) satisfy the same
+  `(params_tuple, apply)` shape.
+
+### Why mirror `fit_temperature_binary`'s tuple shape
+
+#43's body proposed `Callable[[NDArray], NDArray]` as the return type
+(just the apply). We landed on `tuple[params, apply]` instead —
+matches the existing v0.35.0 contract and gives consumers the params
+they need for audit-battery `RunManifest` entries. Consumers wanting
+just the apply can use `_, apply = fit_platt_binary(...)`.
+
+### Protocol stability
+
+No Protocol shape changes. Per v0.39.0's roadmap Gate 2 update, v1.0
+requires ≥2 minors without Protocol edits — v0.40.0 is minor 1 of 2
+toward that target.
+
 ## [0.39.0] — 2026-05-18 — consumer-feedback batch (closes #39, #40, #41)
 
 Three issues lifted from `prompt-injection-detection-prototype v1.0.0`
