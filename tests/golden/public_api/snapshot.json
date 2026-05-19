@@ -134,9 +134,11 @@
     "fdr_bh_correct",
     "figure_metadata",
     "file_sha256",
+    "fit_beta_binary",
     "fit_beta_calibrator",
     "fit_isotonic_calibrator",
     "fit_operating_points",
+    "fit_platt_binary",
     "fit_platt_calibrator",
     "fit_temperature",
     "fit_temperature_binary",
@@ -1196,6 +1198,11 @@
       "kind": "function",
       "signature": "(path: 'Path | str', *, strict: 'bool' = False) -> 'str | None'"
     },
+    "fit_beta_binary": {
+      "doc_first_line": "Binary-probability adapter for :func:`fit_beta_calibrator` per Kull et al. 2017.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray') -> 'tuple[tuple[float, float, float], Callable[[np.ndarray], np.ndarray]]'"
+    },
     "fit_beta_calibrator": {
       "doc_first_line": "Beta calibration per Kull et al. 2017 [#kull]_.",
       "kind": "function",
@@ -1210,6 +1217,11 @@
       "doc_first_line": "Fit selectors on a mixed-class slice and record threshold provenance.",
       "kind": "function",
       "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', selectors: 'Sequence[ThresholdSelector]', *, fitted_on_slice: 'str' = '', scorer_name: 'str' = '') -> 'dict[str, FittedOperatingPoint]'"
+    },
+    "fit_platt_binary": {
+      "doc_first_line": "Binary-probability adapter for :func:`fit_platt_calibrator`.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray') -> 'tuple[tuple[float, float], Callable[[np.ndarray], np.ndarray]]'"
     },
     "fit_platt_calibrator": {
       "doc_first_line": "Platt 1999 [#platt]_ sigmoid scaling with Lin 2007 [#lin]_ Laplace-smoothed targets.",

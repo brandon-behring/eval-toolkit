@@ -53,8 +53,10 @@ __all__ = [
     "CostMatrix",
     "PlattFit",
     "bayes_optimal_threshold",
+    "fit_beta_binary",
     "fit_beta_calibrator",
     "fit_isotonic_calibrator",
+    "fit_platt_binary",
     "fit_platt_calibrator",
     "fit_temperature",
     "fit_temperature_binary",
@@ -1133,6 +1135,163 @@ def fit_temperature_binary(
         return out
 
     return t_optimal, apply
+
+
+def fit_platt_binary(
+    y_true: np.ndarray, y_score: np.ndarray
+) -> tuple[tuple[float, float], Callable[[np.ndarray], np.ndarray]]:
+    r"""Binary-probability adapter for :func:`fit_platt_calibrator`.
+
+    Mirror of :func:`fit_temperature_binary`: returns ``((a, b), apply)``
+    where ``(a, b)`` are the fitted Platt slope and intercept and
+    ``apply: (n,) -> (n,)`` is a scalar-in / scalar-out callable that
+    maps any input probability array through :math:`\sigma(a \cdot s + b)`.
+
+    Trivially wraps :func:`fit_platt_calibrator` — added in v0.40.0 to
+    provide naming consistency with :func:`fit_temperature_binary` and
+    :func:`fit_beta_binary` for the 4-calibrator audit-battery pattern
+    (temperature, isotonic, Platt, Beta). The ``(a, b)`` tuple is exposed
+    explicitly so consumers can log it in a :class:`RunManifest` without
+    introspecting the :class:`PlattFit` dataclass.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary validation labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Validation predicted probabilities of class 1, in [0, 1]. Values
+        at the extremes are clipped to ``[1e-7, 1 - 1e-7]`` by the
+        underlying Platt fitter.
+
+    Returns
+    -------
+    tuple
+        ``((a, b), apply)`` — ``a`` is the Platt slope, ``b`` is the
+        intercept, ``apply`` maps probabilities through the fitted
+        sigmoid.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, empty input, non-finite scores, or single-class
+        ``y_true`` (propagated from :func:`fit_platt_calibrator`).
+    RuntimeError
+        If the L-BFGS-B optimizer fails to converge.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> y_val = rng.binomial(1, 0.3, size=n).astype(int)
+    >>> p_val = np.clip(y_val * 0.6 + rng.normal(0, 0.2, n), 0.01, 0.99)
+    >>> (a, b), apply = fit_platt_binary(y_val, p_val)
+    >>> isinstance(a, float) and isinstance(b, float)
+    True
+    >>> apply(np.array([0.1, 0.5, 0.9])).shape == (3,)
+    True
+
+    See Also
+    --------
+    fit_platt_calibrator : underlying canonical Platt fitter (returns ``PlattFit``).
+    fit_temperature_binary : 1-parameter sibling.
+    fit_beta_binary : 3-parameter sibling.
+    """
+    fit = fit_platt_calibrator(y_true, y_score)
+    return (fit.a, fit.b), fit.transform
+
+
+def fit_beta_binary(
+    y_true: np.ndarray, y_score: np.ndarray
+) -> tuple[tuple[float, float, float], Callable[[np.ndarray], np.ndarray]]:
+    r"""Binary-probability adapter for :func:`fit_beta_calibrator` per Kull et al. 2017.
+
+    Mirror of :func:`fit_temperature_binary`: returns
+    ``((a, b, c), apply)`` where ``(a, b, c)`` are the 3-parameter Beta
+    calibration coefficients (``a`` on :math:`\log s`, ``b`` on
+    :math:`\log(1-s)`, ``c`` intercept) and ``apply`` is the scalar-in /
+    scalar-out callable.
+
+    Added in v0.40.0 for naming consistency with
+    :func:`fit_temperature_binary` and :func:`fit_platt_binary` in the
+    4-calibrator audit-battery pattern. Implemented directly (rather
+    than wrapping :func:`fit_beta_calibrator`) so the fitted ``(a, b, c)``
+    parameters can be exposed alongside the apply callable — the
+    existing :func:`fit_beta_calibrator` returns only the callable.
+
+    Beta calibration is a strict generalization of Platt scaling
+    (Kull 2017 §3); it empirically dominates Platt on most real-world
+    classifiers at the cost of one extra parameter. Unlike Platt and
+    isotonic, the Beta sigmoid is *not* monotone in the raw score.
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary validation labels in {0, 1}.
+    y_score : np.ndarray, shape (n,)
+        Validation predicted probabilities of class 1, in (0, 1). Values
+        at the extremes are clipped to ``[1e-7, 1 - 1e-7]`` so the
+        log-link is finite.
+
+    Returns
+    -------
+    tuple
+        ``((a, b, c), apply)`` — ``(a, b, c)`` are the Beta calibration
+        coefficients; ``apply`` maps probabilities through
+        :math:`\sigma(a \log s + b \log(1-s) + c)`.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, empty input, non-finite scores, or single-class
+        ``y_true``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> y_val = rng.binomial(1, 0.3, size=n).astype(int)
+    >>> p_val = np.clip(y_val * 0.6 + rng.normal(0, 0.2, n), 0.01, 0.99)
+    >>> (a, b, c), apply = fit_beta_binary(y_val, p_val)
+    >>> all(isinstance(x, float) for x in (a, b, c))
+    True
+    >>> apply(np.array([0.1, 0.5, 0.9])).shape == (3,)
+    True
+
+    See Also
+    --------
+    fit_beta_calibrator : underlying Beta fitter (returns only the callable).
+    fit_temperature_binary : 1-parameter sibling.
+    fit_platt_binary : 2-parameter sibling.
+
+    References
+    ----------
+    Kull, M., Filho, T. S., & Flach, P. "Beta calibration: a well-founded
+    and easily implemented improvement on logistic calibration for binary
+    classifiers." AISTATS 2017. arXiv:1607.06770.
+    """
+    from sklearn.linear_model import LogisticRegression  # noqa: PLC0415
+
+    y_true_arr, y_score_arr = _validate_calibrator_inputs(y_true, y_score)
+    s_clipped = np.clip(y_score_arr, _SCORE_CLIP_LO, _SCORE_CLIP_HI)
+    features = np.column_stack([np.log(s_clipped), np.log(1.0 - s_clipped)])
+    lr = LogisticRegression(C=1e9, solver="lbfgs", max_iter=2000)
+    lr.fit(features, y_true_arr)
+    a = float(lr.coef_[0][0])
+    b = float(lr.coef_[0][1])
+    c = float(lr.intercept_[0])
+
+    def apply(scores: np.ndarray) -> np.ndarray:
+        arr = np.asarray(scores, dtype=float).ravel()
+        if not np.isfinite(arr).all():
+            raise ValueError("scores contains NaN or inf")
+        clipped = np.clip(arr, _SCORE_CLIP_LO, _SCORE_CLIP_HI)
+        z = a * np.log(clipped) + b * np.log(1.0 - clipped) + c
+        out: np.ndarray = (1.0 / (1.0 + np.exp(-z))).astype(float)
+        return out
+
+    return (a, b, c), apply
 
 
 def fit_temperature_oracle(
