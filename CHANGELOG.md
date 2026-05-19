@@ -24,6 +24,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src/eval_toolkit/schemas/ood_manifest.v1.json` — Draft 2020-12
   JSON schema for the OOD manifest YAML; auto-validated by
   `uv run eval-toolkit schemas check`.
+- `eval_toolkit.adversarial` — new module with character-injection
+  bypass suite (Microsoft Research 2024, arXiv 2404.13208).
+  Six core techniques shipped as frozen-dataclass strategies:
+  `ZeroWidthSpaceInjection`, `HomoglyphSubstitution`,
+  `DiacriticInjection`, `WhitespaceInjection`, `CaseRandomization`,
+  `PunctuationInjection`. All implement a `CharacterInjectionStrategy`
+  Protocol with `transform(text: str) -> str`. Six advanced techniques
+  (bidi RTL, tag stripping, synonym, token splitting, Unicode
+  normalization, invisible chars) scheduled for v0.43.1 — the sweep
+  API stabilizes in v0.43.0 so the v0.43.1 additions are pure
+  extensions. Closes #49 (core-6).
+- `adversarial.sweep(texts, scorer, techniques="all", threshold=0.5)`
+  — Scorer-Protocol-compliant adversarial-robustness sweep. Returns
+  a DataFrame with `(text_id, technique, original_score,
+  transformed_score, asr)` rows for matrix analysis.
+  Aggregate ASR with `df.groupby("technique")["asr"].mean()`.
+- `adversarial.character_injection` — `SimpleNamespace` exposing the
+  function-style API from the upstream issue spec
+  (`character_injection.zero_width_space(text)`,
+  `character_injection.sweep(...)`, etc.).
 
 ## [0.42.0] — 2026-05-19 — fit_isotonic_binary completes 4-calibrator family (closes #44)
 

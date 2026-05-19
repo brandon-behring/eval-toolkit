@@ -30,6 +30,16 @@ _logging.getLogger("eval_toolkit").addHandler(_logging.NullHandler())
 # dividers below are informational only; the snapshot in
 # tests/golden/public_api/ reads dict keys + values, not comments.
 _EXPORTS: dict[str, str] = {
+    # --- adversarial ---
+    "CORE_TECHNIQUES": "eval_toolkit.adversarial",
+    "CaseRandomization": "eval_toolkit.adversarial",
+    "CharacterInjectionStrategy": "eval_toolkit.adversarial",
+    "DiacriticInjection": "eval_toolkit.adversarial",
+    "HomoglyphSubstitution": "eval_toolkit.adversarial",
+    "PunctuationInjection": "eval_toolkit.adversarial",
+    "WhitespaceInjection": "eval_toolkit.adversarial",
+    "ZeroWidthSpaceInjection": "eval_toolkit.adversarial",
+    "character_injection": "eval_toolkit.adversarial",
     # --- analysis ---
     "CsvPredictionReader": "eval_toolkit.analysis",
     "JsonlPredictionReader": "eval_toolkit.analysis",
