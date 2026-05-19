@@ -67,8 +67,10 @@ __all__ = [
     "DataFrameLoader",
     "DatasetLoader",
     "HFDatasetsLoader",
+    "OodManifestLoader",
     "ParquetGlobLoader",
     "SingleSliceLoader",
+    "ood_dataset_from_manifest",
 ]
 
 
@@ -600,3 +602,480 @@ class HFDatasetsLoader:
                 }
             )
         return out
+
+
+# ----------------------------------------------------------------------------
+# OOD manifest loader (v0.43.0; closes #48)
+# ----------------------------------------------------------------------------
+
+_OOD_DEFAULT_CACHE_DIR = Path.home() / ".cache" / "eval-toolkit" / "ood"
+_OOD_DOWNLOAD_TIMEOUT_SEC = 60
+
+
+def _load_yaml_manifest(yaml_path: str | Path) -> dict[str, Any]:
+    """Read and parse a YAML manifest file with explicit UTF-8 encoding.
+
+    Soft-imports ``yaml`` (PyYAML); raises ``ImportError`` with install
+    hint if the optional ``[yaml]`` extra is not installed.
+    """
+    try:
+        import yaml
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "ood_dataset_from_manifest requires the optional 'yaml' extra. "
+            "Install with: pip install eval-toolkit[yaml]"
+        ) from exc
+    path = Path(yaml_path).expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"OOD manifest not found: {path}")
+    with path.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"OOD manifest {path} must be a YAML mapping at the top level; got {type(data).__name__}"
+        )
+    if "slices" not in data or not isinstance(data["slices"], dict):
+        raise ValueError(f"OOD manifest {path} missing required top-level 'slices' mapping")
+    return data
+
+
+def _sha256_of_bytes(data: bytes) -> str:
+    """Return ``sha256:<hexdigest>`` of bytes — matches Croissant + HF Hub convention."""
+    import hashlib
+
+    return f"sha256:{hashlib.sha256(data).hexdigest()}"
+
+
+def _sha256_of_text(text: str) -> str:
+    """Return ``sha256:<hexdigest>`` of UTF-8-encoded text (for ``row_id`` column)."""
+    return _sha256_of_bytes(text.encode("utf-8"))
+
+
+def _download_with_sha_verify(
+    url: str,
+    expected_sha: str,
+    cache_dir: Path,
+    *,
+    slice_id: str,
+) -> Path:
+    """Download ``url`` to ``cache_dir/{sha-suffix}.bin``; verify sha256.
+
+    Cache key is the *expected* sha256 (so two slices with the same
+    expected hash share storage). On cache hit, re-verifies the cached
+    file's sha against the expected value to defend against on-disk
+    corruption. On cache miss, downloads via stdlib ``urllib``, verifies,
+    and atomically renames into place.
+
+    Parameters
+    ----------
+    url : str
+        HTTP(S) URL to fetch. ``file://`` URLs and bare local paths are
+        also supported for offline manifests.
+    expected_sha : str
+        ``sha256:<hex>`` or bare 64-char hex digest. The downloaded bytes
+        must hash to this value or a :class:`ValueError` is raised.
+    cache_dir : pathlib.Path
+        Directory to store the verified file. Created if absent.
+    slice_id : str
+        Slice id from the manifest, used only in error messages.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the verified cached file.
+
+    Raises
+    ------
+    ValueError
+        If the downloaded (or cached) content's sha256 does not match
+        ``expected_sha``. Message includes expected vs actual + the
+        remediation hint to update the manifest sha.
+    OSError
+        On network / filesystem failure during download.
+    """
+    # Normalize expected sha
+    expected_hex = (
+        expected_sha[len("sha256:") :] if expected_sha.startswith("sha256:") else expected_sha
+    )
+    if len(expected_hex) != 64:
+        raise ValueError(
+            f"OOD slice {slice_id!r}: expected_sha must be 64-char hex (with optional 'sha256:' prefix); "
+            f"got {expected_sha!r} (len={len(expected_hex)})"
+        )
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cached = cache_dir / f"{expected_hex}.bin"
+
+    if cached.exists():
+        actual = _sha256_of_bytes(cached.read_bytes())
+        if actual == f"sha256:{expected_hex}":
+            _logger.debug("OOD slice %s: cache hit at %s", slice_id, cached)
+            return cached
+        # Corrupted cache — log and re-download
+        _logger.warning(
+            "OOD slice %s: cached file %s sha mismatch (expected %s, got %s); re-downloading",
+            slice_id,
+            cached,
+            expected_hex,
+            actual,
+        )
+        cached.unlink()
+
+    # Cache miss — download
+    if url.startswith(("http://", "https://")):
+        req = _urlrequest.Request(url, headers={"User-Agent": "eval-toolkit"})
+        with _urlrequest.urlopen(req, timeout=_OOD_DOWNLOAD_TIMEOUT_SEC) as resp:
+            content = resp.read()
+    else:
+        # Treat as local path (bare or file://)
+        local_path = url[len("file://") :] if url.startswith("file://") else url
+        content = Path(local_path).expanduser().read_bytes()
+
+    actual = _sha256_of_bytes(content)
+    if actual != f"sha256:{expected_hex}":
+        raise ValueError(
+            f"OOD slice {slice_id!r}: sha256 mismatch for {url}\n"
+            f"  expected: sha256:{expected_hex}\n"
+            f"  actual:   {actual}\n"
+            f"  remediation: re-run with --update-manifest to refresh the manifest sha "
+            f"after auditing the upstream change"
+        )
+    # Atomic rename via temp file
+    tmp = cached.with_suffix(".bin.tmp")
+    tmp.write_bytes(content)
+    tmp.rename(cached)
+    return cached
+
+
+def _infer_format_from_url(url: str) -> str | None:
+    """Infer file format from a URL or path's extension; ``None`` if unknown."""
+    # Strip query string / fragment
+    path = url.split("?", 1)[0].split("#", 1)[0]
+    suffix = Path(path).suffix.lstrip(".").lower()
+    if suffix in ("parquet", "pq", "jsonl", "json", "csv"):
+        return suffix
+    return None
+
+
+def _read_slice_dataframe(
+    cached_path: Path,
+    *,
+    fmt: str,
+    slice_id: str,
+) -> pd.DataFrame:
+    """Read a cached file into a pandas DataFrame using an explicit format hint.
+
+    Supports parquet, jsonl, json, and csv. Caller resolves the format
+    (manifest field, then URL extension fallback) before calling.
+    """
+    import pandas as pd
+
+    fmt = fmt.lower()
+    if fmt in ("parquet", "pq"):
+        return pd.read_parquet(cached_path)
+    if fmt in ("jsonl", "json"):
+        return pd.read_json(cached_path, lines=(fmt == "jsonl"))
+    if fmt == "csv":
+        return pd.read_csv(cached_path, encoding="utf-8")
+    raise ValueError(
+        f"OOD slice {slice_id!r}: unsupported format {fmt!r}; "
+        f"set 'format' in the manifest to one of: parquet, jsonl, json, csv"
+    )
+
+
+def _apply_label_map(
+    series: pd.Series,
+    label_map: Mapping[Any, int] | None,
+    *,
+    slice_id: str,
+) -> pd.Series:
+    """Apply ``label_map`` (or pass-through if None) and cast to int.
+
+    Raises ``ValueError`` on any value not in the map; surfaces both the
+    offending value and the available keys to make debugging fast.
+    """
+    if label_map is None:
+        try:
+            return series.astype(int)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"OOD slice {slice_id!r}: label column has non-integer values and no label_map provided; "
+                f"unique values: {sorted(set(series.unique()))[:10]}"
+            ) from exc
+    mapped = series.map(label_map)
+    if mapped.isna().any():
+        missing = sorted(set(series[mapped.isna()].unique()))
+        raise ValueError(
+            f"OOD slice {slice_id!r}: label_map missing keys {missing!r}; "
+            f"map covers {sorted(label_map.keys())!r}"
+        )
+    return mapped.astype(int)
+
+
+def ood_dataset_from_manifest(
+    yaml_path: str | Path,
+    *,
+    slices: Sequence[str] | None = None,
+    cache_dir: str | Path | None = None,
+) -> pd.DataFrame:
+    """Load multiple OOD eval slates declaratively from a YAML manifest.
+
+    Returns a single concatenated :class:`pandas.DataFrame` with the
+    columns ``text``, ``label``, ``source``, ``row_id``, ``sha`` — one
+    row per example across every slice. Each source's bytes are fetched
+    from the URL, sha256-verified against the manifest, and cached
+    on-disk keyed by content hash (second call hits cache).
+
+    Designed as a metadata-driven primitive for portfolio / submission
+    consumers that load BIPIA, AgentDojo, InjecAgent, NotInject, PINT,
+    LLMail-Inject and similar OOD prompt-injection slates side-by-side
+    without open-coding per-source loaders.
+
+    Parameters
+    ----------
+    yaml_path : str or pathlib.Path
+        Path to the YAML manifest. See :doc:`/ood_loader` for the schema
+        (validated by ``ood_manifest.v1.json``).
+    slices : sequence of str or None, optional
+        Subset of slice ids to load. ``None`` (default) loads every
+        slice in the manifest. Unknown ids raise :class:`KeyError`.
+    cache_dir : str or pathlib.Path or None, optional
+        Directory for verified downloads. Default
+        ``~/.cache/eval-toolkit/ood/``. Cache key is the expected
+        sha256 so two slices with the same content share storage.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns: ``text`` (str), ``label`` (int — usually
+        ``0=benign / 1=injected``), ``source`` (str, slice id from the
+        manifest), ``row_id`` (str, ``sha256:`` of UTF-8-encoded text),
+        ``sha`` (str, the manifest sha256 for the slice — for
+        reproducibility). Row order is the manifest's slice declaration
+        order; per-slice row order is preserved from the source file
+        (or from ``sample(n=sample_size, random_state=seed)`` if
+        ``sample_size`` is set).
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``yaml_path`` does not exist.
+    KeyError
+        If ``slices`` references an id not in the manifest, or a slice's
+        ``text_field`` / ``label_field`` is missing from the loaded data.
+    ValueError
+        On YAML parse error, sha256 mismatch (with expected vs actual +
+        remediation hint), unsupported ``format``, or label_map missing keys.
+    ImportError
+        If the optional ``[yaml]`` extra is not installed (PyYAML).
+
+    Examples
+    --------
+    >>> # Not executable in doctest (requires real manifest + network).
+    >>> # Equivalent:
+    >>> # df = ood_dataset_from_manifest("configs/data/source_manifest.yaml",
+    >>> #                                slices=["bipia", "agentdojo"])
+    >>> # df.columns.tolist()
+    >>> # ['text', 'label', 'source', 'row_id', 'sha']
+
+    See Also
+    --------
+    OodManifestLoader : Protocol-compliant wrapper exposing the same
+        function as a :class:`DatasetLoader` for harness pipelines.
+
+    Notes
+    -----
+    Manifest schema (v1):
+
+    .. code-block:: yaml
+
+        name: my-ood-slate     # optional
+        description: ...       # optional
+        license: MIT           # optional (SPDX id)
+        slices:
+          bipia:
+            url: https://example.com/bipia.parquet
+            sha256: abc123...          # 64-char hex or sha256:<hex>
+            text_field: prompt          # source column → output 'text'
+            label_field: label          # source column → output 'label'
+            label_map: {clean: 0, injected: 1}   # optional
+            format: parquet             # parquet | jsonl | json | csv
+            sample_size: 1000           # optional; null = all rows
+            seed: 42                    # optional; required if sample_size set
+          agentdojo:
+            ...
+
+    The manifest is intentionally minimal — for richer Croissant
+    metadata or HF Hub auto-conversion, use :class:`HFDatasetsLoader`
+    directly. This factory targets the **portfolio + submission
+    library-first** pattern: a single YAML drives a single function
+    call that returns a unified DataFrame.
+    """
+    import pandas as pd
+
+    manifest = _load_yaml_manifest(yaml_path)
+    all_slices: dict[str, dict[str, Any]] = manifest["slices"]
+    cache_path = Path(cache_dir).expanduser() if cache_dir else _OOD_DEFAULT_CACHE_DIR
+
+    # Resolve which slices to load (preserve manifest order; ignore caller order).
+    if slices is None:
+        slice_ids = list(all_slices.keys())
+    else:
+        unknown = sorted(set(slices) - set(all_slices.keys()))
+        if unknown:
+            raise KeyError(
+                f"OOD manifest: unknown slice ids {unknown!r}; "
+                f"available: {sorted(all_slices.keys())!r}"
+            )
+        slice_ids = [s for s in all_slices if s in set(slices)]
+
+    parts: list[pd.DataFrame] = []
+    for slice_id in slice_ids:
+        spec = all_slices[slice_id]
+        if not isinstance(spec, dict):
+            raise ValueError(
+                f"OOD slice {slice_id!r}: spec must be a YAML mapping; got {type(spec).__name__}"
+            )
+        url = spec.get("url")
+        sha = spec.get("sha256")
+        if not isinstance(url, str) or not isinstance(sha, str):
+            raise ValueError(f"OOD slice {slice_id!r}: 'url' and 'sha256' are required strings")
+        text_field = spec.get("text_field", "text")
+        label_field = spec.get("label_field", "label")
+        label_map = spec.get("label_map")
+        sample_size = spec.get("sample_size")
+        seed = spec.get("seed")
+
+        fmt = spec.get("format") or _infer_format_from_url(url)
+        if not fmt:
+            raise ValueError(
+                f"OOD slice {slice_id!r}: cannot infer format from URL "
+                f"{url!r}; set 'format' explicitly in the manifest "
+                f"(parquet, jsonl, json, csv)"
+            )
+
+        cached = _download_with_sha_verify(url, sha, cache_path, slice_id=slice_id)
+        raw_df = _read_slice_dataframe(cached, fmt=fmt, slice_id=slice_id)
+        _check_required_columns(
+            raw_df,
+            (text_field, label_field),
+            context=f"OOD slice {slice_id!r}",
+        )
+
+        text_series = raw_df[text_field].astype(str)
+        label_series = _apply_label_map(raw_df[label_field], label_map, slice_id=slice_id)
+
+        out_df = pd.DataFrame(
+            {
+                "text": text_series.values,
+                "label": label_series.values,
+                "source": slice_id,
+                "row_id": [_sha256_of_text(t) for t in text_series],
+                "sha": f"sha256:{sha[len('sha256:') :] if sha.startswith('sha256:') else sha}",
+            }
+        )
+
+        if sample_size is not None:
+            if seed is None:
+                raise ValueError(
+                    f"OOD slice {slice_id!r}: sample_size set without seed; "
+                    f"reproducibility requires both"
+                )
+            n = min(int(sample_size), len(out_df))
+            out_df = out_df.sample(n=n, random_state=int(seed)).reset_index(drop=True)
+
+        parts.append(out_df)
+
+    if not parts:
+        # Edge case: empty slices= filter that resolves to nothing (only happens
+        # when slices=[] explicitly; unknown ids already raised KeyError).
+        return pd.DataFrame(columns=["text", "label", "source", "row_id", "sha"])
+    return pd.concat(parts, axis=0, ignore_index=True)
+
+
+@dataclass(frozen=True, slots=True)
+class OodManifestLoader:
+    """Wrap :func:`ood_dataset_from_manifest` as a :class:`DatasetLoader`.
+
+    Exposes the OOD-manifest loading pattern as a Protocol-compliant
+    loader so harness pipelines (``evaluate`` / ``evaluate_folded``) can
+    consume it via the same interface as :class:`DataFrameLoader` and
+    :class:`HFDatasetsLoader`. :meth:`load_splits` returns
+    ``{"all": <EvalSlice>}`` carrying the concatenated DataFrame
+    (with ``source`` as the strata column by default).
+
+    Parameters
+    ----------
+    yaml_path : str or pathlib.Path
+        Path to the OOD manifest YAML. See
+        :func:`ood_dataset_from_manifest` for schema.
+    slices : sequence of str or None, optional
+        Subset of slice ids. ``None`` (default) loads every slice.
+    cache_dir : str or pathlib.Path or None, optional
+        Override default cache directory.
+    name, description, cite_as, license, url : str, optional
+        Croissant metadata for :meth:`describe`. The manifest's own
+        top-level ``name`` / ``description`` / ``license`` fields are
+        used as fallback defaults.
+    """
+
+    yaml_path: str | Path
+    slices: Sequence[str] | None = None
+    cache_dir: str | Path | None = None
+    name: str = ""
+    description: str = ""
+    cite_as: str = ""
+    license: str = ""
+    url: str = ""
+
+    def load_splits(self) -> dict[str, EvalSlice]:
+        """Load the manifest and return ``{"all": EvalSlice}``.
+
+        The single ``all`` split carries every selected slice
+        concatenated; use the ``source`` column to filter or stratify
+        downstream.
+        """
+        df = ood_dataset_from_manifest(self.yaml_path, slices=self.slices, cache_dir=self.cache_dir)
+        return {
+            "all": EvalSlice(
+                name="all",
+                df=df,
+                description=self.description,
+                feature_col="text",
+                label_col="label",
+                strata_col="source",
+            )
+        }
+
+    def describe(self) -> dict[str, object]:
+        """Croissant-subset metadata with per-slice URI + sha256 in ``distribution``."""
+        manifest = _load_yaml_manifest(self.yaml_path)
+        all_slices: dict[str, dict[str, Any]] = manifest["slices"]
+        ids = list(all_slices.keys()) if self.slices is None else list(self.slices)
+        distribution: list[dict[str, object]] = []
+        for slice_id in ids:
+            spec = all_slices.get(slice_id, {})
+            distribution.append(
+                {
+                    "name": slice_id,
+                    "contentUrl": spec.get("url", ""),
+                    "sha256": spec.get("sha256", ""),
+                    "contentSize": 0,  # not pre-known from manifest
+                }
+            )
+
+        # Caller-supplied fields win; manifest top-level fills gaps.
+        def _pick(local: str, key: str) -> str:
+            if local:
+                return local
+            val = manifest.get(key, "")
+            return val if isinstance(val, str) else ""
+
+        return {
+            "name": _pick(self.name, "name") or f"OOD:{Path(self.yaml_path).name}",
+            "description": _pick(self.description, "description"),
+            "citeAs": self.cite_as,
+            "license": _pick(self.license, "license"),
+            "url": self.url,
+            "distribution": distribution,
+        }

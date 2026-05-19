@@ -156,8 +156,10 @@ _EXPORTS: dict[str, str] = {
     "DataFrameLoader": "eval_toolkit.loaders",
     "DatasetLoader": "eval_toolkit.loaders",
     "HFDatasetsLoader": "eval_toolkit.loaders",
+    "OodManifestLoader": "eval_toolkit.loaders",
     "ParquetGlobLoader": "eval_toolkit.loaders",
     "SingleSliceLoader": "eval_toolkit.loaders",
+    "ood_dataset_from_manifest": "eval_toolkit.loaders",
     # --- manifest ---
     "MANIFEST_SCHEMA_VERSION": "eval_toolkit.manifest",
     "RunManifest": "eval_toolkit.manifest",

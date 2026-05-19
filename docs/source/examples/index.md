@@ -22,6 +22,7 @@ runnable end-to-end under myst-nb (cells execute during
 | [`plot_roc_curve` walkthrough](plot_roc_curve_walkthrough.md) | ROC rendering with threshold marker + baseline overlay | `[plotting]` |
 | [`plot_pareto_frontier` walkthrough](plot_pareto_frontier_walkthrough.md) | Cost-vs-performance scatter with frontier overlay | `[plotting]` |
 | [`plot_slice_metric_heatmap` walkthrough](plot_slice_metric_heatmap_walkthrough.md) | `(row × col → metric)` grid with colorbar + annotations | `[plotting]` |
+| [OOD manifest loader](ood_dataset_from_manifest.md) | `ood_dataset_from_manifest` — declarative loader for multiple OOD slates with sha256 caching | `[dataframe]`, `[yaml]`, `[parquet]` |
 
 ## How these run
 
@@ -58,4 +59,5 @@ cross_corpus_contamination_scan
 plot_roc_curve_walkthrough
 plot_pareto_frontier_walkthrough
 plot_slice_metric_heatmap_walkthrough
+ood_dataset_from_manifest
 ```

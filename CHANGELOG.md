@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ood_dataset_from_manifest(yaml_path, slices=..., cache_dir=...)` —
+  declarative loader for multiple OOD eval slates (BIPIA, AgentDojo,
+  InjecAgent, NotInject, PINT, LLMail-Inject, …) into a single
+  unified DataFrame with columns `text` / `label` / `source` /
+  `row_id` / `sha`. Bytes are downloaded once, sha256-verified
+  against the manifest, and cached on-disk keyed by content hash
+  (default `~/.cache/eval-toolkit/ood/`). Closes #48 — drops the
+  per-source loader boilerplate carried by
+  `prompt-injection-portfolio` and `prompt-injection-detection-submission`.
+- `OodManifestLoader` — `DatasetLoader`-Protocol-compliant wrapper
+  around the factory, returning `{"all": EvalSlice}` with
+  `source` as the default strata column for harness pipelines.
+- `src/eval_toolkit/schemas/ood_manifest.v1.json` — Draft 2020-12
+  JSON schema for the OOD manifest YAML; auto-validated by
+  `uv run eval-toolkit schemas check`.
+
 ## [0.42.0] — 2026-05-19 — fit_isotonic_binary completes 4-calibrator family (closes #44)
 
 Final element of the binary scalar-prob calibrator family started by

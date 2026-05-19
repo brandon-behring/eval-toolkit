@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eval-toolkit/schemas/ood_manifest.v1.json",
+  "version": "1",
+  "title": "eval-toolkit OOD Manifest (v1)",
+  "description": "Schema for the YAML manifest consumed by eval_toolkit.loaders.ood_dataset_from_manifest. Declarative loading of multiple OOD eval slates (BIPIA, AgentDojo, InjecAgent, NotInject, PINT, LLMail-Inject, etc.) into a single unified DataFrame. Closes eval-toolkit#48.",
+  "type": "object",
+  "required": ["slices"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Optional manifest-level dataset name (used as describe() fallback)."
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional manifest-level description (used as describe() fallback)."
+    },
+    "license": {
+      "type": "string",
+      "description": "Optional SPDX license identifier for the aggregate manifest."
+    },
+    "slices": {
+      "type": "object",
+      "description": "Mapping of {slice_id: slice_spec}. Each slice becomes one batch of rows in the output DataFrame with source=<slice_id>.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["url", "sha256"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "HTTP(S) URL or local file path (file:// or bare) to the source file. Bytes are sha256-verified against the 'sha256' field before reading.",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Expected sha256 of the source bytes. Either bare 64-char hex or 'sha256:<hex>'. Mismatch raises ValueError at load time.",
+            "pattern": "^(sha256:)?[0-9a-fA-F]{64}$"
+          },
+          "format": {
+            "type": "string",
+            "description": "File format. If omitted, inferred from the URL's extension.",
+            "enum": ["parquet", "pq", "jsonl", "json", "csv"]
+          },
+          "text_field": {
+            "type": "string",
+            "description": "Column name in the source file that contains the text. Defaults to 'text'.",
+            "default": "text"
+          },
+          "label_field": {
+            "type": "string",
+            "description": "Column name in the source file that contains the label. Defaults to 'label'.",
+            "default": "label"
+          },
+          "label_map": {
+            "type": "object",
+            "description": "Optional mapping from source label values to ints (e.g. {clean: 0, injected: 1}). If omitted, labels are cast directly to int.",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "sample_size": {
+            "type": ["integer", "null"],
+            "description": "Optional row sub-sample size. null (or omitted) = all rows. If set, 'seed' is required.",
+            "minimum": 1
+          },
+          "seed": {
+            "type": ["integer", "null"],
+            "description": "Random seed for sub-sampling. Required if sample_size is set."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": true
+}
