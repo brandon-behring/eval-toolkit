@@ -40,6 +40,10 @@ _EXPORTS: dict[str, str] = {
     "WhitespaceInjection": "eval_toolkit.adversarial",
     "ZeroWidthSpaceInjection": "eval_toolkit.adversarial",
     "character_injection": "eval_toolkit.adversarial",
+    # --- probes ---
+    "ActivationDeltaProbe": "eval_toolkit.probes",
+    "ActivationExtractor": "eval_toolkit.probes",
+    "Probe": "eval_toolkit.probes",
     # --- analysis ---
     "CsvPredictionReader": "eval_toolkit.analysis",
     "JsonlPredictionReader": "eval_toolkit.analysis",

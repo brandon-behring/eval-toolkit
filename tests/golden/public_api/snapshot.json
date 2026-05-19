@@ -1,6 +1,8 @@
 {
   "__all__": [
     "ANCHOR_RE",
+    "ActivationDeltaProbe",
+    "ActivationExtractor",
     "AggregateEvidence",
     "BootstrapCI",
     "CISafeThresholdSelector",
@@ -75,6 +77,7 @@
     "PredictionArtifactRef",
     "PredictionColumns",
     "PredictionReader",
+    "Probe",
     "PunctuationInjection",
     "PurgedKFoldSplitter",
     "RECOMMENDED_SOURCE_ROLES",
@@ -236,6 +239,22 @@
       "doc_first_line": "Compiled regular expression object.",
       "kind": "value",
       "type": "re.Pattern"
+    },
+    "ActivationDeltaProbe": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "TaskTracker-style activation-delta linear probe.",
+      "kind": "class",
+      "signature": "(backbone: 'str', layer_index: 'int' = -1, aggregate: 'AggregateMode' = 'mean', clean_baseline_text: 'str' = '\\n', device: 'str' = 'cpu', cache_dir: 'str | Path | None' = None, classifier: 'Any' = None, extractor: 'ActivationExtractor | None' = None) -> None"
+    },
+    "ActivationExtractor": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Extract a hidden-state vector for each input text.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
     },
     "AggregateEvidence": {
       "bases": [
@@ -841,6 +860,14 @@
         "Protocol"
       ],
       "doc_first_line": "Reads manifest-referenced prediction artifacts into column arrays.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
+    "Probe": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Minimal probe surface: fit + predict on raw text inputs.",
       "kind": "class",
       "signature": "(*args, **kwargs)"
     },
