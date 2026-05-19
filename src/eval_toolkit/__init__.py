@@ -85,6 +85,7 @@ _EXPORTS: dict[str, str] = {
     "bayes_optimal_threshold": "eval_toolkit.calibration",
     "fit_beta_binary": "eval_toolkit.calibration",
     "fit_beta_calibrator": "eval_toolkit.calibration",
+    "fit_isotonic_binary": "eval_toolkit.calibration",
     "fit_isotonic_calibrator": "eval_toolkit.calibration",
     "fit_platt_binary": "eval_toolkit.calibration",
     "fit_platt_calibrator": "eval_toolkit.calibration",

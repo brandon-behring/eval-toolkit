@@ -55,6 +55,7 @@ __all__ = [
     "bayes_optimal_threshold",
     "fit_beta_binary",
     "fit_beta_calibrator",
+    "fit_isotonic_binary",
     "fit_isotonic_calibrator",
     "fit_platt_binary",
     "fit_platt_calibrator",
@@ -1292,6 +1293,83 @@ def fit_beta_binary(
         return out
 
     return (a, b, c), apply
+
+
+def fit_isotonic_binary(
+    y_true: np.ndarray, y_score: np.ndarray
+) -> tuple[None, Callable[[np.ndarray], np.ndarray]]:
+    r"""Binary-probability adapter for :func:`fit_isotonic_calibrator`.
+
+    Mirror of :func:`fit_temperature_binary` / :func:`fit_platt_binary`
+    / :func:`fit_beta_binary`: returns ``(None, apply)``. Isotonic
+    regression is non-parametric — there are no introspectable scalar
+    parameters to log alongside the apply callable — so the params
+    slot is :obj:`None`.
+
+    The ``None``-in-params slot makes "non-parametric" unambiguous
+    while preserving the canonical ``(params_tuple, apply)`` shape
+    shared by the four binary scalar-prob calibrators. Consumer code
+    can iterate over the full family with one idiom:
+
+    .. code-block:: text
+
+        CALIBRATORS = {
+            "temperature": fit_temperature_binary,
+            "isotonic":    fit_isotonic_binary,
+            "platt":       fit_platt_binary,
+            "beta":        fit_beta_binary,
+        }
+        for name, fit_fn in CALIBRATORS.items():
+            params, apply = fit_fn(y_val, p_val)
+            calibrated = apply(p_test)
+            if params is not None:
+                manifest.record(f"{name}_params", params)
+
+    Added v0.42.0 (closes #44) to complete the binary scalar-prob
+    calibrator family started by ``fit_temperature_binary`` (v0.35.0).
+
+    Parameters
+    ----------
+    y_true : np.ndarray, shape (n,)
+        Binary validation labels in ``{0, 1}``.
+    y_score : np.ndarray, shape (n,)
+        Validation predicted probabilities of class 1, in [0, 1].
+
+    Returns
+    -------
+    tuple
+        ``(None, apply)`` — ``None`` in the params slot (isotonic is
+        non-parametric); ``apply`` maps probabilities through the
+        fitted monotonic step function.
+
+    Raises
+    ------
+    ValueError
+        On shape mismatch, empty input, non-finite scores, or
+        single-class ``y_true`` (propagated from
+        :func:`fit_isotonic_calibrator`).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> rng = np.random.default_rng(0)
+    >>> n = 500
+    >>> y_val = rng.binomial(1, 0.3, size=n).astype(int)
+    >>> p_val = np.clip(y_val * 0.6 + rng.normal(0, 0.2, n), 0.01, 0.99)
+    >>> params, apply = fit_isotonic_binary(y_val, p_val)
+    >>> params is None
+    True
+    >>> apply(np.array([0.1, 0.5, 0.9])).shape == (3,)
+    True
+
+    See Also
+    --------
+    fit_isotonic_calibrator : underlying non-parametric fitter.
+    fit_temperature_binary : 1-parameter sibling.
+    fit_platt_binary : 2-parameter sibling.
+    fit_beta_binary : 3-parameter sibling.
+    """
+    return None, fit_isotonic_calibrator(y_true, y_score)
 
 
 def fit_temperature_oracle(

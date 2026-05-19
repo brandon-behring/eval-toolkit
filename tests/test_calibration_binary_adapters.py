@@ -12,6 +12,8 @@ import pytest
 from eval_toolkit import (
     fit_beta_binary,
     fit_beta_calibrator,
+    fit_isotonic_binary,
+    fit_isotonic_calibrator,
     fit_platt_binary,
     fit_platt_calibrator,
     fit_temperature_binary,
@@ -160,6 +162,66 @@ def test_beta_binary_apply_rejects_non_finite_test_scores(
         apply(np.array([0.5, np.nan, 0.8]))
 
 
+# ---------- fit_isotonic_binary ----------
+
+
+@pytest.mark.unit
+def test_isotonic_binary_returns_none_params_and_apply(
+    synthetic_binary_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Isotonic is non-parametric → params slot is None."""
+    y, p = synthetic_binary_data
+    params, apply = fit_isotonic_binary(y, p)
+    assert params is None
+    assert callable(apply)
+
+
+@pytest.mark.unit
+def test_isotonic_binary_apply_returns_same_shape(
+    synthetic_binary_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    y, p = synthetic_binary_data
+    _, apply = fit_isotonic_binary(y, p)
+    test = np.array([0.1, 0.5, 0.9])
+    out = apply(test)
+    assert out.shape == test.shape
+    assert (out >= 0.0).all() and (out <= 1.0).all()
+
+
+@pytest.mark.unit
+def test_isotonic_binary_apply_matches_underlying_calibrator(
+    synthetic_binary_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """fit_isotonic_binary apply should match fit_isotonic_calibrator output."""
+    y, p = synthetic_binary_data
+    _, apply = fit_isotonic_binary(y, p)
+    canonical_apply = fit_isotonic_calibrator(y, p)
+    test = np.linspace(0.05, 0.95, 20)
+    np.testing.assert_allclose(apply(test), canonical_apply(test))
+
+
+@pytest.mark.unit
+def test_isotonic_binary_rejects_single_class() -> None:
+    y_single = np.zeros(50, dtype=int)
+    p = np.random.default_rng(0).uniform(0.0, 1.0, 50)
+    with pytest.raises(ValueError):
+        fit_isotonic_binary(y_single, p)
+
+
+@pytest.mark.unit
+def test_isotonic_binary_monotone(
+    synthetic_binary_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Isotonic regression is monotone non-decreasing in the score."""
+    y, p = synthetic_binary_data
+    _, apply = fit_isotonic_binary(y, p)
+    test = np.linspace(0.05, 0.95, 50)
+    out = apply(test)
+    # Allow tiny numerical noise but enforce non-decreasing trend
+    deltas = np.diff(out)
+    assert (deltas >= -1e-12).all(), "isotonic should be non-decreasing"
+
+
 # ---------- consistency across the calibrator family ----------
 
 
@@ -167,14 +229,15 @@ def test_beta_binary_apply_rejects_non_finite_test_scores(
 def test_all_four_binary_adapters_have_consistent_shape(
     synthetic_binary_data: tuple[np.ndarray, np.ndarray],
 ) -> None:
-    """temperature_binary, platt_binary, beta_binary all return ``(params, apply)``.
+    """temperature, isotonic, platt, beta all return ``(params, apply)``.
 
     Documents the audit-battery contract for the 4-calibrator pattern.
     """
     y, p = synthetic_binary_data
-    # All return (params, apply); apply is a callable taking (n,) -> (n,)
+    # All return (params, apply); apply is a callable taking (n,) -> (n,).
     for name, fitter in [
         ("temperature", fit_temperature_binary),
+        ("isotonic", fit_isotonic_binary),
         ("platt", fit_platt_binary),
         ("beta", fit_beta_binary),
     ]:
@@ -183,6 +246,38 @@ def test_all_four_binary_adapters_have_consistent_shape(
         out = apply(np.array([0.1, 0.5, 0.9]))
         assert out.shape == (3,), f"{name}: apply output shape mismatch"
         assert (out >= 0.0).all() and (out <= 1.0).all(), f"{name}: output not in [0,1]"
+
+
+@pytest.mark.unit
+def test_consumer_idiom_iterating_all_four_calibrators(
+    synthetic_binary_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """End-to-end consumer idiom: iterate the 4-element family with one shape.
+
+    Matches the calibration-battery pattern in
+    ``prompt-injection-detection-prototype/src/eval/calibration_battery.py``
+    (ADR-056). The ``params is not None`` check distinguishes parametric
+    from non-parametric in a single conditional.
+    """
+    y, p = synthetic_binary_data
+    fitters = {
+        "temperature": fit_temperature_binary,
+        "isotonic": fit_isotonic_binary,
+        "platt": fit_platt_binary,
+        "beta": fit_beta_binary,
+    }
+    p_test = np.linspace(0.05, 0.95, 30)
+    recorded_params: dict[str, object] = {}
+    calibrated: dict[str, np.ndarray] = {}
+    for name, fit_fn in fitters.items():
+        params, apply = fit_fn(y, p)
+        calibrated[name] = apply(p_test)
+        if params is not None:
+            recorded_params[name] = params
+    # Three of four have inspectable params; isotonic is None.
+    assert set(recorded_params.keys()) == {"temperature", "platt", "beta"}
+    # All four produced calibrated outputs of matching shape.
+    assert all(out.shape == p_test.shape for out in calibrated.values())
 
 
 @pytest.mark.unit
