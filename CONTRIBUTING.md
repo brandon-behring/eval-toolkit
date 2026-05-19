@@ -155,30 +155,7 @@ for the checklist if you're considering wiring a new site.
    pre-fill the body; fill in Summary / Testing / CHANGELOG / Risk
 4. CI must be green:
    - `CI` workflow (lint + type + tests across ubuntu/macos/windows on Python 3.13)
-   - `v4 sibling smoke` (advisory during the trial; see "Downstream contract"
-     below) — a red v4-smoke check needs diagnosis but doesn't block merge
-     during the trial period
 5. Reference the issue with `Closes #N` if applicable
-
-## Downstream contract: v4 sibling-smoke
-
-eval-toolkit has a live downstream consumer: `brandon-behring/prompt-injection-v4`.
-The `.github/workflows/v4-smoke.yml` workflow checks out v4 at `main` and runs
-its fast `-m smoke` suite against this repo's current PR head — catching contract
-regressions at PR time rather than after-merge.
-
-**HF_TOKEN secret:** v4's smoke fixtures load gated HuggingFace datasets. The
-workflow needs an `HF_TOKEN` repo secret to be set at:
-`https://github.com/brandon-behring/eval-toolkit/settings/secrets/actions`.
-
-The workflow is **advisory** (`continue-on-error: true`) during a 2–3 week
-trial to characterize the false-positive rate (independent v4 main breakage,
-HF rate-limits). It will be promoted to a required gate after the trial. If
-your PR sees a red v4-smoke check, comment with the diagnosis — workflow
-hiccup, real contract break, or v4 main pre-existing breakage.
-
-See `README.md`'s "Downstream contract testing (v4 sibling-smoke)" section
-for the full design rationale.
 
 ## Release flow
 
