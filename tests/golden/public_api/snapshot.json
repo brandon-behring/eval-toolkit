@@ -83,6 +83,7 @@
     "RECOMMENDED_SOURCE_ROLES",
     "RUN_RESULT_SCHEMA_VERSION",
     "RecallAtFprResult",
+    "RecallAtLowFPR",
     "RunManifest",
     "RunResult",
     "SINGLE_CLASS_INCOMPATIBLE_METRICS",
@@ -132,7 +133,10 @@
     "cross_dedup",
     "cross_validate_metric",
     "cv_clt_ci",
+    "datamark",
+    "delimit",
     "delong_roc_variance",
+    "encode",
     "error_metric",
     "evaluate",
     "evaluate_claims",
@@ -220,6 +224,7 @@
     "skipped_metric",
     "source_role_gate",
     "split_provenance_config",
+    "spotlighting",
     "stratified_recall",
     "strict_artifact_gate",
     "validate_manifest",
@@ -907,6 +912,11 @@
       "kind": "class",
       "signature": "(threshold: 'float', recall: 'float', actual_fpr: 'float', n_val_neg: 'int', fp: 'int', tn: 'int') -> None"
     },
+    "RecallAtLowFPR": {
+      "doc_first_line": "Construct a Recall@LowFPR loss module.",
+      "kind": "function",
+      "signature": "(fpr_target: 'float' = 0.01, fpr_smoothing_beta: 'float' = 10.0, pos_weight: 'float' = 1.0, reduction: 'ReductionMode' = 'mean') -> 'Any'"
+    },
     "RunManifest": {
       "bases": [
         "object"
@@ -1236,10 +1246,25 @@
       "kind": "function",
       "signature": "(fold_metrics: 'np.ndarray', *, confidence: 'float' = 0.95) -> 'BootstrapCI'"
     },
+    "datamark": {
+      "doc_first_line": "Prepend ``marker`` before each non-leading whitespace run.",
+      "kind": "function",
+      "signature": "(text: 'str', *, marker: 'str' = '^') -> 'str'"
+    },
+    "delimit": {
+      "doc_first_line": "Wrap ``text`` in unusual delimiters so the LLM can spot the boundary.",
+      "kind": "function",
+      "signature": "(text: 'str', *, delimiter: 'str' = '<<', end: 'str | None' = None) -> 'str'"
+    },
     "delong_roc_variance": {
       "doc_first_line": "DeLong's variance of the paired ROC-AUC difference.",
       "kind": "function",
       "signature": "(y_true: 'np.ndarray', y_score_a: 'np.ndarray', y_score_b: 'np.ndarray') -> 'DeLongResult'"
+    },
+    "encode": {
+      "doc_first_line": "Encode ``text`` so the LLM treats the result as data, not instructions.",
+      "kind": "function",
+      "signature": "(text: 'str', *, encoding: \"Literal['base64']\" = 'base64') -> 'str'"
     },
     "error_metric": {
       "doc_first_line": "Return a structured errored-metric payload.",
@@ -1675,6 +1700,11 @@
       "doc_first_line": "Walk a config dict and normalize Path-typed values to repo-relative strings.",
       "kind": "function",
       "signature": "(config: 'Mapping[str, Any]', repo_root: 'Path | str | None' = None, *, path_keys: 'tuple[str, ...]' = ('path', 'dir', 'file', 'splits_dir', 'model_path')) -> 'dict[str, Any]'"
+    },
+    "spotlighting": {
+      "doc_first_line": "A simple attribute-based namespace.",
+      "kind": "value",
+      "type": "types.SimpleNamespace"
     },
     "stratified_recall": {
       "doc_first_line": "Recall (TPR) per categorical stratum.",

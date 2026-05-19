@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `eval_toolkit.preprocessing` — new module with 3 Spotlighting
+  structural-defense variants from Hines et al. 2024
+  (arXiv 2403.14720): `delimit(text, delimiter='<<')`,
+  `datamark(text, marker='^')`, `encode(text, encoding='base64')`,
+  plus a `sweep(texts, variants=..., kwargs=...)` batch wrapper that
+  returns a `(N*3)`-row DataFrame. Includes a `spotlighting`
+  SimpleNamespace exposing the upstream issue's function-style API
+  (`spotlighting.delimit(text)`, etc.). Base-install safe (pure
+  stdlib). Closes #51.
+- `eval_toolkit.losses` — new module with `RecallAtLowFPR` — the
+  Meta Prompt Guard 2 (PG2) training recipe: a differentiable
+  approximation of recall-at-fixed-FPR via soft-rank, returning a
+  scalar `torch.nn.Module` loss for use in standard training loops.
+  Optimizes detector ranking at a constrained operating point
+  (e.g. `fpr_target=0.01` → "maximize recall while keeping FPR ≤ 1%").
+  Closes #50.
+- New optional extra `[losses] = torch>=2.0`. Granular per the v0.43
+  plan Decision 4 — separated from `[probes]` so callers wanting only
+  the loss don't have to install the larger transformers stack.
+  Shares the torch version pin with `[probes]`.
+
 ## [0.43.0] — 2026-05-19 — P1 batch: OOD manifest loader + character_injection sweep + ActivationDeltaProbe (closes #48, #49, #53)
 
 ### Added
