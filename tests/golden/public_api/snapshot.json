@@ -1,9 +1,12 @@
 {
   "__all__": [
+    "ADVANCED_TECHNIQUES",
+    "ALL_TECHNIQUES",
     "ANCHOR_RE",
     "ActivationDeltaProbe",
     "ActivationExtractor",
     "AggregateEvidence",
+    "BidiRTLInjection",
     "BootstrapCI",
     "CISafeThresholdSelector",
     "CORE_TECHNIQUES",
@@ -54,6 +57,7 @@
     "HFDatasetsLoader",
     "HoldoutSplitter",
     "HomoglyphSubstitution",
+    "InvisibleCharsInjection",
     "JaccardNgramStrategy",
     "JsonlPredictionReader",
     "LabelConflictCheck",
@@ -105,6 +109,8 @@
     "SourceRoleRecord",
     "Splitter",
     "StratifiedKFoldSplitter",
+    "SynonymSubstitution",
+    "TagStrippingInjection",
     "TargetFPRSelector",
     "TargetPrecisionSelector",
     "TargetRecallSelector",
@@ -117,7 +123,9 @@
     "ThresholdSelector",
     "ThresholdedMetricFn",
     "TimeSeriesSplitter",
+    "TokenSplitting",
     "TokenizationLeakageCheck",
+    "UnicodeNormalization",
     "Versioned",
     "WhitespaceInjection",
     "WilsonInterval",
@@ -243,6 +251,16 @@
     "write_run_result"
   ],
   "entries": {
+    "ADVANCED_TECHNIQUES": {
+      "doc_first_line": "Built-in immutable sequence.",
+      "kind": "value",
+      "type": "tuple"
+    },
+    "ALL_TECHNIQUES": {
+      "doc_first_line": "Built-in immutable sequence.",
+      "kind": "value",
+      "type": "tuple"
+    },
     "ANCHOR_RE": {
       "doc_first_line": "Compiled regular expression object.",
       "kind": "value",
@@ -276,6 +294,14 @@
       "doc_first_line": "Typed status for aggregate rows or summaries.",
       "kind": "class",
       "signature": "(status: 'AggregateStatus', method: 'str', axes: 'tuple[EvidenceAxis, ...]' = (), notes: 'str' = '', metadata: 'dict[str, object]' = <factory>) -> None"
+    },
+    "BidiRTLInjection": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Wrap the input in a Unicode bidi-RTL override block.",
+      "kind": "class",
+      "signature": "(name: 'str' = 'bidi_rtl') -> None"
     },
     "BootstrapCI": {
       "bases": [
@@ -681,6 +707,14 @@
       "doc_first_line": "Substitute Latin characters with Cyrillic/Greek homoglyph lookalikes.",
       "kind": "class",
       "signature": "(ratio: 'float' = 0.3, seed: 'int' = 42, name: 'str' = 'homoglyph') -> None"
+    },
+    "InvisibleCharsInjection": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Insert invisible / zero-width Unicode characters between characters.",
+      "kind": "class",
+      "signature": "(ratio: 'float' = 0.5, seed: 'int' = 42, name: 'str' = 'invisible_chars') -> None"
     },
     "JaccardNgramStrategy": {
       "bases": [
@@ -1149,6 +1183,22 @@
       "kind": "class",
       "signature": "(k: 'int' = 5, shuffle: 'bool' = True, seed: 'int' = 42) -> None"
     },
+    "SynonymSubstitution": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Replace whitelisted words with deterministic synonyms.",
+      "kind": "class",
+      "signature": "(ratio: 'float' = 1.0, seed: 'int' = 42, name: 'str' = 'synonym') -> None"
+    },
+    "TagStrippingInjection": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Strip HTML/XML-like tags from the input.",
+      "kind": "class",
+      "signature": "(name: 'str' = 'tag_strip') -> None"
+    },
     "TargetFPRSelector": {
       "bases": [
         "object"
@@ -1247,6 +1297,14 @@
       "kind": "class",
       "signature": "(k: 'int' = 5, time_col: 'str | None' = None) -> None"
     },
+    "TokenSplitting": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Insert a single space inside each long enough word.",
+      "kind": "class",
+      "signature": "(min_word_length: 'int' = 5, ratio: 'float' = 1.0, seed: 'int' = 42, name: 'str' = 'token_split') -> None"
+    },
     "TokenizationLeakageCheck": {
       "bases": [
         "object"
@@ -1254,6 +1312,14 @@
       "doc_first_line": "Detect duplicates that collide post-tokenization.",
       "kind": "class",
       "signature": "(tokenizer: 'Callable[[str], Mapping[str, object]]', target_splits: 'Sequence[str] | None' = None, severity: 'Severity' = 'error') -> None"
+    },
+    "UnicodeNormalization": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Apply a Unicode normalization form to the input.",
+      "kind": "class",
+      "signature": "(form: 'str' = 'NFKC', name: 'str' = 'unicode_normalize') -> None"
     },
     "Versioned": {
       "bases": [

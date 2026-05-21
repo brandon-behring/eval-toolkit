@@ -17,6 +17,29 @@ into the v0.47.0 entry at release-prep time.
   shape across preprocessing (defence) and adversarial (attack) strategies so
   the v0.47 top-level :func:`sweep` (next sub-PR) can mix them in one call. The
   9th strict Tier-2 Protocol per ADR 0003.
+- **Advanced 6 character-injection techniques** (plan §4F, Decision Q11→11.3) —
+  closes the v0.43.0 CHANGELOG forward-look that referenced these as "scheduled
+  for v0.43.1" (a version that never shipped). Each satisfies the top-level
+  :class:`TextTransform` Protocol structurally; all are frozen + ``slots=True``
+  dataclasses with deterministic behaviour under their ``seed`` kwarg where
+  applicable:
+
+    - :class:`BidiRTLInjection` — wrap input in ``U+202E … U+202C``
+      RIGHT-TO-LEFT OVERRIDE block.
+    - :class:`TagStrippingInjection` — strip HTML/XML-like ``<…>`` tags
+      (idempotent).
+    - :class:`SynonymSubstitution` — replace whitelisted prompt-injection-
+      relevant function words / verbs with semantic-preserving synonyms.
+    - :class:`TokenSplitting` — insert a single space inside long enough
+      words; forces subword tokenizers to re-segment.
+    - :class:`UnicodeNormalization` — NFC / NFD / NFKC / NFKD; default NFKC
+      folds compatibility chars (e.g., fullwidth ``ＡＢＣ`` → ``ABC``).
+    - :class:`InvisibleCharsInjection` — sample from the 5-element invisible-
+      code-point set (ZWSP, ZWNJ, ZWJ, word joiner, BOM) — distinct from the
+      single-codepoint :class:`ZeroWidthSpaceInjection`.
+
+  Also exported: ``ADVANCED_TECHNIQUES`` (6-tuple) and ``ALL_TECHNIQUES``
+  (12-tuple = core 6 + advanced 6).
 - **Top-level :func:`sweep`** — single ``TextTransform`` enumeration entry
   point (Decision K + Decision D + Audit R5-F3). Replaces the per-module
   ``adversarial.sweep`` + ``preprocessing.sweep`` (those are removed in a

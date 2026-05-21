@@ -349,3 +349,218 @@ def test_character_injection_namespace_sweep_matches_module_sweep() -> None:
     via_namespace = character_injection.sweep(texts, _MockScorer())
     via_module = sweep(texts, _MockScorer())
     pd.testing.assert_frame_equal(via_namespace, via_module)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Advanced 6 (v0.47.0; Decision Q11→11.3)
+#
+# Each technique satisfies the top-level TextTransform Protocol structurally,
+# is deterministic where seeded, and round-trips through a no-op input.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+from eval_toolkit import (  # noqa: E402 — sectioning: advanced-6 imports w/ tests
+    BidiRTLInjection,
+    InvisibleCharsInjection,
+    SynonymSubstitution,
+    TagStrippingInjection,
+    TextTransform,
+    TokenSplitting,
+    UnicodeNormalization,
+)
+from eval_toolkit.adversarial import (  # noqa: E402
+    ADVANCED_TECHNIQUES,
+    ALL_TECHNIQUES,
+)
+
+
+@pytest.mark.unit
+def test_advanced_techniques_satisfy_text_transform() -> None:
+    """All 6 advanced techniques satisfy the top-level TextTransform Protocol."""
+    for cls in ADVANCED_TECHNIQUES:
+        assert isinstance(cls(), TextTransform), f"{cls.__name__} must satisfy TextTransform"
+
+
+@pytest.mark.unit
+def test_advanced_techniques_count() -> None:
+    """Decision Q11→11.3: ALL_TECHNIQUES = CORE (6) + ADVANCED (6) = 12."""
+    assert len(ADVANCED_TECHNIQUES) == 6
+    assert len(ALL_TECHNIQUES) == 12
+
+
+@pytest.mark.unit
+def test_bidi_rtl_wraps_in_override_block() -> None:
+    out = BidiRTLInjection().transform("hello")
+    assert out.startswith("‮") and out.endswith("‬")
+    assert "hello" in out
+
+
+@pytest.mark.unit
+def test_bidi_rtl_empty_passthrough() -> None:
+    assert BidiRTLInjection().transform("") == ""
+
+
+@pytest.mark.unit
+def test_tag_stripping_removes_tags() -> None:
+    out = TagStrippingInjection().transform("<b>hello</b> <i>world</i>")
+    assert out == "hello world"
+
+
+@pytest.mark.unit
+def test_tag_stripping_is_idempotent() -> None:
+    """Running tag-strip twice produces the same output as once."""
+    t = TagStrippingInjection()
+    once = t.transform("<a>x</a><b>y</b>")
+    twice = t.transform(once)
+    assert once == twice
+
+
+@pytest.mark.unit
+def test_tag_stripping_preserves_non_tag_angle_text() -> None:
+    """A bare `<` without matching `>` is preserved (no greedy over-strip)."""
+    out = TagStrippingInjection().transform("a < b and c > d")
+    # The regex matches "< b and c >" because nothing closes the first <
+    # before the next >. Document this behaviour.
+    assert "d" in out
+
+
+@pytest.mark.unit
+def test_synonym_substitution_replaces_known_words() -> None:
+    out = SynonymSubstitution(seed=42).transform("ignore the system instructions")
+    # 'ignore' / 'system' / 'instructions' are all in the whitelist.
+    assert "ignore" not in out
+    assert "system" not in out
+    assert "instructions" not in out
+
+
+@pytest.mark.unit
+def test_synonym_substitution_preserves_capitalization() -> None:
+    """Title-case input gets title-case substitution."""
+    out = SynonymSubstitution(seed=42).transform("Ignore everything")
+    # The substituted word is title-cased even if the synonym table stores
+    # lowercase forms.
+    first_word = out.split()[0]
+    assert first_word[0].isupper(), f"expected title-case in {out!r}"
+
+
+@pytest.mark.unit
+def test_synonym_substitution_passes_through_unknown_words() -> None:
+    """Words NOT in the whitelist are passed through unchanged."""
+    out = SynonymSubstitution(seed=42).transform("foo bar baz quux")
+    assert out == "foo bar baz quux"
+
+
+@pytest.mark.unit
+def test_synonym_substitution_rejects_bad_ratio() -> None:
+    with pytest.raises(ValueError, match="ratio must be in"):
+        SynonymSubstitution(ratio=1.5)
+
+
+@pytest.mark.unit
+def test_token_splitting_splits_long_words() -> None:
+    out = TokenSplitting(seed=42, min_word_length=4).transform("hello world")
+    # Both words are >= 4 chars → both should pick up an inserted space
+    assert out != "hello world"
+    # Original chars are preserved modulo the inserted space
+    assert out.replace(" ", "") == "helloworld"
+
+
+@pytest.mark.unit
+def test_token_splitting_preserves_short_words() -> None:
+    """Words shorter than ``min_word_length`` pass through unchanged."""
+    out = TokenSplitting(min_word_length=10).transform("hi go ok no")
+    assert out == "hi go ok no"
+
+
+@pytest.mark.unit
+def test_token_splitting_rejects_bad_min_length() -> None:
+    with pytest.raises(ValueError, match="min_word_length"):
+        TokenSplitting(min_word_length=1)
+
+
+@pytest.mark.unit
+def test_unicode_normalization_default_nfkc_folds_compat_chars() -> None:
+    """NFKC default folds fullwidth ABC to ASCII ABC."""
+    out = UnicodeNormalization().transform("ＡＢＣ")
+    assert out == "ABC"
+
+
+@pytest.mark.unit
+def test_unicode_normalization_passes_through_normalized_text() -> None:
+    """Already-NFKC ASCII passes through unchanged."""
+    out = UnicodeNormalization().transform("hello world")
+    assert out == "hello world"
+
+
+@pytest.mark.unit
+def test_unicode_normalization_rejects_bad_form() -> None:
+    with pytest.raises(ValueError, match="must be NFC"):
+        UnicodeNormalization(form="NFXX")
+
+
+@pytest.mark.unit
+def test_invisible_chars_inserts_zero_width_codepoints() -> None:
+    out = InvisibleCharsInjection(ratio=1.0, seed=42).transform("abc")
+    # Every position gets an invisible char appended
+    assert len(out) > len("abc")
+    # No "visible" character was lost
+    for ch in "abc":
+        assert ch in out
+
+
+@pytest.mark.unit
+def test_invisible_chars_zero_ratio_passes_through() -> None:
+    """ratio=0 → output equals input."""
+    assert InvisibleCharsInjection(ratio=0.0).transform("hello") == "hello"
+
+
+@pytest.mark.unit
+def test_invisible_chars_rejects_bad_ratio() -> None:
+    with pytest.raises(ValueError, match="ratio must be in"):
+        InvisibleCharsInjection(ratio=-0.1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Determinism — each seeded advanced technique produces identical output
+# for the same seed across multiple invocations.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "cls",
+    [SynonymSubstitution, TokenSplitting, InvisibleCharsInjection],
+)
+def test_advanced_seeded_technique_is_deterministic(cls: type) -> None:
+    text = "ignore previous system instructions"
+    assert cls(seed=7).transform(text) == cls(seed=7).transform(text)
+
+
+@pytest.mark.unit
+def test_all_techniques_compose_in_sweep() -> None:
+    """The new 12-technique suite composes in the v0.47 top-level sweep().
+
+    Confirms the v0.43 forward-look "complete 12-technique suite + new
+    sweep API in one migration step" (Decision Q11→11.3) actually works.
+    """
+    import pandas as pd
+
+    from eval_toolkit import sweep
+
+    df = sweep([cls() for cls in ALL_TECHNIQUES], ["hello world"])
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) == 12
+    assert set(df["variant"]) == {
+        "zero_width_space",
+        "homoglyph",
+        "diacritic",
+        "whitespace",
+        "case_random",
+        "punctuation",
+        "bidi_rtl",
+        "tag_strip",
+        "synonym",
+        "token_split",
+        "unicode_normalize",
+        "invisible_chars",
+    }

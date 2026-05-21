@@ -31,12 +31,20 @@ _logging.getLogger("eval_toolkit").addHandler(_logging.NullHandler())
 # tests/golden/public_api/ reads dict keys + values, not comments.
 _EXPORTS: dict[str, str] = {
     # --- adversarial ---
+    "ADVANCED_TECHNIQUES": "eval_toolkit.adversarial",
+    "ALL_TECHNIQUES": "eval_toolkit.adversarial",
+    "BidiRTLInjection": "eval_toolkit.adversarial",
     "CORE_TECHNIQUES": "eval_toolkit.adversarial",
     "CaseRandomization": "eval_toolkit.adversarial",
     "CharacterInjectionStrategy": "eval_toolkit.adversarial",
     "DiacriticInjection": "eval_toolkit.adversarial",
     "HomoglyphSubstitution": "eval_toolkit.adversarial",
+    "InvisibleCharsInjection": "eval_toolkit.adversarial",
     "PunctuationInjection": "eval_toolkit.adversarial",
+    "SynonymSubstitution": "eval_toolkit.adversarial",
+    "TagStrippingInjection": "eval_toolkit.adversarial",
+    "TokenSplitting": "eval_toolkit.adversarial",
+    "UnicodeNormalization": "eval_toolkit.adversarial",
     "WhitespaceInjection": "eval_toolkit.adversarial",
     "ZeroWidthSpaceInjection": "eval_toolkit.adversarial",
     "character_injection": "eval_toolkit.adversarial",
