@@ -302,6 +302,8 @@ _EXPORTS: dict[str, str] = {
     "MetricSpec": "eval_toolkit._scorecard",
     "Scorecard": "eval_toolkit._scorecard",
     "scorecard": "eval_toolkit._scorecard",
+    # --- sweep (top-level v0.47 unification — Decision K + Decision D) ---
+    "sweep": "eval_toolkit.sweep",
 }
 
 __all__ = ["__version__", *_EXPORTS.keys()]

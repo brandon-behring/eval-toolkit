@@ -17,6 +17,26 @@ into the v0.47.0 entry at release-prep time.
   shape across preprocessing (defence) and adversarial (attack) strategies so
   the v0.47 top-level :func:`sweep` (next sub-PR) can mix them in one call. The
   9th strict Tier-2 Protocol per ADR 0003.
+- **Top-level :func:`sweep`** — single ``TextTransform`` enumeration entry
+  point (Decision K + Decision D + Audit R5-F3). Replaces the per-module
+  ``adversarial.sweep`` + ``preprocessing.sweep`` (those are removed in a
+  subsequent sub-PR of this release). New contract:
+
+    - ``sweep(strategies, texts)`` → neutral DataFrame with ``text_id`` /
+      ``variant`` / ``transformed_text`` columns. Pure text-transform
+      enumeration; defence + attack strategies compose freely.
+    - ``sweep(..., scorer=...)`` → also emits ``original_score`` /
+      ``transformed_score`` columns (single batched scorer call per
+      strategy, not per-row).
+    - ``sweep(..., scorer=..., attack_threshold=t)`` → also emits ``asr``
+      (per-row attack-success flag). Explicit threshold REQUIRED to
+      materialize ``asr``; no magic ``threshold=0.5`` default.
+      ``attack_threshold`` without ``scorer`` raises ``ValueError``.
+
+  Parity tests against the existing module-level sweeps ship in this
+  sub-PR (``tests/test_sweep.py``) and prove the v0.47 consolidation
+  produces identical transformed-text rows for the 6 core character-
+  injection techniques + the 3 spotlighting variants.
 - **3 preprocessing dataclasses** (``DelimitVariant``, ``DatamarkVariant``,
   ``EncodeVariant``) in :mod:`eval_toolkit.preprocessing`. Frozen +
   ``slots=True`` thin wrappers over the existing :func:`delimit` /

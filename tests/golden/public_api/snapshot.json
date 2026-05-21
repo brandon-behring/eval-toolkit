@@ -229,6 +229,7 @@
     "spotlighting",
     "stratified_recall",
     "strict_artifact_gate",
+    "sweep",
     "validate_manifest",
     "validate_payload",
     "validate_prediction_artifact_ref",
@@ -1827,6 +1828,11 @@
       "doc_first_line": "Fail if result or manifest contains non-finite numeric values.",
       "kind": "function",
       "signature": "(*, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "sweep": {
+      "doc_first_line": "Apply each ``TextTransform`` strategy to each text; one row per pair.",
+      "kind": "function",
+      "signature": "(strategies: 'Sequence[TextTransform]', texts: 'Sequence[str]', *, scorer: 'Scorer | None' = None, attack_threshold: 'float | None' = None) -> 'pd.DataFrame'"
     },
     "validate_manifest": {
       "doc_first_line": "Validate a serialized ``RunManifest`` payload.",
