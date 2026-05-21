@@ -164,7 +164,9 @@ def test_invalid_ratio_raises_valueerror(strategy_cls: type[Any], ratio: float) 
 @pytest.mark.parametrize("kwarg", ["pad_ratio", "substitute_ratio"])
 def test_whitespace_invalid_ratio_raises(kwarg: str) -> None:
     with pytest.raises(ValueError):
-        WhitespaceInjection(**{kwarg: 1.5})
+        # Dynamic kwarg dispatch — runtime accepts both float kwargs;
+        # mypy sees `**dict[str, float]` and can't pick the right slot.
+        WhitespaceInjection(**{kwarg: 1.5})  # type: ignore[arg-type]
 
 
 # ----------------------------------------------------------------------------

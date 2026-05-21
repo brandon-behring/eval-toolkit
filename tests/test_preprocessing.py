@@ -274,7 +274,7 @@ def test_variants_are_frozen() -> None:
 
     for variant in (DelimitVariant(), DatamarkVariant(), EncodeVariant()):
         with _pytest.raises((AttributeError, dataclasses.FrozenInstanceError)):
-            variant.name = "mutated"  # type: ignore[misc]
+            variant.name = "mutated"
 
 
 import dataclasses  # noqa: E402 — used in test_variants_are_frozen

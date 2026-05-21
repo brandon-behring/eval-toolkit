@@ -92,7 +92,8 @@ jobs:
           source .venv-base/bin/activate
           python -c "import eval_toolkit; print('version:', eval_toolkit.__version__)"
           python -c "from eval_toolkit import evaluate, RunResult, EvalSlice"
-          python -c "from eval_toolkit import pr_auc, bootstrap_ci, BootstrapCI"
+          python -c "from eval_toolkit import scorecard, Scorecard, MetricSpec, metric_specs, bootstrap_ci, BootstrapCI, sweep, TextTransform"
+          python -c "from eval_toolkit.metrics import pr_auc, brier_score"  # v0.47: scalars moved to submodule (ADR 0002)
           python -c "import eval_toolkit.harness"
           python -c "import eval_toolkit.loaders"
           python -c "import eval_toolkit.leakage"

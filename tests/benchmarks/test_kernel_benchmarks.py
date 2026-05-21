@@ -31,9 +31,11 @@ import pytest
 
 from eval_toolkit import (
     bootstrap_ci,
+    paired_bootstrap_diff,
+)
+from eval_toolkit.metrics import (  # v0.47: scalars now live in the submodule (Decision C; ADR 0002)
     brier_score,
     expected_calibration_error,
-    paired_bootstrap_diff,
     pr_auc,
     roc_auc,
 )

@@ -153,7 +153,7 @@ def test_sweep_malformed_strategy_raises() -> None:
             return text
 
     with pytest.raises(ValueError, match="does not satisfy TextTransform"):
-        sweep([_BadStrategy()], ["x"])  # type: ignore[list-item]
+        sweep([_BadStrategy()], ["x"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
