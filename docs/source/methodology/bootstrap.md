@@ -25,8 +25,9 @@ resampling theory.
 ```python
 import numpy as np
 from eval_toolkit import (
-    bootstrap_ci, paired_bootstrap_diff, mde_from_ci, cv_clt_ci, pr_auc,
+    bootstrap_ci, paired_bootstrap_diff, mde_from_ci, cv_clt_ci,
 )
+from eval_toolkit.metrics import pr_auc
 ```
 
 A 200-row fixture used throughout:

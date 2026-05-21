@@ -22,8 +22,9 @@ wrapper that became canonical in the SDD `REPORT.md` convention).
 ```python
 import numpy as np
 from eval_toolkit import (
-    pr_auc, quantile_stratified_pr_auc, quantile_stratified_report,
+    quantile_stratified_pr_auc, quantile_stratified_report,
 )
+from eval_toolkit.metrics import pr_auc
 ```
 
 A 500-row fixture where the model's signal is genuine but a
@@ -124,7 +125,7 @@ the label. Common stratifiers:
 A complete length-stratified audit:
 
 ```python
-from eval_toolkit import expected_calibration_error_l2_debiased
+from eval_toolkit.metrics import expected_calibration_error_l2_debiased
 
 print("=" * 60)
 print(f"Headline PR-AUC: {pr_auc(y, s):.3f}")

@@ -35,7 +35,8 @@ from eval_toolkit import EvalSlice
 When you already have predictions, just call the metrics directly:
 
 ```python
-from eval_toolkit import pr_auc, roc_auc, bootstrap_ci, paired_bootstrap_diff
+from eval_toolkit import bootstrap_ci, paired_bootstrap_diff
+from eval_toolkit.metrics import pr_auc, roc_auc
 
 rng = np.random.default_rng(42)
 y = rng.binomial(1, 0.3, size=200)

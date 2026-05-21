@@ -121,7 +121,7 @@ decisions interpret the score as P(y=1) and unequal calibration creates
 unequal trust.
 
 ```python
-from eval_toolkit import expected_calibration_error_l2_debiased
+from eval_toolkit.metrics import expected_calibration_error_l2_debiased
 ece_per_group = {}
 for g in np.unique(groups):
     mask = groups == g
