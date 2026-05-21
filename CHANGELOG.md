@@ -5,6 +5,71 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.46.1] — 2026-05-21 — Round 6 hotfix: ECE strategy validation + deprecation warning content
+
+Hotfix release per **Decision Q** (data correctness regression + time-sensitive
+warning content) + **Decision R6-E** (scope: R6-F1 + R6-F2 only; R6-A docstring
+rolls forward to v0.47). All other Round 6 findings dispositioned to v0.47.0.
+
+See [`docs/source/audit_findings.md`](docs/source/audit_findings.md) Round 6 for
+the full disposition ledger.
+
+### Fixed
+
+- **`metric_specs.ece(strategy=<value>)` strategy validation** (Round 6 Codex
+  R6-F1). Prior to v0.46.1, an invalid strategy string (e.g.
+  `metric_specs.ece(strategy="typo")`) silently dispatched to quantile ECE and
+  returned a `scorecard()` cell with `status="ok"` under an invalid encoded key
+  (`"ece_n_bins_15_strategy_typo"`) — wrong-by-design data correctness path.
+  Verified by Codex via runtime probe. Now both the `ece()` factory and
+  `_EceSpec.compute()` raise:
+  ```
+  ValueError: ECE strategy must be 'uniform' or 'quantile'; got 'typo'
+  ```
+  Defence-in-depth: the factory validates eagerly (before LRU cache hit) AND
+  `compute()` validates at the compute boundary so direct construction of
+  `_EceSpec(strategy="typo")` (bypassing the factory) also raises.
+
+- **Deprecation warning content for all 5 ECE variants** (Round 6 Codex R6-F2 +
+  Gemini R6-F2, with Decisions R6-F + R6-G). The v0.46.0 `__getattr__`
+  deprecation shim's warning messages produced broken migration snippets:
+  - For `expected_calibration_error` + `expected_calibration_error_equal_mass`:
+    the suggested `Scorecard` lookup key was the factory-call expression
+    (`"ece(n_bins=10)"`) instead of the encoded spec name
+    (`"ece_n_bins_10_strategy_uniform"`). Now uses the correct encoded key.
+  - For `expected_calibration_error_debiased` / `_l2` / `_l2_debiased`: these
+    variants are not in the v0.46 `metric_specs` namespace (Decision R6-G;
+    research-completeness primitives, deferred to v1.x if user demand
+    surfaces). Their warnings now point at the submodule path
+    (`from eval_toolkit.metrics import expected_calibration_error_debiased`)
+    instead of an unconstructable scorecard snippet.
+  - Pre-v0.46 default verification: Gemini's report claimed
+    `expected_calibration_error` defaulted to `n_bins=15`; verified against
+    `metrics.py:730-734` that the actual default is `n_bins=10`. Per Decision
+    R6-F, warning snippets use `n_bins=10` to preserve bit-identical pre-v0.46
+    math + add a migration note explaining the new `metric_specs.ece()` factory
+    default of `n_bins=15` (matching Hines et al.).
+
+### Tests
+
+- `tests/test_scorecard.py`: 4 new tests for ECE strategy validation
+  (parametrized factory-rejection + compute-defence-in-depth).
+- `tests/test_deprecated_scalars_shim.py`: 4 new test classes — verify each
+  warning contains correct factory expression + encoded scorecard key, ECE
+  warnings carry the n_bins=10/15 migration note, submodule-only warnings cite
+  `eval_toolkit.metrics` path, and the snippet in each first-party warning is
+  EXECUTABLE (parses + runs against synthetic data + produces ok-status cell).
+
+### Rolled forward to v0.47 (Decision R6-E)
+
+- R6-A `seed=None` docstring fix (non-blocker per Decision Q).
+- R6-F3 duplicate `MetricSpec.name` rejection.
+- R6-F5 (Codex) Protocol method-shape drift guard.
+- R6-F3 (Gemini) `Scorecard.to_pandas()` schema expansion.
+- R6-F4 (Gemini) `make_spec_name()` helper.
+- R6-F5 (Gemini) narrow `_evaluate_spec()` exception catch.
+- R6-F6 (Codex) plan + roadmap state-drift refresh.
+
 ## [0.46.0] — 2026-05-21 — Scorecard: primary v1.0 metric surface (closes #36)
 
 Second minor of the staggered v0.45 → v0.46 → v0.47 → v0.48 → v1.0 sequence.

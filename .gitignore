@@ -49,8 +49,11 @@ mutants/
 # The canonical prompt lives at ~/.claude/plans/gate3-audit-prompt.md and the
 # canonical findings ledger lives at docs/source/audit_findings.md; per-run
 # raw model outputs are author-local working copies.
+# Tracked: per-round briefing files (`gate3-audit-round-<N>.md`).
+# Untracked: prompt template, generic report, per-round report files.
 gate3-audit-prompt.md
 gate3-audit-report.md
+gate3-audit-round-*-report.md
 
 # Claude Code project settings (machine-local)
 .claude/

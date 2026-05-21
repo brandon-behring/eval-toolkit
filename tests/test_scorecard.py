@@ -118,6 +118,47 @@ def test_ece_different_kwargs_different_instances() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ECE strategy validation (v0.46.1 — Round 6 R6-F1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("strategy", ["typo", "UNIFORM", "Quantile", "", "default"])
+def test_ece_factory_rejects_invalid_strategy(strategy: str) -> None:
+    """`ece(strategy=<invalid>)` raises ValueError at factory level (R6-F1).
+
+    Prior to v0.46.1, invalid strategies silently dispatched to quantile ECE
+    and returned a scorecard cell with `status="ok"` under an invalid key
+    like `"ece_n_bins_15_strategy_typo"`. Verified by Codex Round 6 runtime
+    probe.
+    """
+    with pytest.raises(ValueError, match="ECE strategy must be 'uniform' or 'quantile'"):
+        ms.ece(strategy=strategy)
+
+
+@pytest.mark.parametrize("strategy", ["uniform", "quantile"])
+def test_ece_factory_accepts_valid_strategies(strategy: str) -> None:
+    """Both documented strategies still work after the v0.46.1 validation."""
+    spec = ms.ece(n_bins=10, strategy=strategy)
+    assert spec.name == f"ece_n_bins_10_strategy_{strategy}"
+
+
+def test_ece_compute_defence_in_depth() -> None:
+    """`_EceSpec.compute()` ALSO validates strategy (defence-in-depth — R6-F1).
+
+    Direct construction of `_EceSpec(strategy="typo")` bypasses the factory's
+    validation. compute() catches the invalid strategy at the compute boundary
+    so the wrong-metric `ok`-status path can never happen.
+    """
+    from eval_toolkit.metric_specs import _EceSpec
+
+    spec = _EceSpec(n_bins=10, strategy="typo")  # type: ignore[arg-type]
+    y = np.array([0, 1, 0, 1, 1, 0, 1, 0])
+    s = np.array([0.2, 0.8, 0.3, 0.7, 0.9, 0.1, 0.6, 0.4])
+    with pytest.raises(ValueError, match="ECE strategy must be 'uniform' or 'quantile'"):
+        spec.compute(y, s)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Spec name encoding (Decision X.2 + name-mangling rule from §3A)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -139,7 +180,7 @@ def test_ece_spec_name_encodes_kwargs() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_scorecard_ok_status_with_bootstrap(well_mixed_data) -> None:
+def test_scorecard_ok_status_with_bootstrap(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True, n_resamples=200, seed=0)
     assert r["pr_auc"].status == "ok"
@@ -149,14 +190,16 @@ def test_scorecard_ok_status_with_bootstrap(well_mixed_data) -> None:
     assert r["brier"].status == "ok"
 
 
-def test_scorecard_ok_status_without_bootstrap(well_mixed_data) -> None:
+def test_scorecard_ok_status_without_bootstrap(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.brier], bootstrap=False)
     assert r["brier"].status == "ok"
     assert r["brier"].ci is None
 
 
-def test_single_class_slice_pr_auc_skipped(all_zeros_data) -> None:
+def test_single_class_slice_pr_auc_skipped(all_zeros_data: tuple[np.ndarray, np.ndarray]) -> None:
     """PR-AUC on a single-class slice → status='skipped', not raised."""
     y, s = all_zeros_data
     r = scorecard(y, s, metrics=[ms.pr_auc, ms.roc_auc, ms.brier], bootstrap=False)
@@ -169,7 +212,7 @@ def test_single_class_slice_pr_auc_skipped(all_zeros_data) -> None:
     assert r["brier"].value is not None
 
 
-def test_per_cell_error_isolation(well_mixed_data) -> None:
+def test_per_cell_error_isolation(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     """One metric's exception doesn't abort the others."""
     y, s = well_mixed_data
 
@@ -187,7 +230,7 @@ def test_per_cell_error_isolation(well_mixed_data) -> None:
     assert r["bad"].value is None
 
 
-def test_bootstrap_unavailable_keeps_ok_status(tiny_data) -> None:
+def test_bootstrap_unavailable_keeps_ok_status(tiny_data: tuple[np.ndarray, np.ndarray]) -> None:
     """When bootstrap_ci can't run (n<10 floor), point is ok but ci=None with reason."""
     y, s = tiny_data
     r = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=200, seed=0)
@@ -205,7 +248,7 @@ def test_bootstrap_unavailable_keeps_ok_status(tiny_data) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_scorecard_is_mapping(well_mixed_data) -> None:
+def test_scorecard_is_mapping(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.brier], bootstrap=False)
     assert isinstance(r, Scorecard)
@@ -214,7 +257,7 @@ def test_scorecard_is_mapping(well_mixed_data) -> None:
     assert isinstance(r, Mapping)
 
 
-def test_unknown_key_raises_key_error(well_mixed_data) -> None:
+def test_unknown_key_raises_key_error(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     """Typo in subscript → KeyError, not silent None."""
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.brier], bootstrap=False)
@@ -222,7 +265,7 @@ def test_unknown_key_raises_key_error(well_mixed_data) -> None:
         _ = r["pr_uac"]  # noqa: F841
 
 
-def test_mapping_iter_keys_items(well_mixed_data) -> None:
+def test_mapping_iter_keys_items(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=False)
     assert set(r.keys()) == {"pr_auc", "brier"}
@@ -239,7 +282,7 @@ def test_mapping_iter_keys_items(well_mixed_data) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_to_dict_roundtrip(well_mixed_data) -> None:
+def test_to_dict_roundtrip(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     """to_dict produces JSON-serializable output."""
     import json
 
@@ -253,7 +296,7 @@ def test_to_dict_roundtrip(well_mixed_data) -> None:
     assert "ci" in parsed["pr_auc"]
 
 
-def test_to_dict_handles_skipped_and_error(all_zeros_data) -> None:
+def test_to_dict_handles_skipped_and_error(all_zeros_data: tuple[np.ndarray, np.ndarray]) -> None:
     """to_dict serializes skipped + error states cleanly (None value)."""
     import json
 
@@ -273,7 +316,7 @@ def test_to_dict_handles_skipped_and_error(all_zeros_data) -> None:
     assert d["bad"]["status"] == "error"
 
 
-def test_to_pandas_one_row(well_mixed_data) -> None:
+def test_to_pandas_one_row(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     """to_pandas returns a 1-row DataFrame with metric × field multi-index."""
     pytest.importorskip("pandas")
     y, s = well_mixed_data
@@ -290,7 +333,9 @@ def test_to_pandas_one_row(well_mixed_data) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_point_estimate_agrees_with_submodule_scalar(well_mixed_data) -> None:
+def test_point_estimate_agrees_with_submodule_scalar(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
     """scorecard(...).pr_auc.value == metrics.pr_auc(y, s)."""
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=False)
@@ -343,7 +388,7 @@ def test_raises_on_negative_n_resamples() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_deterministic_under_seed(well_mixed_data) -> None:
+def test_deterministic_under_seed(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     y, s = well_mixed_data
     a = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, seed=42)
     b = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, seed=42)
