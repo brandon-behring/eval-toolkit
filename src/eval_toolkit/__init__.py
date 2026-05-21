@@ -296,6 +296,10 @@ _EXPORTS: dict[str, str] = {
     "wilson_interval": "eval_toolkit.thresholds",
     "LogisticStacker": "eval_toolkit.stacking",
     "MetaLearner": "eval_toolkit.stacking",
+    "MetricResult": "eval_toolkit._scorecard",
+    "MetricSpec": "eval_toolkit._scorecard",
+    "Scorecard": "eval_toolkit._scorecard",
+    "scorecard": "eval_toolkit._scorecard",
 }
 
 __all__ = ["__version__", *_EXPORTS.keys()]
