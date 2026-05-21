@@ -59,6 +59,7 @@ from eval_toolkit.metrics import roc_auc as _roc_auc
 __all__ = [
     "brier",
     "ece",
+    "make_spec_name",
     "pr_auc",
     "roc_auc",
 ]
@@ -215,3 +216,59 @@ def ece(*, n_bins: int = 15, strategy: ECEStrategy = "uniform") -> MetricSpec:
     """
     _validate_ece_strategy(strategy)
     return _EceSpec(n_bins=n_bins, strategy=strategy)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Spec-name canonicalization (Decision R6-H — Round 6 Gemini R6-F4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def make_spec_name(prefix: str, **kwargs: object) -> str:
+    """Canonicalize a parameterized :class:`MetricSpec` ``name``.
+
+    Convention: alphabetized kwargs joined by underscore, snake-cased. Mirrors
+    the v0.46 ECE encoding rule (``ece(n_bins=15, strategy="uniform")`` →
+    ``"ece_n_bins_15_strategy_uniform"``).
+
+    Use in custom :class:`MetricSpec` implementations to avoid silent key drift
+    when constructor argument order changes — without canonicalization, two
+    callers passing the same kwargs in different orders can spawn distinct dict
+    keys in :class:`~eval_toolkit.Scorecard`.
+
+    Placement (Decision R6-H, locked at Round 6): exposed via
+    :mod:`eval_toolkit.metric_specs.__all__` only; not in the top-level package
+    ``__all__``. The Tier-2 additive-only contract (ADR 0003) permits the
+    helper to gain optional kwargs (e.g. custom value formatters) without a
+    SemVer-major bump.
+
+    Parameters
+    ----------
+    prefix : str
+        Base name — typically the metric family (``"ece"``, ``"pr_auc"``, etc.).
+    **kwargs : object
+        Spec parameters. Keys are alphabetized; values rendered via
+        ``str(value)``. Only finite, repr-stable values are supported.
+
+    Returns
+    -------
+    str
+        Canonicalized spec name. With zero kwargs, returns ``prefix`` unchanged.
+
+    Examples
+    --------
+    >>> make_spec_name("ece", n_bins=15, strategy="uniform")
+    'ece_n_bins_15_strategy_uniform'
+    >>> make_spec_name("ece", strategy="uniform", n_bins=15)
+    'ece_n_bins_15_strategy_uniform'
+    >>> make_spec_name("custom_metric", alpha=0.1, beta=2)
+    'custom_metric_alpha_0.1_beta_2'
+    >>> make_spec_name("pr_auc")
+    'pr_auc'
+    """
+    if not kwargs:
+        return prefix
+    parts: list[str] = [prefix]
+    for key in sorted(kwargs):
+        parts.append(key)
+        parts.append(str(kwargs[key]))
+    return "_".join(parts)

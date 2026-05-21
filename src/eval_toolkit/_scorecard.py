@@ -341,7 +341,13 @@ def scorecard(
     confidence : float, optional
         Two-sided CI level ∈ ``(0, 1)``. Default ``0.95``.
     seed : int or None, optional
-        Bootstrap RNG seed. Default ``None`` (non-deterministic).
+        Bootstrap RNG seed. Default ``None``, which is treated as ``seed=0``
+        for reproducibility — eval-toolkit's evaluation pipelines are
+        deterministic by default. Pass an explicit integer to control the
+        bootstrap RNG; pass a value derived from
+        ``np.random.SeedSequence().entropy`` for non-deterministic sampling.
+        Decision R6-A (Round 6 audit) locked the deterministic-by-default
+        contract; the prior docstring framing was incorrect.
 
     Returns
     -------
@@ -410,6 +416,7 @@ def scorecard(
         confidence=confidence,
         bootstrap=bootstrap,
     )
+    _validate_unique_spec_names(metrics)
 
     is_single_class = bool(np.unique(y_true_arr).size < 2)
 
@@ -450,6 +457,11 @@ def _evaluate_spec(
 
     try:
         point = float(spec.compute(y_true, y_score))
+    except (MemoryError, RecursionError, KeyboardInterrupt, SystemExit):
+        # Process-exhaustion / user-interrupt signals must propagate;
+        # per-cell isolation is for application-level errors only.
+        # Decision R6-F5 (Round 6 audit, Gemini).
+        raise
     except Exception as exc:  # noqa: BLE001 — broad catch is intentional (per-cell isolation)
         return MetricResult(
             value=None,
@@ -469,6 +481,9 @@ def _evaluate_spec(
             confidence=confidence,
             seed=seed if seed is not None else 0,
         )
+    except (MemoryError, RecursionError, KeyboardInterrupt, SystemExit):
+        # Same R6-F5 invariant for the bootstrap path.
+        raise
     except Exception as exc:  # noqa: BLE001
         # Point estimate succeeded; the bootstrap couldn't (e.g., n < 10
         # floor from bootstrap.py:198, BCa degeneracy, etc.). Record the
@@ -507,3 +522,21 @@ def _validate_scorecard_inputs(
             raise ValueError(f"n_resamples must be >= 1 when bootstrap=True; got {n_resamples}")
         if not 0.0 < confidence < 1.0:
             raise ValueError(f"confidence must be in (0, 1); got {confidence}")
+
+
+def _validate_unique_spec_names(metrics: Sequence[MetricSpec]) -> None:
+    """Reject duplicate MetricSpec.name values in a single scorecard() call.
+
+    Locked by Decision R6-B (Round 6 audit, Codex R6-F3): silent last-wins
+    overwrite is not a documented Mapping[str, MetricResult] contract. Force
+    the caller to disambiguate so we never lose data on user error.
+    """
+    seen: dict[str, int] = {}
+    for i, spec in enumerate(metrics):
+        if spec.name in seen:
+            raise ValueError(
+                f"Duplicate MetricSpec name {spec.name!r} at index {i} "
+                f"(previously at index {seen[spec.name]}); each spec must have a "
+                f"unique name for the Scorecard Mapping[str, MetricResult] contract."
+            )
+        seen[spec.name] = i

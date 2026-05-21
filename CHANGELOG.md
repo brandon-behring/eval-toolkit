@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — release/v0.47.0 — Sweep unification + TextTransform + advanced-6 + cleanup + Round 6 follow-on
+
+In progress on the ``release/v0.47.0`` branch. Final shape will be reconciled
+into the v0.47.0 entry at release-prep time.
+
+### Added (Round 6 follow-on, partial — others queued in subsequent sub-PRs)
+
+- ``metric_specs.make_spec_name(prefix, **kwargs)`` canonicalization helper
+  for custom parameterized :class:`MetricSpec` implementations. Alphabetized
+  kwargs joined by underscore — same convention the v0.46 ECE factory uses.
+  Lands in ``metric_specs.__all__`` only; **not** top-level ``__all__`` per
+  Decision R6-H. (Closes Round 6 Gemini R6-F4.)
+
+### Changed (Round 6 follow-on)
+
+- ``scorecard()`` now raises ``ValueError`` when two :class:`MetricSpec`
+  instances in the ``metrics`` list share a ``name``. Forces caller
+  disambiguation; the ``Mapping[str, MetricResult]`` contract never silently
+  drops a cell. Error message reports both indices. (Decision R6-B; closes
+  Round 6 Codex R6-F3.)
+- ``scorecard(seed=None)`` docstring rewritten to document the deterministic-
+  by-default contract (``None`` is treated as ``seed=0``). No behavior
+  change; v0.46 documented the wrong contract. (Decision R6-A; closes Round 6
+  Codex R6-F4 + Gemini R6-F1.)
+- ``_evaluate_spec()`` exception catches narrowed: ``MemoryError``,
+  ``RecursionError``, ``KeyboardInterrupt``, and ``SystemExit`` now propagate
+  out of ``scorecard()`` instead of being captured as a ``status="error"``
+  cell. Per-cell isolation remains for ordinary application errors.
+  (Decision R6-F5; closes Round 6 Gemini R6-F5.)
+
 ## [0.46.1] — 2026-05-21 — Round 6 hotfix: ECE strategy validation + deprecation warning content
 
 Hotfix release per **Decision Q** (data correctness regression + time-sensitive
