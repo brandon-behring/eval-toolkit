@@ -10,8 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 In progress on the ``release/v0.47.0`` branch. Final shape will be reconciled
 into the v0.47.0 entry at release-prep time.
 
-### Added (Round 6 follow-on, partial — others queued in subsequent sub-PRs)
+### Added
 
+- **``TextTransform`` Protocol** (top-level; ``eval_toolkit.protocols`` module).
+  Decision K + Audit R5-F3 (Codex Round 5): unifies the "name + transform(text)"
+  shape across preprocessing (defence) and adversarial (attack) strategies so
+  the v0.47 top-level :func:`sweep` (next sub-PR) can mix them in one call. The
+  9th strict Tier-2 Protocol per ADR 0003.
+- **3 preprocessing dataclasses** (``DelimitVariant``, ``DatamarkVariant``,
+  ``EncodeVariant``) in :mod:`eval_toolkit.preprocessing`. Frozen +
+  ``slots=True`` thin wrappers over the existing :func:`delimit` /
+  :func:`datamark` / :func:`encode` functions. Closes Audit R5-F3
+  (Codex Round 5) — prior to this commit, ``preprocessing.__all__`` exported
+  only functions, so the "concrete classes satisfy ``TextTransform``
+  structurally" claim only held on the adversarial side. Now both sides
+  share the dataclass-strategy shape.
 - ``metric_specs.make_spec_name(prefix, **kwargs)`` canonicalization helper
   for custom parameterized :class:`MetricSpec` implementations. Alphabetized
   kwargs joined by underscore — same convention the v0.46 ECE factory uses.

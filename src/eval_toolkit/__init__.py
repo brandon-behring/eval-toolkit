@@ -43,6 +43,9 @@ _EXPORTS: dict[str, str] = {
     # --- losses ---
     "RecallAtLowFPR": "eval_toolkit.losses",
     # --- preprocessing ---
+    "DatamarkVariant": "eval_toolkit.preprocessing",
+    "DelimitVariant": "eval_toolkit.preprocessing",
+    "EncodeVariant": "eval_toolkit.preprocessing",
     "datamark": "eval_toolkit.preprocessing",
     "delimit": "eval_toolkit.preprocessing",
     "encode": "eval_toolkit.preprocessing",
@@ -247,6 +250,7 @@ _EXPORTS: dict[str, str] = {
     "PredictionReader": "eval_toolkit.protocols",
     "Scorer": "eval_toolkit.protocols",
     "SliceAwareScorer": "eval_toolkit.protocols",
+    "TextTransform": "eval_toolkit.protocols",
     "Versioned": "eval_toolkit.protocols",
     # --- seeds ---
     "set_global_seeds": "eval_toolkit.seeds",

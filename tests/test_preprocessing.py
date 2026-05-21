@@ -239,3 +239,114 @@ def test_spotlighting_sweep_matches_module_function() -> None:
     via_ns = spotlighting.sweep(["x"], variants=["encode"])
     via_module = sweep(["x"], variants=["encode"])
     pd.testing.assert_frame_equal(via_ns, via_module)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TextTransform Protocol + 3 preprocessing dataclasses (Decision K + R5-F3)
+# Added at v0.47.0 release/v0.47.0 Sub-PR 3.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_text_transform_protocol_is_runtime_checkable() -> None:
+    """The top-level TextTransform Protocol is runtime-checkable.
+
+    Required so structural-subtyping checks (`isinstance(x, TextTransform)`)
+    work in user code without explicit subclassing.
+    """
+    from eval_toolkit import TextTransform
+
+    assert getattr(TextTransform, "_is_protocol", False)
+
+
+@pytest.mark.unit
+def test_delimit_variant_satisfies_text_transform() -> None:
+    """DelimitVariant satisfies TextTransform structurally (Decision K)."""
+    from eval_toolkit import DelimitVariant, TextTransform
+
+    v = DelimitVariant()
+    assert isinstance(v, TextTransform)
+    assert v.name == "delimit"
+    assert v.transform("hello") == "<<hello>>"
+
+
+@pytest.mark.unit
+def test_datamark_variant_satisfies_text_transform() -> None:
+    """DatamarkVariant satisfies TextTransform structurally."""
+    from eval_toolkit import DatamarkVariant, TextTransform
+
+    v = DatamarkVariant()
+    assert isinstance(v, TextTransform)
+    assert v.name == "datamark"
+    assert v.transform("hello world") == "hello^ world"
+
+
+@pytest.mark.unit
+def test_encode_variant_satisfies_text_transform() -> None:
+    """EncodeVariant satisfies TextTransform structurally."""
+    from eval_toolkit import EncodeVariant, TextTransform
+
+    v = EncodeVariant()
+    assert isinstance(v, TextTransform)
+    assert v.name == "encode"
+    assert v.transform("hello") == "aGVsbG8="
+
+
+@pytest.mark.unit
+def test_delimit_variant_with_custom_kwargs() -> None:
+    """DelimitVariant honours its constructor kwargs."""
+    from eval_toolkit import DelimitVariant
+
+    v = DelimitVariant(delimiter="((", end="))")
+    assert v.transform("payload") == "((payload))"
+
+
+@pytest.mark.unit
+def test_adversarial_strategies_satisfy_text_transform() -> None:
+    """Adversarial-side dataclasses satisfy TextTransform structurally without source changes.
+
+    Verifies the cross-module Protocol unification — defence (preprocessing)
+    and attack (adversarial) strategies share the same Protocol shape so
+    the v0.47 top-level sweep can mix them in one call.
+    """
+    from eval_toolkit import TextTransform
+    from eval_toolkit.adversarial import (
+        CaseRandomization,
+        DiacriticInjection,
+        HomoglyphSubstitution,
+        PunctuationInjection,
+        WhitespaceInjection,
+        ZeroWidthSpaceInjection,
+    )
+
+    for cls in (
+        CaseRandomization,
+        DiacriticInjection,
+        HomoglyphSubstitution,
+        PunctuationInjection,
+        WhitespaceInjection,
+        ZeroWidthSpaceInjection,
+    ):
+        assert isinstance(cls(), TextTransform), f"{cls.__name__} should satisfy TextTransform"
+
+
+@pytest.mark.unit
+def test_variants_are_frozen() -> None:
+    """The 3 preprocessing dataclasses are frozen per house style.
+
+    Frozen + ``slots=True`` is the project-wide pattern for spec / strategy
+    dataclasses. The slots interaction has version-dependent error
+    semantics on attribute creation (frozen catches it before slots on
+    some Python versions), so we only assert the load-bearing invariant
+    (existing-attr mutation raises) here for cross-Python stability.
+    """
+    import pytest as _pytest
+
+    from eval_toolkit import DatamarkVariant, DelimitVariant, EncodeVariant
+
+    for variant in (DelimitVariant(), DatamarkVariant(), EncodeVariant()):
+        with _pytest.raises((AttributeError, dataclasses.FrozenInstanceError)):
+            variant.name = "mutated"  # type: ignore[misc]
+
+
+import dataclasses  # noqa: E402 — used in test_variants_are_frozen

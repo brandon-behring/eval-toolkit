@@ -36,6 +36,7 @@ from __future__ import annotations
 import base64
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Literal
 
@@ -43,6 +44,9 @@ if TYPE_CHECKING:
     import pandas as pd
 
 __all__ = [
+    "DatamarkVariant",
+    "DelimitVariant",
+    "EncodeVariant",
     "datamark",
     "delimit",
     "encode",
@@ -170,6 +174,63 @@ def encode(text: str, *, encoding: Literal["base64"] = _DEFAULT_ENCODING) -> str
     if encoding == "base64":
         return base64.b64encode(text.encode("utf-8")).decode("ascii")
     raise ValueError(f"encode: unsupported encoding {encoding!r}; supported: 'base64'")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Spotlighting variants as ``TextTransform``-shaped dataclasses (v0.47)
+#
+# Decision K + Audit R5-F3: the functional API (``delimit`` / ``datamark``
+# / ``encode``) remains the implementation; these frozen dataclasses are
+# thin ``TextTransform`` wrappers so the top-level :func:`sweep` and
+# downstream code can treat them uniformly with adversarial-side
+# strategies (``ZeroWidthSpaceInjection`` etc.) via structural subtyping.
+#
+# All three satisfy the top-level :class:`eval_toolkit.TextTransform`
+# Protocol: ``name: str`` attribute + ``transform(text: str) -> str``
+# method. Frozen + ``slots=True`` per house style.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class DelimitVariant:
+    """:class:`TextTransform` wrapper around :func:`delimit`.
+
+    See the underlying function for semantics; this dataclass exists so
+    callers can pass a uniform-shape strategy object into
+    :func:`eval_toolkit.sweep` alongside adversarial-side strategies.
+    """
+
+    name: str = "delimit"
+    delimiter: str = _DEFAULT_DELIMITER
+    end: str | None = None
+
+    def transform(self, text: str) -> str:
+        """Delegate to :func:`delimit` with the dataclass's configured kwargs."""
+        return delimit(text, delimiter=self.delimiter, end=self.end)
+
+
+@dataclass(frozen=True, slots=True)
+class DatamarkVariant:
+    """:class:`TextTransform` wrapper around :func:`datamark`."""
+
+    name: str = "datamark"
+    marker: str = _DEFAULT_MARKER
+
+    def transform(self, text: str) -> str:
+        """Delegate to :func:`datamark` with the dataclass's configured kwargs."""
+        return datamark(text, marker=self.marker)
+
+
+@dataclass(frozen=True, slots=True)
+class EncodeVariant:
+    """:class:`TextTransform` wrapper around :func:`encode`."""
+
+    name: str = "encode"
+    encoding: Literal["base64"] = _DEFAULT_ENCODING
+
+    def transform(self, text: str) -> str:
+        """Delegate to :func:`encode` with the dataclass's configured kwargs."""
+        return encode(text, encoding=self.encoding)
 
 
 def sweep(

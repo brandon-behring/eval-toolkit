@@ -31,11 +31,14 @@
     "DEFAULT_SEED",
     "DEFAULT_STRATEGY",
     "DataFrameLoader",
+    "DatamarkVariant",
     "DatasetLoader",
     "DeLongResult",
     "DedupReport",
+    "DelimitVariant",
     "DiacriticInjection",
     "EmbeddingCosineStrategy",
+    "EncodeVariant",
     "EvalSlice",
     "EvalSliceLike",
     "EvidenceAxis",
@@ -106,6 +109,7 @@
     "TargetPrecisionSelector",
     "TargetRecallSelector",
     "TemporalLeakageCheck",
+    "TextTransform",
     "TfidfCosineStrategy",
     "ThresholdFn",
     "ThresholdPolicyMetadata",
@@ -483,6 +487,14 @@
       "kind": "class",
       "signature": "(df: 'pd.DataFrame', split_col: 'str', feature_col: 'str' = 'text', label_col: 'str' = 'label', strata_col: 'str | None' = None, name: 'str' = '', description: 'str' = '', cite_as: 'str' = '', license: 'str' = '', url: 'str' = '') -> None"
     },
+    "DatamarkVariant": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": ":class:`TextTransform` wrapper around :func:`datamark`.",
+      "kind": "class",
+      "signature": "(name: 'str' = 'datamark', marker: 'str' = '^') -> None"
+    },
     "DatasetLoader": {
       "bases": [
         "Protocol"
@@ -511,6 +523,14 @@
       "kind": "class",
       "signature": "(kept_indices: 'list[int]', dropped_pairs: 'list[tuple[int, int, float]]', threshold: 'float', n_input: 'int') -> None"
     },
+    "DelimitVariant": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": ":class:`TextTransform` wrapper around :func:`delimit`.",
+      "kind": "class",
+      "signature": "(name: 'str' = 'delimit', delimiter: 'str' = '<<', end: 'str | None' = None) -> None"
+    },
     "DiacriticInjection": {
       "bases": [
         "object"
@@ -526,6 +546,14 @@
       "doc_first_line": "Cosine similarity on caller-supplied embeddings.",
       "kind": "class",
       "signature": "(embedder: 'Callable[[Sequence[str]], np.ndarray]') -> None"
+    },
+    "EncodeVariant": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": ":class:`TextTransform` wrapper around :func:`encode`.",
+      "kind": "class",
+      "signature": "(name: 'str' = 'encode', encoding: \"Literal['base64']\" = 'base64') -> None"
     },
     "EvalSlice": {
       "bases": [
@@ -1151,6 +1179,18 @@
       "doc_first_line": "Temporal ordering invariant: every earlier split's max(time) \u2264 next's min(time).",
       "kind": "class",
       "signature": "(time_col: 'str', split_order: 'Sequence[str]', severity: 'Severity' = 'error') -> None"
+    },
+    "TextTransform": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Uniform text-transform shape for sweep + defence + attack strategies.",
+      "kind": "class",
+      "protocol_methods": {
+        "name": "<attr: 'str'>",
+        "transform": "(self, text: 'str') -> 'str'"
+      },
+      "signature": "(*args, **kwargs)"
     },
     "TfidfCosineStrategy": {
       "bases": [

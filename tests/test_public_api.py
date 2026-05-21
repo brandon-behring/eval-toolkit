@@ -240,10 +240,6 @@ def test_public_api_drift_guard() -> None:
 # coverage test fails fast if someone introduces a Tier-2 Protocol without
 # also wiring it into the drift guard.
 #
-# NOTE: ``TextTransform`` will be added as the 9th strict Tier-2 Protocol
-# (Decision K, plan §4B) in a subsequent sub-PR of release/v0.47.0. Add it
-# here AT THE SAME TIME that ``TextTransform`` lands in ``__all__`` /
-# ``_EXPORTS`` so the coverage test stays green through every sub-commit.
 _TIER2_PROTOCOLS = frozenset(
     {
         "DatasetLoader",
@@ -253,7 +249,7 @@ _TIER2_PROTOCOLS = frozenset(
         "Probe",
         "Scorer",
         "Splitter",
-        # "TextTransform",  # ← uncomment in Sub-PR 3 (TextTransform addition)
+        "TextTransform",  # added in v0.47 release/v0.47.0 Sub-PR 3 (Decision K)
         "ThresholdSelector",
     }
 )
