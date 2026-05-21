@@ -955,7 +955,7 @@
       "doc_first_line": "Build an immutable unordered collection of unique elements.",
       "kind": "value",
       "type": "frozenset",
-      "value": "['auprc', 'auroc']"
+      "value": "['auprc', 'auroc', 'pr_auc', 'roc_auc']"
     },
     "Scorer": {
       "bases": [
@@ -1427,7 +1427,7 @@
     "is_metric_defined_for_slice": {
       "doc_first_line": "Return ``True`` iff a metric is well-defined for the given class distribution.",
       "kind": "function",
-      "signature": "(metric_name: 'str', *, is_single_class: 'bool', incompatible_metrics: 'Collection[str]' = frozenset({'auprc', 'auroc'})) -> 'bool'"
+      "signature": "(metric_name: 'str', *, is_single_class: 'bool', incompatible_metrics: 'Collection[str]' = frozenset({'auprc', 'auroc', 'pr_auc', 'roc_auc'})) -> 'bool'"
     },
     "iter_folds_with_pool": {
       "doc_first_line": "Compose a :class:`Splitter` with a :class:`PoolBuilder`.",

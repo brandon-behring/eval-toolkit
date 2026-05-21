@@ -117,7 +117,9 @@ __all__ = [
     "stratified_recall",
 ]
 
-SINGLE_CLASS_INCOMPATIBLE_METRICS: Final[frozenset[str]] = frozenset({"auroc", "auprc"})
+SINGLE_CLASS_INCOMPATIBLE_METRICS: Final[frozenset[str]] = frozenset(
+    {"auroc", "auprc", "roc_auc", "pr_auc"}
+)
 """Metrics that are mathematically undefined on single-class slices.
 
 AUROC and AUPRC are *ranking* metrics — both require at least one
@@ -126,8 +128,21 @@ sklearn's implementations return degenerate ``1.0`` or ``0.0`` (or
 warn) when called on single-class input; those values entering
 bootstrap/CI artifacts produce misleading downstream evidence.
 
+Both naming conventions are recognized:
+
+- ``"auroc"`` / ``"roc_auc"`` — the same ranking metric (area under the ROC curve).
+- ``"auprc"`` / ``"pr_auc"`` — the same ranking metric (area under the PR curve).
+
+The v0.46 `scorecard()` surface uses `pr_auc` / `roc_auc` per the existing
+toolkit scalar function names (``eval_toolkit.metrics.pr_auc`` /
+``eval_toolkit.metrics.roc_auc``); the v0.39 harness paths use `auroc` /
+`auprc`. The primitive treats both as single-class-incompatible so either
+calling convention produces correct skipped-status behavior.
+
 Overridable per call to :func:`is_metric_defined_for_slice` via the
-``incompatible_metrics`` kwarg. Surfaced by v0.39.0 / closes #39.
+``incompatible_metrics`` kwarg. Originally surfaced by v0.39.0 (closes #39);
+extended in v0.46 prep to include both naming conventions per the v1.0
+plan Decision X.2 precondition.
 """
 
 
@@ -176,6 +191,20 @@ def is_metric_defined_for_slice(
     True
     >>> is_metric_defined_for_slice("AUROC", is_single_class=True)
     False
+
+    Both naming conventions are recognized (v0.46 prep — Decision X.2):
+
+    >>> is_metric_defined_for_slice("pr_auc", is_single_class=True)
+    False
+    >>> is_metric_defined_for_slice("roc_auc", is_single_class=True)
+    False
+    >>> is_metric_defined_for_slice("PR_AUC", is_single_class=True)
+    False
+    >>> is_metric_defined_for_slice("brier", is_single_class=True)
+    True
+
+    Custom overrides still work:
+
     >>> is_metric_defined_for_slice(
     ...     "recall_at_fpr",
     ...     is_single_class=True,
