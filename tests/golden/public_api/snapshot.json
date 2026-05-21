@@ -63,6 +63,8 @@
     "MaxF1Selector",
     "MetaLearner",
     "MetricFn",
+    "MetricResult",
+    "MetricSpec",
     "MetricState",
     "MinHashLSHStrategy",
     "NearDuplicateCheck",
@@ -89,6 +91,7 @@
     "RunManifest",
     "RunResult",
     "SINGLE_CLASS_INCOMPATIBLE_METRICS",
+    "Scorecard",
     "Scorer",
     "SimilarityAuditFinding",
     "SimilarityAuditReport",
@@ -125,7 +128,6 @@
     "bootstrap_ci",
     "bootstrap_metric_from_predictions",
     "brier_decomposition",
-    "brier_score",
     "build_manifest",
     "capture_git_sha",
     "character_injection",
@@ -144,11 +146,6 @@
     "evaluate_claims",
     "evaluate_folded",
     "evaluate_scorer_on_slice",
-    "expected_calibration_error",
-    "expected_calibration_error_debiased",
-    "expected_calibration_error_equal_mass",
-    "expected_calibration_error_l2",
-    "expected_calibration_error_l2_debiased",
     "external_diagnostic_gate",
     "fdr_bh_correct",
     "figure_metadata",
@@ -200,7 +197,6 @@
     "plot_roc_curve",
     "plot_score_histograms",
     "plot_slice_metric_heatmap",
-    "pr_auc",
     "precision_at_prior",
     "quantile_stratified_pr_auc",
     "quantile_stratified_report",
@@ -213,11 +209,11 @@
     "required_scorer_gate",
     "required_slice_gate",
     "resolve_repo_path",
-    "roc_auc",
     "run_leakage_checks",
     "sanitize_for_json",
     "save_figure",
     "score_distribution_summary",
+    "scorecard",
     "select_threshold",
     "set_global_seeds",
     "set_plot_style",
@@ -729,6 +725,22 @@
       "kind": "function",
       "signature": "(*args, **kwargs)"
     },
+    "MetricResult": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Per-metric scorecard cell with status + reason + optional CI.",
+      "kind": "class",
+      "signature": "(value: 'float | None', status: 'MetricStatus', reason: 'str' = '', ci: 'BootstrapCI | None' = None) -> None"
+    },
+    "MetricSpec": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Public Protocol for metric specifications consumed by :func:`scorecard`.",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
+    },
     "MetricState": {
       "bases": [
         "object"
@@ -957,6 +969,14 @@
       "type": "frozenset",
       "value": "['auprc', 'auroc', 'pr_auc', 'roc_auc']"
     },
+    "Scorecard": {
+      "bases": [
+        "Mapping"
+      ],
+      "doc_first_line": "Read-only :class:`~collections.abc.Mapping` ``[str, MetricResult]`` over a slice's metric battery.",
+      "kind": "class",
+      "signature": "(results: 'Mapping[str, MetricResult]') -> 'None'"
+    },
     "Scorer": {
       "bases": [
         "Protocol"
@@ -1172,7 +1192,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'0.45.0'"
+      "value": "'0.46.0'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1213,11 +1233,6 @@
       "doc_first_line": "Murphy 1973 [#murphy]_ decomposition of the Brier score.",
       "kind": "function",
       "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'dict[str, float]'"
-    },
-    "brier_score": {
-      "doc_first_line": "Brier score (mean squared error between predicted probabilities and labels).",
-      "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, empty_strategy: 'EmptyStrategy' = 'raise') -> 'float | None | dict[str, object]'"
     },
     "build_manifest": {
       "doc_first_line": "Pure builder: assemble a :class:`RunManifest` from components.",
@@ -1308,31 +1323,6 @@
       "doc_first_line": "Score one scorer on one slice; return headline + bootstrap CI on PR-AUC.",
       "kind": "function",
       "signature": "(scorer: 'Scorer', slice_: 'EvalSlice', *, n_resamples: 'int' = 1000, seed: 'int' = 42, on_scorer_error: \"Literal['raise', 'record']\" = 'raise', precomputed_scores: 'np.ndarray | None' = None, attack_style: 'str | None' = None, fpr_ladder: 'list[float] | None' = None, compute_mce: 'bool' = False, compute_brier: 'bool' = False, calibrator: 'PlattFit | None' = None, bootstrap_roc_auc: 'bool' = False) -> 'dict[str, object]'"
-    },
-    "expected_calibration_error": {
-      "doc_first_line": "Expected calibration error on equal-width probability bins.",
-      "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'float'"
-    },
-    "expected_calibration_error_debiased": {
-      "doc_first_line": "Bias-corrected L1 ECE via simulated-H0 Monte-Carlo (Roelofs 2022 spirit).",
-      "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10, *, n_sweep: 'int' = 200, seed: 'int' = 42) -> 'float'"
-    },
-    "expected_calibration_error_equal_mass": {
-      "doc_first_line": "ECE on equal-mass (quantile) bins.",
-      "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'float'"
-    },
-    "expected_calibration_error_l2": {
-      "doc_first_line": "Equal-mass L2 ECE \u2014 root mean squared bin-level miscalibration.",
-      "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'float'"
-    },
-    "expected_calibration_error_l2_debiased": {
-      "doc_first_line": "Bias-corrected L2 ECE per Kumar 2019 [#kumar]_ \u00a73.3.",
-      "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'float'"
     },
     "external_diagnostic_gate": {
       "doc_first_line": "Require an external diagnostic payload, optionally thresholded.",
@@ -1589,11 +1579,6 @@
       "kind": "function",
       "signature": "(grid: 'np.ndarray', *, row_labels: 'Sequence[str]', col_labels: 'Sequence[str]', metric_name: 'str' = 'metric', cmap: 'str' = 'viridis', annotate: 'bool' = True, annot_fmt: 'str' = '{:.3f}', title: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, ax: 'Axes | None' = None) -> 'Figure'"
     },
-    "pr_auc": {
-      "doc_first_line": "Average precision (PR-AUC).",
-      "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, empty_strategy: 'EmptyStrategy' = 'raise') -> 'float | None | dict[str, object]'"
-    },
     "precision_at_prior": {
       "doc_first_line": "Project precision under a different positive-class prior.",
       "kind": "function",
@@ -1654,11 +1639,6 @@
       "kind": "function",
       "signature": "(path: 'Path | str', repo_root: 'Path | str | None' = None) -> 'Path'"
     },
-    "roc_auc": {
-      "doc_first_line": "ROC-AUC.",
-      "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, empty_strategy: 'EmptyStrategy' = 'raise') -> 'float | None | dict[str, object]'"
-    },
     "run_leakage_checks": {
       "doc_first_line": "Run a sequence of :class:`LeakageCheck` over ``splits`` and aggregate.",
       "kind": "function",
@@ -1678,6 +1658,11 @@
       "doc_first_line": "Threshold-free score-distribution summary.",
       "kind": "function",
       "signature": "(scores: 'np.ndarray') -> 'dict[str, float | int]'"
+    },
+    "scorecard": {
+      "doc_first_line": "Compute multiple metrics on a single slice; return a :class:`Scorecard`.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', *, metrics: 'Sequence[MetricSpec]', bootstrap: 'bool' = True, n_resamples: 'int' = 1000, confidence: 'float' = 0.95, seed: 'int | None' = None) -> 'Scorecard'"
     },
     "select_threshold": {
       "doc_first_line": "Dispatch to a :class:`ThresholdSelector` instance.",
