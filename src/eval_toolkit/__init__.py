@@ -193,20 +193,18 @@ _EXPORTS: dict[str, str] = {
     "SINGLE_CLASS_INCOMPATIBLE_METRICS": "eval_toolkit.metrics",
     "ThresholdResult": "eval_toolkit.metrics",
     "brier_decomposition": "eval_toolkit.metrics",
-    "brier_score": "eval_toolkit.metrics",
-    "expected_calibration_error": "eval_toolkit.metrics",
-    "expected_calibration_error_debiased": "eval_toolkit.metrics",
-    "expected_calibration_error_equal_mass": "eval_toolkit.metrics",
-    "expected_calibration_error_l2": "eval_toolkit.metrics",
-    "expected_calibration_error_l2_debiased": "eval_toolkit.metrics",
+    # `brier_score`, `pr_auc`, `roc_auc`, and the 5 ECE variants removed from
+    # `_EXPORTS` at v0.46 (Decision L). They remain reachable at the top
+    # level via the `__getattr__` deprecation branch (emits
+    # `DeprecationWarning`; branch removed at v0.47) and via the metrics
+    # submodule (`from eval_toolkit.metrics import pr_auc` — internal API
+    # per ADR 0002, not part of the v1.0 stability contract).
     "headline_metrics": "eval_toolkit.metrics",
     "is_metric_defined_for_slice": "eval_toolkit.metrics",
     "metrics_at_threshold": "eval_toolkit.metrics",
-    "pr_auc": "eval_toolkit.metrics",
     "precision_at_prior": "eval_toolkit.metrics",
     "quantile_stratified_pr_auc": "eval_toolkit.metrics",
     "quantile_stratified_report": "eval_toolkit.metrics",
-    "roc_auc": "eval_toolkit.metrics",
     "score_distribution_summary": "eval_toolkit.metrics",
     "single_class_threshold_metrics": "eval_toolkit.metrics",
     "stratified_recall": "eval_toolkit.metrics",
@@ -305,10 +303,59 @@ _EXPORTS: dict[str, str] = {
 __all__ = ["__version__", *_EXPORTS.keys()]
 
 
+# ── BEGIN TRANSITIONAL DEPRECATION BRANCH (Decision L; REMOVE AT v0.47) ──
+# At v0.46 the scalar metric functions left the top-level `_EXPORTS` map (above)
+# in favor of the `scorecard()` surface (Decision A). To give the consumer one
+# release of overlap before the hard removal at v0.47, the names below remain
+# reachable via the package-level `__getattr__` (which delegates to the
+# `eval_toolkit.metrics` submodule) but emit a `DeprecationWarning` on first
+# lookup pointing at the new API.
+#
+# WHY THIS IS A BRANCH, NOT A REPLACEMENT (Audit F4 — Round 5):
+# `__getattr__` below is the load-bearing lazy export resolver for every name
+# in `_EXPORTS`. The deprecation branch is a discrete `if name in
+# _DEPRECATED_SCALARS` check ABOVE the resolver — the resolver's existing
+# behavior for non-deprecated names is unchanged. At v0.47 we delete this
+# transitional block and the resolver continues to work for every remaining
+# `_EXPORTS` entry.
+_DEPRECATED_SCALARS: frozenset[str] = frozenset(
+    {
+        "pr_auc",
+        "roc_auc",
+        "brier_score",
+        "expected_calibration_error",
+        "expected_calibration_error_debiased",
+        "expected_calibration_error_equal_mass",
+        "expected_calibration_error_l2",
+        "expected_calibration_error_l2_debiased",
+    }
+)
+# ── END TRANSITIONAL DEPRECATION (Decision L; REMOVE AT v0.47) ──
+
+
 def __getattr__(name: str) -> Any:
     """Resolve public symbols lazily."""
     if name == "__version__":
         return __version__
+    # ── BEGIN TRANSITIONAL DEPRECATION BRANCH (Decision L; REMOVE AT v0.47) ──
+    if name in _DEPRECATED_SCALARS:
+        import warnings
+
+        warnings.warn(
+            f"eval_toolkit.{name} is deprecated and will be removed in v0.47. "
+            f"Use `scorecard(y, s, metrics=[metric_specs.{_scorecard_spec_for(name)}])"
+            f'["{_scorecard_spec_for(name)}"].value` instead, or "import from the'
+            f" `eval_toolkit.metrics` submodule directly (internal API).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        module = import_module("eval_toolkit.metrics")
+        value = getattr(module, name)
+        # Do NOT cache in globals() — repeated lookups should keep re-warning
+        # (one warning per call site, modulo Python's default
+        # DeprecationWarning de-duplication).
+        return value
+    # ── END TRANSITIONAL DEPRECATION (Decision L; REMOVE AT v0.47) ──
     module_name = _EXPORTS.get(name)
     if module_name is None:
         raise AttributeError(f"module 'eval_toolkit' has no attribute {name!r}")
@@ -316,6 +363,29 @@ def __getattr__(name: str) -> Any:
     value = getattr(module, name)
     globals()[name] = value
     return value
+
+
+# ── BEGIN TRANSITIONAL DEPRECATION HELPER (Decision L; REMOVE AT v0.47) ──
+def _scorecard_spec_for(deprecated_name: str) -> str:
+    """Map a deprecated-scalar name to its `metric_specs` replacement name.
+
+    Used only inside the v0.46 deprecation warning message. Returns the
+    closest equivalent first-party spec name where one exists; falls back
+    to the original name for ECE variants whose exact-match spec isn't in
+    the v0.46 first-party namespace (e.g., the L2 / debiased variants —
+    callers either implement a custom `MetricSpec` or stay on the
+    submodule path).
+    """
+    return {
+        "pr_auc": "pr_auc",
+        "roc_auc": "roc_auc",
+        "brier_score": "brier",
+        "expected_calibration_error": "ece(n_bins=10)",
+        "expected_calibration_error_equal_mass": 'ece(n_bins=10, strategy="quantile")',
+    }.get(deprecated_name, deprecated_name)
+
+
+# ── END TRANSITIONAL DEPRECATION HELPER (Decision L; REMOVE AT v0.47) ──
 
 
 def __dir__() -> list[str]:
