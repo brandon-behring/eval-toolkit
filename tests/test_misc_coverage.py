@@ -119,11 +119,22 @@ def test_dunder_version_accessible_via_getattr() -> None:
 
 @pytest.mark.unit
 def test_dunder_dir_returns_sorted_all() -> None:
-    """__dir__ returns the sorted lazy export list (line 227)."""
+    """__dir__ returns the sorted lazy export list.
+
+    Updated at v0.46: `pr_auc` is no longer in `__all__` per Decision L
+    (soft-deprecated at v0.46; hard-removed at v0.47). The deprecated names
+    are still resolvable at the top level via the transitional
+    `__getattr__` branch — they just aren't advertised in `__dir__`.
+    """
     listing = dir(eval_toolkit)
     assert listing == sorted(listing)
-    assert "pr_auc" in listing
+    # Non-deprecated top-level symbols still appear:
     assert "evaluate" in listing
+    assert "scorecard" in listing  # v0.46 new
+    assert "bootstrap_ci" in listing
+    # Deprecated scalars are NO LONGER in __dir__ (removed from _EXPORTS at v0.46):
+    assert "pr_auc" not in listing
+    assert "brier_score" not in listing
 
 
 @pytest.mark.unit
