@@ -5,6 +5,81 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.46.0] — 2026-05-21 — Scorecard: primary v1.0 metric surface (closes #36)
+
+Second minor of the staggered v0.45 → v0.46 → v0.47 → v0.48 → v1.0 sequence.
+**Soft-breaking** — existing top-level scalar metric imports still work but
+emit `DeprecationWarning` (hard-removed at v0.47).
+
+See `docs/source/migration/v0.46.md` for the full consumer migration guide and
+`docs/source/adr/0002-scorecard-as-primary-metric-surface.md` for the
+decision record.
+
+### Added
+
+- **`eval_toolkit.scorecard(y_true, y_score, metrics=[...], bootstrap=True)`**
+  — primary v1.0 metric surface. Single call computes multiple threshold-free
+  metrics + bootstrap CIs on one slice; returns a `Scorecard` (read-only
+  `Mapping[str, MetricResult]`). Type-safe dict-subscript access; status-aware
+  cells; per-cell error isolation.
+- **`MetricSpec` Protocol** — v1.0 Tier-2 contract; `name: str` +
+  `compute(y_true, y_score) -> float`. Custom user specs satisfy structurally.
+- **`MetricResult`** frozen dataclass — `value: float | None`, `status:
+  Literal["ok", "skipped", "error"]`, `reason: str`, `ci: BootstrapCI | None`.
+  Reuses the existing `MetricState` vocabulary from `artifacts.py:30-61`.
+- **`Scorecard`** read-only `Mapping[str, MetricResult]` — `to_dict()`
+  JSON-friendly, `to_pandas()` one-row DataFrame (lazy pandas import).
+- **`eval_toolkit.metric_specs`** namespace submodule with threshold-free
+  first-party specs:
+  - `pr_auc`, `roc_auc`, `brier` — module-level singletons (identity stable).
+  - `ece(n_bins, strategy)` — LRU-cached factory (identity stable per kwargs).
+- **`SINGLE_CLASS_INCOMPATIBLE_METRICS`** extended with `pr_auc` / `roc_auc`
+  aliases (alongside existing `auroc` / `auprc`) so the v0.46 scorecard
+  surface and the v0.39 harness paths both produce correct skipped-status
+  behavior. Non-breaking; doctest + unit tests added.
+- **`docs/source/adr/0002-scorecard-as-primary-metric-surface.md`** —
+  decision record covering single-surface rationale, threshold-free scope,
+  Tier-2 Protocol commitment, and v2.0 trigger conditions.
+- **`docs/source/migration/v0.46.md`** — consumer migration guide with
+  side-by-side recipes for every common pattern.
+
+### Deprecated
+
+The following 8 top-level scalar imports emit `DeprecationWarning` and will
+be hard-removed at v0.47.0. Use `scorecard()` + `metric_specs` or the
+`eval_toolkit.metrics` submodule path (internal API, no warning).
+
+- `pr_auc`, `roc_auc`, `brier_score`
+- `expected_calibration_error`
+- `expected_calibration_error_debiased`
+- `expected_calibration_error_equal_mass`
+- `expected_calibration_error_l2`
+- `expected_calibration_error_l2_debiased`
+
+### Audit findings integrated (Round 5)
+
+Per `docs/source/audit_findings.md`:
+
+- **F1** (scorecard threshold semantics) — addressed by Decision R: ship
+  threshold-free first-party specs only at v0.46. Threshold-dependent
+  metrics (F1, accuracy, precision, recall) deferred to v1.x with explicit
+  operating-point provenance.
+- **F2** (scorecard cell-state semantics) — addressed by Decision S: reuse
+  existing `MetricState` (`ok`/`skipped`/`error`) vocabulary.
+- **F4** (deprecation shim must extend the lazy resolver, not replace it) —
+  addressed: `__getattr__` deprecation branch sits between `__version__`
+  short-circuit and the base `_EXPORTS` lookup; tagged with BEGIN/END
+  TRANSITIONAL markers for clean v0.47 removal. Tests guard that every
+  remaining `_EXPORTS` symbol still resolves.
+- **X.2 precondition** — `is_metric_defined_for_slice` aliases shipped
+  ahead of v0.46 (PR #62).
+
+### Protocol stability
+
+Tier-2 streak continues: 7 of 7 consecutive minors (v0.40–v0.46) without
+method-shape edits to any existing Tier-2 Protocol. `MetricSpec` is a NEW
+Tier-2 Protocol added at v0.46; freezes at v1.0.
+
 ## [0.45.0] — 2026-05-21 — Stacking: MetaLearner Protocol + LogisticStacker (closes #52)
 
 First minor of the staggered v0.45 → v0.46 → v0.47 → v0.48 → v1.0 sequence
