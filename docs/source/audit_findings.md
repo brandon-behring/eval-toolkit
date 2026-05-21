@@ -60,14 +60,66 @@ for fix-tracking. Lower-severity findings are recorded here only.
 
 ---
 
-## Round 6 (planned: post-v0.46 ship) — STOP-GATE before v0.47 release branch
+## Round 6 (active: post-v0.46 ship — pending Codex + Gemini reports)
 
-_To be populated after v0.46 ships and Codex + Gemini re-run against the new
-state. Focus: scorecard surface design lock-in._
+**Ship date**: v0.46.0 tagged + published to PyPI 2026-05-21. STOP-GATE per
+Decision Y.2 — `release/v0.47.0` cannot open until this audit completes (or
+the 7-day timeout from 2026-05-21 expires).
+
+**Reviewers**: author (manual) + Codex (independent) + Gemini (independent).
+
+**Packet to send to Codex + Gemini**:
+
+- This plan file (`~/.claude/plans/evaluate-all-the-work-twinkly-kite.md`)
+- This audit ledger (`docs/source/audit_findings.md`)
+- `docs/source/methodology/` (16 chapters — unchanged from Round 5)
+- `docs/source/roadmap.md`
+- `docs/source/migration/v0.46.md` (**NEW** — consumer migration guide)
+- `docs/source/adr/0002-scorecard-as-primary-metric-surface.md` (**NEW**)
+- `CHANGELOG.md` (new v0.45.0 + v0.46.0 entries since Round 5)
+- Source tree, with focus on the v0.45 + v0.46 additions:
+  - `src/eval_toolkit/stacking.py` (v0.45, ~370 lines)
+  - `src/eval_toolkit/_scorecard.py` (v0.46, ~430 lines)
+  - `src/eval_toolkit/metric_specs.py` (v0.46, ~180 lines)
+  - `src/eval_toolkit/__init__.py` — `__getattr__` deprecation branch +
+    `_DEPRECATED_SCALARS` (Audit F4 invariant region)
+  - `src/eval_toolkit/metrics.py:120-200` —
+    `SINGLE_CLASS_INCOMPATIBLE_METRICS` extension (Round-5 X.2 precondition)
+
+**Audit prompt**:
+[`~/.claude/plans/gate3-audit-prompt.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/.claude/plans/gate3-audit-prompt.md)
+(local). The "Known issues already in the v0.48 backlog (skip re-reporting)"
+section already lists drift items scheduled for v0.48 polish — Round 6
+reviewers should skip those and surface only NEW findings against the v0.46
+state.
+
+**Focus areas** for Round 6 review:
+
+- **scorecard surface design lock-in.** The Tier-2 `MetricSpec` Protocol
+  freezes at v1.0 — method-signature changes require a v2.0 major bump.
+  Last cheap chance to catch contract gaps.
+- **MetricResult cell-state contract** — does the `ok` / `skipped` /
+  `error` vocabulary cover every relevant failure mode? Are the reason
+  strings useful for triage?
+- **Per-cell error isolation** — confirm that catching all exceptions in
+  `_evaluate_spec` doesn't hide important failures the user should see.
+- **`__getattr__` deprecation shim** — Audit F4 invariant: does the branch
+  correctly route deprecated names, NOT break non-deprecated resolution,
+  and cleanly delete at v0.47?
+- **Spec name encoding for parameterized metrics** — is
+  `"ece_n_bins_15_strategy_uniform"` a stable v1.0 commitment, or does the
+  alphabetize-kwargs rule create surprise keys for custom user specs with
+  multi-kwarg signatures?
+- **`Scorecard.to_pandas()` MultiIndex schema** — first-time-public; any
+  shape lock-in concerns?
+
+**Triage on findings**: each blocker → `p1-gate3`-labelled GitHub issue +
+a row in this ledger. Either fix-as-v0.46.1-hotfix or fold into v0.47
+design (per Decision Q severity-tiered hotfix policy).
 
 | ID | Severity | Finding | Disposition | Issue |
 |----|----------|---------|-------------|-------|
-| _pending_ | | | | |
+| _pending Codex + Gemini reports_ | | | | |
 
 ---
 
