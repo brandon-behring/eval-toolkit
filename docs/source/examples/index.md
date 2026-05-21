@@ -27,6 +27,7 @@ runnable end-to-end under myst-nb (cells execute during
 | [ActivationDeltaProbe](activation_delta_probe.md) | `eval_toolkit.probes.ActivationDeltaProbe` — TaskTracker-style linear probe on transformer activation deltas | `[probes]` for real backbones; mocked illustration here |
 | [Spotlighting variants](spotlighting.md) | `eval_toolkit.preprocessing` — delimit / datamark / encode structural defenses + batch sweep | none |
 | [RecallAtLowFPR loss](recall_at_low_fpr.md) | `eval_toolkit.losses.RecallAtLowFPR` — Meta Prompt Guard 2 training recipe (differentiable recall-at-fixed-FPR) | `[losses]`; static render in docs CI |
+| [LogisticStacker](stacking.md) | `eval_toolkit.stacking.LogisticStacker` — combine multiple detector outputs into a calibrated meta-classifier via the `MetaLearner` Protocol | none |
 
 ## How these run
 
@@ -68,4 +69,5 @@ character_injection_sweep
 activation_delta_probe
 spotlighting
 recall_at_low_fpr
+stacking
 ```
