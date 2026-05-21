@@ -5,6 +5,140 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.47.0] — 2026-05-21 — Sweep unification + TextTransform + advanced-6 + cleanup + Round 6 follow-on
+
+Second BREAKING minor of the staggered v0.45 → v0.46 → v0.46.1 → v0.47 →
+v0.48 → v1.0 release sequence (plan
+``~/.claude/plans/evaluate-all-the-work-twinkly-kite.md``, Step 3).
+
+Closes:
+
+- The v0.43 CHANGELOG forward-look re: advanced-6 character-injection
+  techniques (Decision Q11→11.3 — "12-technique suite + new sweep API
+  in one migration step").
+- Round 6 audit follow-on items per Decision R6-E (R6-A docstring,
+  R6-B duplicate name guard, R6-C to_pandas schema, R6-D Protocol
+  method-shape drift guard, R6-F5 narrow except, R6-F6 plan/roadmap
+  refresh, R6-H make_spec_name helper) — see ``docs/source/audit_findings.md``
+  for the per-finding ledger.
+
+### Removed (BREAKING)
+
+- **Top-level scalar metric names** (``eval_toolkit.pr_auc``,
+  ``eval_toolkit.roc_auc``, ``eval_toolkit.brier_score``, all 5
+  ``expected_calibration_*`` variants) — the v0.46 ``__getattr__``
+  deprecation shim has been deleted. These names now raise
+  ``AttributeError`` at the top-level. Migration: use ``scorecard(...)``
+  with ``metric_specs`` (primary) OR import from the
+  ``eval_toolkit.metrics`` submodule (internal API per ADR 0002).
+  (Decision L; plan §4D.)
+- **Module-level ``adversarial.sweep`` + ``preprocessing.sweep``** —
+  consolidated into the top-level :func:`sweep` (Decision D + plan §4C).
+  Parity tests in Sub-PR 4 of this release proved 1:1 output equivalence
+  on the neutral subset.
+- **``adversarial.character_injection`` + ``preprocessing.spotlighting``
+  ``SimpleNamespace`` shortcuts** — removed (Decision N + plan §4E).
+  The 12 adversarial dataclasses + the 3 preprocessing variants + the
+  underlying functional API are the only public paths.
+- **``adversarial.CharacterInjectionStrategy``** per-module Protocol —
+  removed. The top-level :class:`TextTransform` Protocol (Decision K)
+  is the single canonical contract; all 12 character-injection
+  dataclasses + 3 preprocessing variants satisfy it structurally.
+
+### Added
+
+- **``TextTransform`` Protocol** (top-level; ``eval_toolkit.protocols`` module).
+  Decision K + Audit R5-F3 (Codex Round 5): unifies the "name + transform(text)"
+  shape across preprocessing (defence) and adversarial (attack) strategies so
+  the v0.47 top-level :func:`sweep` (next sub-PR) can mix them in one call. The
+  9th strict Tier-2 Protocol per ADR 0003.
+- **Advanced 6 character-injection techniques** (plan §4F, Decision Q11→11.3) —
+  closes the v0.43.0 CHANGELOG forward-look that referenced these as "scheduled
+  for v0.43.1" (a version that never shipped). Each satisfies the top-level
+  :class:`TextTransform` Protocol structurally; all are frozen + ``slots=True``
+  dataclasses with deterministic behaviour under their ``seed`` kwarg where
+  applicable:
+
+    - :class:`BidiRTLInjection` — wrap input in ``U+202E … U+202C``
+      RIGHT-TO-LEFT OVERRIDE block.
+    - :class:`TagStrippingInjection` — strip HTML/XML-like ``<…>`` tags
+      (idempotent).
+    - :class:`SynonymSubstitution` — replace whitelisted prompt-injection-
+      relevant function words / verbs with semantic-preserving synonyms.
+    - :class:`TokenSplitting` — insert a single space inside long enough
+      words; forces subword tokenizers to re-segment.
+    - :class:`UnicodeNormalization` — NFC / NFD / NFKC / NFKD; default NFKC
+      folds compatibility chars (e.g., fullwidth ``ＡＢＣ`` → ``ABC``).
+    - :class:`InvisibleCharsInjection` — sample from the 5-element invisible-
+      code-point set (ZWSP, ZWNJ, ZWJ, word joiner, BOM) — distinct from the
+      single-codepoint :class:`ZeroWidthSpaceInjection`.
+
+  Also exported: ``ADVANCED_TECHNIQUES`` (6-tuple) and ``ALL_TECHNIQUES``
+  (12-tuple = core 6 + advanced 6).
+- **Top-level :func:`sweep`** — single ``TextTransform`` enumeration entry
+  point (Decision K + Decision D + Audit R5-F3). Replaces the per-module
+  ``adversarial.sweep`` + ``preprocessing.sweep`` (those are removed in a
+  subsequent sub-PR of this release). New contract:
+
+    - ``sweep(strategies, texts)`` → neutral DataFrame with ``text_id`` /
+      ``variant`` / ``transformed_text`` columns. Pure text-transform
+      enumeration; defence + attack strategies compose freely.
+    - ``sweep(..., scorer=...)`` → also emits ``original_score`` /
+      ``transformed_score`` columns (single batched scorer call per
+      strategy, not per-row).
+    - ``sweep(..., scorer=..., attack_threshold=t)`` → also emits ``asr``
+      (per-row attack-success flag). Explicit threshold REQUIRED to
+      materialize ``asr``; no magic ``threshold=0.5`` default.
+      ``attack_threshold`` without ``scorer`` raises ``ValueError``.
+
+  Parity tests against the existing module-level sweeps ship in this
+  sub-PR (``tests/test_sweep.py``) and prove the v0.47 consolidation
+  produces identical transformed-text rows for the 6 core character-
+  injection techniques + the 3 spotlighting variants.
+- **3 preprocessing dataclasses** (``DelimitVariant``, ``DatamarkVariant``,
+  ``EncodeVariant``) in :mod:`eval_toolkit.preprocessing`. Frozen +
+  ``slots=True`` thin wrappers over the existing :func:`delimit` /
+  :func:`datamark` / :func:`encode` functions. Closes Audit R5-F3
+  (Codex Round 5) — prior to this commit, ``preprocessing.__all__`` exported
+  only functions, so the "concrete classes satisfy ``TextTransform``
+  structurally" claim only held on the adversarial side. Now both sides
+  share the dataclass-strategy shape.
+- ``metric_specs.make_spec_name(prefix, **kwargs)`` canonicalization helper
+  for custom parameterized :class:`MetricSpec` implementations. Alphabetized
+  kwargs joined by underscore — same convention the v0.46 ECE factory uses.
+  Lands in ``metric_specs.__all__`` only; **not** top-level ``__all__`` per
+  Decision R6-H. (Closes Round 6 Gemini R6-F4.)
+
+### Changed (Round 6 follow-on)
+
+- ``scorecard()`` now raises ``ValueError`` when two :class:`MetricSpec`
+  instances in the ``metrics`` list share a ``name``. Forces caller
+  disambiguation; the ``Mapping[str, MetricResult]`` contract never silently
+  drops a cell. Error message reports both indices. (Decision R6-B; closes
+  Round 6 Codex R6-F3.)
+- ``scorecard(seed=None)`` docstring rewritten to document the deterministic-
+  by-default contract (``None`` is treated as ``seed=0``). No behavior
+  change; v0.46 documented the wrong contract. (Decision R6-A; closes Round 6
+  Codex R6-F4 + Gemini R6-F1.)
+- ``_evaluate_spec()`` exception catches narrowed: ``MemoryError``,
+  ``RecursionError``, ``KeyboardInterrupt``, and ``SystemExit`` now propagate
+  out of ``scorecard()`` instead of being captured as a ``status="error"``
+  cell. Per-cell isolation remains for ordinary application errors.
+  (Decision R6-F5; closes Round 6 Gemini R6-F5.)
+- ``Scorecard.to_pandas()`` MultiIndex schema extended with two new inner-
+  field columns: ``n_resamples`` (int / NaN sentinel) and ``method``
+  (string / ``""`` sentinel). The DataFrame view is now lossless against
+  :meth:`BootstrapCI.to_dict` — trace provenance (resample count + CI
+  method) no longer drops at the DataFrame boundary. Callers indexing the
+  MultiIndex by name keep working; callers indexing by position must
+  re-check column offsets. (Decision R6-C; closes Round 6 Gemini R6-F3.)
+- ``tests/test_public_api.py`` drift guard now captures method signatures
+  for ``typing.Protocol`` classes in ``__all__`` (a ``protocol_methods``
+  sub-entry in the snapshot). Together with a Tier-2 coverage test, this
+  actually enforces the strict method-shape stability ADR 0003 promises
+  for the 9 Tier-2 Protocols. (Decision R6-D; closes Round 6 Codex R6-F5.)
+  Public-API golden regenerated alongside this change.
+
 ## [0.46.1] — 2026-05-21 — Round 6 hotfix: ECE strategy validation + deprecation warning content
 
 Hotfix release per **Decision Q** (data correctness regression + time-sensitive

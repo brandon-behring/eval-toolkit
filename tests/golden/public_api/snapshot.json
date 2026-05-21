@@ -1,14 +1,16 @@
 {
   "__all__": [
+    "ADVANCED_TECHNIQUES",
+    "ALL_TECHNIQUES",
     "ANCHOR_RE",
     "ActivationDeltaProbe",
     "ActivationExtractor",
     "AggregateEvidence",
+    "BidiRTLInjection",
     "BootstrapCI",
     "CISafeThresholdSelector",
     "CORE_TECHNIQUES",
     "CaseRandomization",
-    "CharacterInjectionStrategy",
     "ClaimReport",
     "ClaimSpec",
     "CorrectionMethod",
@@ -31,11 +33,14 @@
     "DEFAULT_SEED",
     "DEFAULT_STRATEGY",
     "DataFrameLoader",
+    "DatamarkVariant",
     "DatasetLoader",
     "DeLongResult",
     "DedupReport",
+    "DelimitVariant",
     "DiacriticInjection",
     "EmbeddingCosineStrategy",
+    "EncodeVariant",
     "EvalSlice",
     "EvalSliceLike",
     "EvidenceAxis",
@@ -51,6 +56,7 @@
     "HFDatasetsLoader",
     "HoldoutSplitter",
     "HomoglyphSubstitution",
+    "InvisibleCharsInjection",
     "JaccardNgramStrategy",
     "JsonlPredictionReader",
     "LabelConflictCheck",
@@ -102,10 +108,13 @@
     "SourceRoleRecord",
     "Splitter",
     "StratifiedKFoldSplitter",
+    "SynonymSubstitution",
+    "TagStrippingInjection",
     "TargetFPRSelector",
     "TargetPrecisionSelector",
     "TargetRecallSelector",
     "TemporalLeakageCheck",
+    "TextTransform",
     "TfidfCosineStrategy",
     "ThresholdFn",
     "ThresholdPolicyMetadata",
@@ -113,7 +122,9 @@
     "ThresholdSelector",
     "ThresholdedMetricFn",
     "TimeSeriesSplitter",
+    "TokenSplitting",
     "TokenizationLeakageCheck",
+    "UnicodeNormalization",
     "Versioned",
     "WhitespaceInjection",
     "WilsonInterval",
@@ -130,7 +141,6 @@
     "brier_decomposition",
     "build_manifest",
     "capture_git_sha",
-    "character_injection",
     "compute_file_hash",
     "compute_label_overlap",
     "correct_p_values",
@@ -222,9 +232,9 @@
     "skipped_metric",
     "source_role_gate",
     "split_provenance_config",
-    "spotlighting",
     "stratified_recall",
     "strict_artifact_gate",
+    "sweep",
     "validate_manifest",
     "validate_payload",
     "validate_prediction_artifact_ref",
@@ -238,6 +248,16 @@
     "write_run_result"
   ],
   "entries": {
+    "ADVANCED_TECHNIQUES": {
+      "doc_first_line": "Built-in immutable sequence.",
+      "kind": "value",
+      "type": "tuple"
+    },
+    "ALL_TECHNIQUES": {
+      "doc_first_line": "Built-in immutable sequence.",
+      "kind": "value",
+      "type": "tuple"
+    },
     "ANCHOR_RE": {
       "doc_first_line": "Compiled regular expression object.",
       "kind": "value",
@@ -257,6 +277,11 @@
       ],
       "doc_first_line": "Extract a hidden-state vector for each input text.",
       "kind": "class",
+      "protocol_methods": {
+        "backbone_id": "<property>",
+        "extract": "(self, texts: 'Sequence[str]') -> 'np.ndarray'",
+        "hidden_size": "<property>"
+      },
       "signature": "(*args, **kwargs)"
     },
     "AggregateEvidence": {
@@ -266,6 +291,14 @@
       "doc_first_line": "Typed status for aggregate rows or summaries.",
       "kind": "class",
       "signature": "(status: 'AggregateStatus', method: 'str', axes: 'tuple[EvidenceAxis, ...]' = (), notes: 'str' = '', metadata: 'dict[str, object]' = <factory>) -> None"
+    },
+    "BidiRTLInjection": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Wrap the input in a Unicode bidi-RTL override block.",
+      "kind": "class",
+      "signature": "(name: 'str' = 'bidi_rtl') -> None"
     },
     "BootstrapCI": {
       "bases": [
@@ -295,14 +328,6 @@
       "doc_first_line": "Randomly flip the case of alphabetic characters.",
       "kind": "class",
       "signature": "(ratio: 'float' = 0.5, seed: 'int' = 42, name: 'str' = 'case_random') -> None"
-    },
-    "CharacterInjectionStrategy": {
-      "bases": [
-        "Protocol"
-      ],
-      "doc_first_line": "Apply a deterministic character-level adversarial transformation.",
-      "kind": "class",
-      "signature": "(*args, **kwargs)"
     },
     "ClaimReport": {
       "bases": [
@@ -474,12 +499,24 @@
       "kind": "class",
       "signature": "(df: 'pd.DataFrame', split_col: 'str', feature_col: 'str' = 'text', label_col: 'str' = 'label', strata_col: 'str | None' = None, name: 'str' = '', description: 'str' = '', cite_as: 'str' = '', license: 'str' = '', url: 'str' = '') -> None"
     },
+    "DatamarkVariant": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": ":class:`TextTransform` wrapper around :func:`datamark`.",
+      "kind": "class",
+      "signature": "(name: 'str' = 'datamark', marker: 'str' = '^') -> None"
+    },
     "DatasetLoader": {
       "bases": [
         "Protocol"
       ],
       "doc_first_line": "Yields one or more :class:`EvalSlice` keyed by split name.",
       "kind": "class",
+      "protocol_methods": {
+        "describe": "(self) -> 'dict[str, object]'",
+        "load_splits": "(self) -> 'dict[str, EvalSlice]'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "DeLongResult": {
@@ -498,6 +535,14 @@
       "kind": "class",
       "signature": "(kept_indices: 'list[int]', dropped_pairs: 'list[tuple[int, int, float]]', threshold: 'float', n_input: 'int') -> None"
     },
+    "DelimitVariant": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": ":class:`TextTransform` wrapper around :func:`delimit`.",
+      "kind": "class",
+      "signature": "(name: 'str' = 'delimit', delimiter: 'str' = '<<', end: 'str | None' = None) -> None"
+    },
     "DiacriticInjection": {
       "bases": [
         "object"
@@ -514,6 +559,14 @@
       "kind": "class",
       "signature": "(embedder: 'Callable[[Sequence[str]], np.ndarray]') -> None"
     },
+    "EncodeVariant": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": ":class:`TextTransform` wrapper around :func:`encode`.",
+      "kind": "class",
+      "signature": "(name: 'str' = 'encode', encoding: \"Literal['base64']\" = 'base64') -> None"
+    },
     "EvalSlice": {
       "bases": [
         "object"
@@ -528,6 +581,12 @@
       ],
       "doc_first_line": "Pandas-free slice surface needed by evaluation contracts.",
       "kind": "class",
+      "protocol_methods": {
+        "features": "<property>",
+        "name": "<property>",
+        "strata": "<property>",
+        "y_true": "<property>"
+      },
       "signature": "(*args, **kwargs)"
     },
     "EvidenceAxis": {
@@ -634,6 +693,14 @@
       "kind": "class",
       "signature": "(ratio: 'float' = 0.3, seed: 'int' = 42, name: 'str' = 'homoglyph') -> None"
     },
+    "InvisibleCharsInjection": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Insert invisible / zero-width Unicode characters between characters.",
+      "kind": "class",
+      "signature": "(ratio: 'float' = 0.5, seed: 'int' = 42, name: 'str' = 'invisible_chars') -> None"
+    },
     "JaccardNgramStrategy": {
       "bases": [
         "object"
@@ -664,6 +731,10 @@
       ],
       "doc_first_line": "A pluggable validator over a dict of splits.",
       "kind": "class",
+      "protocol_methods": {
+        "name": "<property>",
+        "validate": "(self, splits: 'Mapping[str, EvalSlice]') -> 'LeakageFinding'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "LeakageFinding": {
@@ -718,6 +789,14 @@
       ],
       "doc_first_line": "Combines per-sample scores from multiple base detectors into P(positive).",
       "kind": "class",
+      "protocol_methods": {
+        "classes_": "<attr: 'np.ndarray'>",
+        "coef_": "<attr: 'np.ndarray'>",
+        "fit": "(self, score_matrix: 'np.ndarray', y: 'np.ndarray') -> 'MetaLearner'",
+        "intercept_": "<attr: 'np.ndarray'>",
+        "predict": "(self, score_matrix: 'np.ndarray') -> 'np.ndarray'",
+        "predict_proba": "(self, score_matrix: 'np.ndarray') -> 'np.ndarray'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "MetricFn": {
@@ -739,6 +818,10 @@
       ],
       "doc_first_line": "Public Protocol for metric specifications consumed by :func:`scorecard`.",
       "kind": "class",
+      "protocol_methods": {
+        "compute": "(self, y_true: 'np.ndarray', y_score: 'np.ndarray') -> 'float'",
+        "name": "<property>"
+      },
       "signature": "(*args, **kwargs)"
     },
     "MetricState": {
@@ -864,6 +947,9 @@
       ],
       "doc_first_line": "Augment a fold's train slice with an external pool and split off val.",
       "kind": "class",
+      "protocol_methods": {
+        "build": "(self, train: 'EvalSlice', *, fold_idx: 'int') -> 'dict[str, EvalSlice]'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "PredictionArrays": {
@@ -896,6 +982,9 @@
       ],
       "doc_first_line": "Reads manifest-referenced prediction artifacts into column arrays.",
       "kind": "class",
+      "protocol_methods": {
+        "read_predictions": "(self, uri: 'str', *, columns: 'Mapping[str, str]') -> 'Mapping[str, Sequence[object]]'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "Probe": {
@@ -904,6 +993,13 @@
       ],
       "doc_first_line": "Minimal probe surface: fit + predict on raw text inputs.",
       "kind": "class",
+      "protocol_methods": {
+        "classes_": "<attr: 'np.ndarray'>",
+        "coef_": "<attr: 'np.ndarray'>",
+        "fit": "(self, clean_texts: 'Sequence[str]', injected_texts: 'Sequence[str]') -> 'Probe'",
+        "predict": "(self, texts: 'Sequence[str]') -> 'np.ndarray'",
+        "predict_proba": "(self, texts: 'Sequence[str]') -> 'np.ndarray'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "PunctuationInjection": {
@@ -983,6 +1079,9 @@
       ],
       "doc_first_line": "Anything exposing ``predict_proba(X) -> np.ndarray of P(positive)``.",
       "kind": "class",
+      "protocol_methods": {
+        "predict_proba": "(self, X: 'Sequence[str] | np.ndarray | pd.Series') -> 'np.ndarray'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "SimilarityAuditFinding": {
@@ -1007,6 +1106,10 @@
       ],
       "doc_first_line": "Pluggable similarity backend for :func:`near_dedup` / :func:`cross_dedup`.",
       "kind": "class",
+      "protocol_methods": {
+        "pairs_across": "(self, query_texts: 'Sequence[str]', reference_texts: 'Sequence[str]', k: 'int') -> 'tuple[np.ndarray, np.ndarray]'",
+        "pairs_within": "(self, texts: 'Sequence[str]', k: 'int') -> 'tuple[np.ndarray, np.ndarray]'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "SingleSliceLoader": {
@@ -1024,6 +1127,9 @@
       ],
       "doc_first_line": "Optional scorer contract for cost-controlled slice skipping.",
       "kind": "class",
+      "protocol_methods": {
+        "should_score_slice": "(self, slice_name: 'str') -> 'bool'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "SourceDisjointKFoldSplitter": {
@@ -1048,6 +1154,10 @@
       ],
       "doc_first_line": "Iterates folds, each as a named-splits dict ready for ``evaluate(...)``.",
       "kind": "class",
+      "protocol_methods": {
+        "get_n_splits": "(self, slice_: 'EvalSlice') -> 'int'",
+        "iter_folds": "(self, slice_: 'EvalSlice', *, groups: 'np.ndarray | None' = None) -> 'Iterator[dict[str, EvalSlice]]'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "StratifiedKFoldSplitter": {
@@ -1057,6 +1167,22 @@
       "doc_first_line": "K-fold cross-validation with class-stratification.",
       "kind": "class",
       "signature": "(k: 'int' = 5, shuffle: 'bool' = True, seed: 'int' = 42) -> None"
+    },
+    "SynonymSubstitution": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Replace whitelisted words with deterministic synonyms.",
+      "kind": "class",
+      "signature": "(ratio: 'float' = 1.0, seed: 'int' = 42, name: 'str' = 'synonym') -> None"
+    },
+    "TagStrippingInjection": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Strip HTML/XML-like tags from the input.",
+      "kind": "class",
+      "signature": "(name: 'str' = 'tag_strip') -> None"
     },
     "TargetFPRSelector": {
       "bases": [
@@ -1089,6 +1215,18 @@
       "doc_first_line": "Temporal ordering invariant: every earlier split's max(time) \u2264 next's min(time).",
       "kind": "class",
       "signature": "(time_col: 'str', split_order: 'Sequence[str]', severity: 'Severity' = 'error') -> None"
+    },
+    "TextTransform": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Uniform text-transform shape for sweep + defence + attack strategies.",
+      "kind": "class",
+      "protocol_methods": {
+        "name": "<attr: 'str'>",
+        "transform": "(self, text: 'str') -> 'str'"
+      },
+      "signature": "(*args, **kwargs)"
     },
     "TfidfCosineStrategy": {
       "bases": [
@@ -1125,6 +1263,10 @@
       ],
       "doc_first_line": "Selects a decision threshold from ``(y_true, y_score)``.",
       "kind": "class",
+      "protocol_methods": {
+        "criterion": "<property>",
+        "select": "(self, y_true: 'np.ndarray', y_score: 'np.ndarray') -> 'ThresholdResult'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "ThresholdedMetricFn": {
@@ -1140,6 +1282,14 @@
       "kind": "class",
       "signature": "(k: 'int' = 5, time_col: 'str | None' = None) -> None"
     },
+    "TokenSplitting": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Insert a single space inside each long enough word.",
+      "kind": "class",
+      "signature": "(min_word_length: 'int' = 5, ratio: 'float' = 1.0, seed: 'int' = 42, name: 'str' = 'token_split') -> None"
+    },
     "TokenizationLeakageCheck": {
       "bases": [
         "object"
@@ -1148,12 +1298,23 @@
       "kind": "class",
       "signature": "(tokenizer: 'Callable[[str], Mapping[str, object]]', target_splits: 'Sequence[str] | None' = None, severity: 'Severity' = 'error') -> None"
     },
+    "UnicodeNormalization": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Apply a Unicode normalization form to the input.",
+      "kind": "class",
+      "signature": "(form: 'str' = 'NFKC', name: 'str' = 'unicode_normalize') -> None"
+    },
     "Versioned": {
       "bases": [
         "Protocol"
       ],
       "doc_first_line": "Anything exposing a stable version string.",
       "kind": "class",
+      "protocol_methods": {
+        "version": "<property>"
+      },
       "signature": "(*args, **kwargs)"
     },
     "WhitespaceInjection": {
@@ -1192,7 +1353,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'0.46.1'"
+      "value": "'0.47.0'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1243,11 +1404,6 @@
       "doc_first_line": "Current HEAD full SHA, or ``None`` if not in a git repo.",
       "kind": "function",
       "signature": "(repo_root: 'Path | str | None' = None) -> 'str | None'"
-    },
-    "character_injection": {
-      "doc_first_line": "A simple attribute-based namespace.",
-      "kind": "value",
-      "type": "types.SimpleNamespace"
     },
     "compute_file_hash": {
       "doc_first_line": "SHA-256 hex digest of an existing file (sentinel-typed).",
@@ -1704,11 +1860,6 @@
       "kind": "function",
       "signature": "(config: 'Mapping[str, Any]', repo_root: 'Path | str | None' = None, *, path_keys: 'tuple[str, ...]' = ('path', 'dir', 'file', 'splits_dir', 'model_path')) -> 'dict[str, Any]'"
     },
-    "spotlighting": {
-      "doc_first_line": "A simple attribute-based namespace.",
-      "kind": "value",
-      "type": "types.SimpleNamespace"
-    },
     "stratified_recall": {
       "doc_first_line": "Recall (TPR) per categorical stratum.",
       "kind": "function",
@@ -1718,6 +1869,11 @@
       "doc_first_line": "Fail if result or manifest contains non-finite numeric values.",
       "kind": "function",
       "signature": "(*, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "sweep": {
+      "doc_first_line": "Apply each ``TextTransform`` strategy to each text; one row per pair.",
+      "kind": "function",
+      "signature": "(strategies: 'Sequence[TextTransform]', texts: 'Sequence[str]', *, scorer: 'Scorer | None' = None, attack_threshold: 'float | None' = None) -> 'pd.DataFrame'"
     },
     "validate_manifest": {
       "doc_first_line": "Validate a serialized ``RunManifest`` payload.",

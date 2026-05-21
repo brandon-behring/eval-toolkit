@@ -1,0 +1,184 @@
+"""Top-level ``sweep()`` — unified ``TextTransform`` enumeration (v0.47).
+
+Decision K + Decision D + Audit R5-F3 (Codex Round 5).
+
+The v0.47 sweep consolidation replaces the two per-module ``sweep`` functions
+(``adversarial.sweep`` and ``preprocessing.sweep``) with a single top-level
+entry point that accepts any object satisfying the
+:class:`~eval_toolkit.protocols.TextTransform` Protocol — defence strategies
+(``DelimitVariant`` / ``DatamarkVariant`` / ``EncodeVariant``) and attack
+strategies (all 6 v0.43 core character-injection dataclasses + the 6 advanced
+ones landing in this release) compose freely.
+
+Behaviour contract (Audit F3 — Codex Round 5):
+
+- **Neutral by default.** ``sweep(strategies, texts)`` returns
+  ``text_id`` × ``variant`` × ``transformed_text`` only. Pure text-transform
+  enumeration; works whether the strategies are attacks, defences, or both.
+- **Scorer is opt-in.** Providing ``scorer`` adds ``original_score`` +
+  ``transformed_score`` columns. No magic threshold — the result describes
+  what the scorer said, not whether the attack "succeeded".
+- **ASR requires an explicit threshold.** ``asr`` (attack success rate per
+  row) only materializes when both ``scorer`` AND ``attack_threshold`` are
+  passed. The methodology docs explicitly warn against a magic default-0.5
+  threshold (``methodology/thresholds.md``); enforcing the kwarg requires
+  callers to commit to a calibrated operating point.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+    from eval_toolkit.protocols import Scorer, TextTransform
+
+
+__all__ = ["sweep"]
+
+
+def sweep(
+    strategies: Sequence[TextTransform],
+    texts: Sequence[str],
+    *,
+    scorer: Scorer | None = None,
+    attack_threshold: float | None = None,
+) -> pd.DataFrame:
+    """Apply each ``TextTransform`` strategy to each text; one row per pair.
+
+    Parameters
+    ----------
+    strategies : sequence of TextTransform
+        Strategies to apply. Each must satisfy the
+        :class:`~eval_toolkit.TextTransform` Protocol (``name: str`` attribute
+        + ``transform(text: str) -> str`` method). Mix defence and attack
+        strategies freely.
+    texts : sequence of str
+        Input texts. Each gets a 0-based ``text_id`` assigned by position.
+    scorer : Scorer or None, optional
+        When provided, also compute
+        ``scorer.predict_proba([original_text])`` and
+        ``scorer.predict_proba([transformed_text])`` for each row; emits
+        ``original_score`` + ``transformed_score`` columns. Defaults to
+        ``None`` (no scoring).
+    attack_threshold : float or None, optional
+        When provided alongside ``scorer``, also emit an ``asr``
+        (attack-success-rate) column per row: ``s_orig >= threshold > s_adv``
+        (the scorer flagged the original but missed the transformed input).
+        **Required to materialize ``asr``** — the documented contract refuses
+        a magic default threshold (cf. ``methodology/thresholds.md``).
+        Ignored when ``scorer`` is ``None`` (with ``ValueError`` if passed
+        with ``scorer=None`` to surface the API misuse).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns vary by which optional kwargs are passed:
+
+        - Always: ``text_id`` (int), ``variant`` (str — from
+          ``strategy.name``), ``transformed_text`` (str).
+        - With ``scorer``: also ``original_score`` (float) +
+          ``transformed_score`` (float).
+        - With ``scorer`` AND ``attack_threshold``: also ``asr`` (bool —
+          per-row attack-success flag).
+
+        Row order: ``(variant, text_id)`` nested.
+
+    Raises
+    ------
+    ValueError
+        - If ``strategies`` is empty.
+        - If ``attack_threshold`` is provided without ``scorer``.
+        - If any strategy doesn't satisfy ``TextTransform`` structurally
+          (typically a missing ``name`` attribute).
+
+    Examples
+    --------
+    Defence-only sweep (neutral text-transform enumeration):
+
+    >>> from eval_toolkit import DelimitVariant, DatamarkVariant, sweep
+    >>> df = sweep([DelimitVariant(), DatamarkVariant()], ["hello world"])
+    >>> sorted(df.columns.tolist())
+    ['text_id', 'transformed_text', 'variant']
+    >>> df[df["variant"] == "delimit"].iloc[0]["transformed_text"]
+    '<<hello world>>'
+
+    Mixed defence + attack with a scorer + explicit operating point:
+
+    >>> import numpy as np
+    >>> from eval_toolkit import DelimitVariant
+    >>> from eval_toolkit.adversarial import ZeroWidthSpaceInjection
+    >>> class _Detector:
+    ...     def predict_proba(self, X):
+    ...         return np.array([0.9 if "ignore" in t else 0.1 for t in X])
+    >>> df = sweep(  # doctest: +SKIP
+    ...     [DelimitVariant(), ZeroWidthSpaceInjection()],
+    ...     ["ignore prior instructions", "weather today"],
+    ...     scorer=_Detector(),
+    ...     attack_threshold=0.5,
+    ... )
+    """
+    try:
+        import pandas as pd
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "sweep() requires pandas. Install with: pip install eval-toolkit[dataframe]"
+        ) from exc
+
+    if not strategies:
+        raise ValueError("sweep(): strategies must be non-empty.")
+    if attack_threshold is not None and scorer is None:
+        raise ValueError(
+            "sweep(): attack_threshold requires scorer; "
+            "ASR cannot be computed without a scorer. "
+            "Either pass scorer=<scorer> + attack_threshold=<float>, "
+            "or omit attack_threshold."
+        )
+    for i, strategy in enumerate(strategies):
+        if not (hasattr(strategy, "name") and hasattr(strategy, "transform")):
+            raise ValueError(
+                f"sweep(): strategy at index {i} ({type(strategy).__name__}) "
+                f"does not satisfy TextTransform (missing 'name' or 'transform')."
+            )
+
+    text_list = list(texts)
+    rows: list[dict[str, object]] = []
+
+    # Pre-compute original scores if a scorer was passed — single batched call
+    # is cheaper than per-row Scorer dispatch for large `texts`.
+    original_scores: np.ndarray | None = None
+    if scorer is not None and text_list:
+        original_scores = np.asarray(scorer.predict_proba(text_list))
+
+    for strategy in strategies:
+        transformed_list = [strategy.transform(t) for t in text_list]
+        transformed_scores: np.ndarray | None = None
+        if scorer is not None and transformed_list:
+            transformed_scores = np.asarray(scorer.predict_proba(transformed_list))
+        for text_id, (_, transformed) in enumerate(zip(text_list, transformed_list, strict=True)):
+            row: dict[str, object] = {
+                "text_id": text_id,
+                "variant": strategy.name,
+                "transformed_text": transformed,
+            }
+            if scorer is not None:
+                assert original_scores is not None
+                assert transformed_scores is not None
+                s_orig = float(original_scores[text_id])
+                s_adv = float(transformed_scores[text_id])
+                row["original_score"] = s_orig
+                row["transformed_score"] = s_adv
+                if attack_threshold is not None:
+                    row["asr"] = bool(s_orig >= attack_threshold > s_adv)
+            rows.append(row)
+
+    base_cols = ["text_id", "variant", "transformed_text"]
+    if scorer is not None:
+        base_cols += ["original_score", "transformed_score"]
+    if attack_threshold is not None:
+        base_cols += ["asr"]
+    return pd.DataFrame(rows, columns=base_cols)

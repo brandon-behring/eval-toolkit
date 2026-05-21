@@ -132,7 +132,7 @@ pip install "eval-toolkit[all]"                 # everything
 
 ```python
 import numpy as np
-from eval_toolkit import pr_auc, roc_auc, expected_calibration_error
+from eval_toolkit.metrics import pr_auc, roc_auc, expected_calibration_error
 
 rng = np.random.default_rng(42)
 y = rng.integers(0, 2, size=200)
@@ -147,7 +147,8 @@ print(f"ECE (10 bins): {expected_calibration_error(y, s, n_bins=10):.3f}")
 ### Bootstrap confidence intervals
 
 ```python
-from eval_toolkit import bootstrap_ci, paired_bootstrap_diff, pr_auc
+from eval_toolkit import bootstrap_ci, paired_bootstrap_diff
+from eval_toolkit.metrics import pr_auc
 
 ci = bootstrap_ci(y, s, pr_auc, n_resamples=1000, seed=42)
 print(f"PR-AUC: {ci.point_estimate:.3f}  95% CI: [{ci.ci_low:.3f}, {ci.ci_high:.3f}]")
@@ -161,8 +162,10 @@ print(f"Δ PR-AUC: {diff.delta:.3f}  overlaps zero: {diff.overlaps_zero}")
 ### Temperature scaling (Guo et al. 2017)
 
 ```python
+import numpy as np
 from eval_toolkit import fit_temperature
 
+rng = np.random.default_rng(42)
 logits = rng.normal(size=(500, 2))
 labels = (logits[:, 1] > logits[:, 0]).astype(int)
 result = fit_temperature(logits, labels)

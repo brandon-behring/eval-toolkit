@@ -195,7 +195,8 @@ fixed-threshold CI because it includes selection variance. Reporting the
 narrower one when the deployment really refits is overconfident.
 
 ```python
-from eval_toolkit import paired_bootstrap_op_point_diff, pr_auc, MaxF1Selector
+from eval_toolkit import paired_bootstrap_op_point_diff, MaxF1Selector
+from eval_toolkit.metrics import pr_auc
 
 s_a = np.clip(rng.normal(0.5, 0.3, size=200), 0, 1)
 s_b = np.clip(y * 0.5 + rng.normal(0.2, 0.3, size=200), 0, 1)

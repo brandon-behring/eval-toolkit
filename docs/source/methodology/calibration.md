@@ -20,14 +20,14 @@ isotonic, Platt), and when *not* to.
 
 ```python
 import numpy as np
-from eval_toolkit import (
+from eval_toolkit import reliability_curve
+from eval_toolkit.metrics import (
     expected_calibration_error,
     expected_calibration_error_l2,
     expected_calibration_error_debiased,
     expected_calibration_error_l2_debiased,
     expected_calibration_error_equal_mass,
     brier_score, brier_decomposition,
-    reliability_curve,
 )
 ```
 

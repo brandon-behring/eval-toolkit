@@ -33,7 +33,7 @@ from eval_toolkit import (
 from eval_toolkit import (
     metric_specs as ms,
 )
-from eval_toolkit import (
+from eval_toolkit.metrics import (
     pr_auc as scalar_pr_auc,
 )
 
@@ -328,6 +328,67 @@ def test_to_pandas_one_row(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> No
     assert df.loc[0, ("brier", "status")] == "ok"
 
 
+def test_to_pandas_includes_n_resamples_and_method(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Decision R6-C: to_pandas schema includes n_resamples + method columns.
+
+    v0.47 expansion makes the DataFrame schema lossless against
+    BootstrapCI.to_dict(); trace provenance (resample count + CI method) is
+    no longer dropped at the DataFrame boundary.
+    """
+    pytest.importorskip("pandas")
+    y, s = well_mixed_data
+    r = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, seed=0)
+    df = r.to_pandas()
+    # Both new columns present
+    assert ("brier", "n_resamples") in df.columns
+    assert ("brier", "method") in df.columns
+    # Values match the BootstrapCI fields
+    ci = r["brier"].ci
+    assert ci is not None
+    assert df.loc[0, ("brier", "n_resamples")] == ci.n_resamples
+    assert df.loc[0, ("brier", "method")] == ci.method
+
+
+def test_to_pandas_skipped_cells_carry_sentinels(
+    all_zeros_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """For skipped cells (no CI), the two new columns get sentinel values.
+
+    Numeric column ``n_resamples`` → NaN; string column ``method`` → "".
+    Matches the existing pattern for ``ci_low`` / ``ci_high`` / ``confidence``.
+    """
+    pytest.importorskip("pandas")
+    import math
+
+    y, s = all_zeros_data  # single-class slice → pr_auc skipped
+    r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True, n_resamples=100, seed=0)
+    df = r.to_pandas()
+    assert r["pr_auc"].status == "skipped"
+    # Sentinels in the skipped cell's new columns
+    assert math.isnan(df.loc[0, ("pr_auc", "n_resamples")])
+    assert df.loc[0, ("pr_auc", "method")] == ""
+    # Brier was still bootstrapped, so its new columns are populated
+    assert not math.isnan(df.loc[0, ("brier", "n_resamples")])
+    assert df.loc[0, ("brier", "method")] != ""
+
+
+def test_to_pandas_no_bootstrap_carries_sentinels(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """When bootstrap=False, the CI columns (incl. R6-C additions) all sentinel."""
+    pytest.importorskip("pandas")
+    import math
+
+    y, s = well_mixed_data
+    r = scorecard(y, s, metrics=[ms.brier], bootstrap=False)
+    df = r.to_pandas()
+    assert math.isnan(df.loc[0, ("brier", "ci_low")])
+    assert math.isnan(df.loc[0, ("brier", "n_resamples")])
+    assert df.loc[0, ("brier", "method")] == ""
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Point-agreement: scorecard().value matches the underlying scalar function
 # ─────────────────────────────────────────────────────────────────────────────
@@ -451,3 +512,199 @@ def test_metric_specs_submodule_importable() -> None:
 
     assert hasattr(metric_specs, "pr_auc")
     assert hasattr(metric_specs, "ece")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Round 6 follow-on (R6-A docstring, R6-B duplicate-name, R6-F5 narrow except,
+# R6-H make_spec_name) — landing in v0.47.0 per Decision R6-E.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_scorecard_rejects_duplicate_spec_names(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Decision R6-B: silent last-wins is not a documented contract.
+
+    Two specs with identical ``name`` must raise ``ValueError`` so the caller
+    disambiguates before any compute happens. Forces no data loss on user error.
+    """
+    y, s = well_mixed_data
+    with pytest.raises(ValueError, match="Duplicate MetricSpec name 'pr_auc'"):
+        scorecard(y, s, metrics=[ms.pr_auc, ms.pr_auc], bootstrap=False)
+
+
+def test_scorecard_accepts_distinct_specs_same_family(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Positive case: two distinct ECE specs coexist because their names differ.
+
+    ``ms.ece(n_bins=10).name == "ece_n_bins_10_strategy_uniform"`` and
+    ``ms.ece(n_bins=15).name == "ece_n_bins_15_strategy_uniform"`` — distinct,
+    so they survive the R6-B duplicate-name guard.
+    """
+    y, s = well_mixed_data
+    r = scorecard(y, s, metrics=[ms.ece(n_bins=10), ms.ece(n_bins=15)], bootstrap=False)
+    assert "ece_n_bins_10_strategy_uniform" in r
+    assert "ece_n_bins_15_strategy_uniform" in r
+
+
+def test_scorecard_duplicate_name_message_reports_index(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Decision R6-B: the error must cite both indices for debuggability."""
+    y, s = well_mixed_data
+    with pytest.raises(ValueError) as excinfo:
+        scorecard(y, s, metrics=[ms.pr_auc, ms.brier, ms.pr_auc], bootstrap=False)
+    msg = str(excinfo.value)
+    assert "index 2" in msg
+    assert "index 0" in msg
+
+
+def test_scorecard_seed_none_is_deterministic(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Decision R6-A: ``seed=None`` is treated as ``seed=0`` for reproducibility.
+
+    Two calls with ``seed=None`` must produce bit-for-bit identical CIs. The
+    R6-A docstring fix codified the deterministic-by-default contract.
+    """
+    y, s = well_mixed_data
+    r_a = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, seed=None)
+    r_b = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, seed=None)
+    ci_a = r_a["pr_auc"].ci
+    ci_b = r_b["pr_auc"].ci
+    assert ci_a is not None
+    assert ci_b is not None
+    assert ci_a.ci_low == ci_b.ci_low
+    assert ci_a.ci_high == ci_b.ci_high
+
+
+def test_scorecard_seed_none_matches_explicit_zero(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Decision R6-A: ``seed=None`` must equal ``seed=0`` bit-for-bit."""
+    y, s = well_mixed_data
+    r_none = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, seed=None)
+    r_zero = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, seed=0)
+    ci_none = r_none["pr_auc"].ci
+    ci_zero = r_zero["pr_auc"].ci
+    assert ci_none is not None
+    assert ci_zero is not None
+    assert ci_none.ci_low == ci_zero.ci_low
+    assert ci_none.ci_high == ci_zero.ci_high
+
+
+@pytest.mark.parametrize("exc_class", [MemoryError, RecursionError, KeyboardInterrupt, SystemExit])
+def test_scorecard_propagates_system_exit_class_exceptions(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+    exc_class: type[BaseException],
+) -> None:
+    """Decision R6-F5: process-exhaustion / user-interrupt signals must propagate.
+
+    A custom spec raising any of ``MemoryError`` / ``RecursionError`` /
+    ``KeyboardInterrupt`` / ``SystemExit`` from ``compute()`` must NOT be
+    swallowed into a ``status="error"`` cell — the surrounding scorecard
+    call must raise so process-level shutdown / OOM / Ctrl-C / sys.exit work.
+    """
+    from eval_toolkit import MetricResult, MetricSpec, Scorecard  # noqa: F401
+
+    y, s = well_mixed_data
+
+    class _RaisingSpec:
+        name = "raises_system_exit_class"
+
+        def __init__(self, exc_class: type[BaseException]) -> None:
+            self._exc_class = exc_class
+
+        def compute(self, y_true: np.ndarray, y_score: np.ndarray) -> float:
+            raise self._exc_class("simulated process-class signal")
+
+    with pytest.raises(exc_class):
+        scorecard(y, s, metrics=[_RaisingSpec(exc_class)], bootstrap=False)
+
+
+def test_scorecard_propagates_system_exit_class_from_bootstrap(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Decision R6-F5: the bootstrap path must also propagate the four classes.
+
+    The point estimate succeeds (so we enter the bootstrap branch); the
+    bootstrap call itself raises ``MemoryError`` mid-resample. The narrow
+    except in `_evaluate_spec` must re-raise rather than caching the failure
+    as a ``status="ok"`` cell with a non-None reason.
+    """
+    y, s = well_mixed_data
+    call_count = [0]
+
+    class _SecondCallRaises:
+        name = "pr_auc"
+
+        def compute(self, y_true: np.ndarray, y_score: np.ndarray) -> float:
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # First call = point estimate; succeed so we enter the bootstrap loop.
+                from eval_toolkit.metrics import pr_auc as _pr_auc
+
+                return float(_pr_auc(y_true, y_score))
+            # Subsequent calls = bootstrap resamples; raise process-class signal.
+            raise MemoryError("simulated OOM during bootstrap")
+
+    with pytest.raises(MemoryError):
+        scorecard(y, s, metrics=[_SecondCallRaises()], bootstrap=True, n_resamples=10, seed=0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Decision R6-H: `make_spec_name()` canonicalization helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_make_spec_name_zero_kwargs_returns_prefix() -> None:
+    """``make_spec_name("pr_auc")`` returns the prefix unchanged."""
+    from eval_toolkit.metric_specs import make_spec_name
+
+    assert make_spec_name("pr_auc") == "pr_auc"
+
+
+def test_make_spec_name_alphabetizes_kwargs() -> None:
+    """Argument-order invariance: ``a, b`` and ``b, a`` produce same name."""
+    from eval_toolkit.metric_specs import make_spec_name
+
+    name_ab = make_spec_name("ece", n_bins=15, strategy="uniform")
+    name_ba = make_spec_name("ece", strategy="uniform", n_bins=15)
+    assert name_ab == name_ba == "ece_n_bins_15_strategy_uniform"
+
+
+def test_make_spec_name_matches_ece_factory_encoding() -> None:
+    """The helper produces the same name as the ECE factory's auto-encoding.
+
+    Regression-guards the encoding convention used internally so custom
+    user specs that opt into ``make_spec_name()`` get keys interoperable
+    with the first-party specs.
+    """
+    from eval_toolkit.metric_specs import make_spec_name
+
+    assert make_spec_name("ece", n_bins=15, strategy="uniform") == ms.ece(n_bins=15).name
+    assert (
+        make_spec_name("ece", n_bins=10, strategy="quantile")
+        == ms.ece(n_bins=10, strategy="quantile").name
+    )
+
+
+def test_make_spec_name_supports_numeric_values() -> None:
+    """``make_spec_name`` accepts int and float values via ``str()`` conversion."""
+    from eval_toolkit.metric_specs import make_spec_name
+
+    assert make_spec_name("custom_metric", alpha=0.1, beta=2) == "custom_metric_alpha_0.1_beta_2"
+    assert make_spec_name("topk", k=10) == "topk_k_10"
+
+
+def test_make_spec_name_in_metric_specs_all() -> None:
+    """Decision R6-H placement: helper is in metric_specs.__all__ only.
+
+    NOT in top-level ``eval_toolkit.__all__`` (Tier-2 additive contract).
+    """
+    import eval_toolkit
+    from eval_toolkit import metric_specs
+
+    assert "make_spec_name" in metric_specs.__all__
+    assert "make_spec_name" not in eval_toolkit.__all__

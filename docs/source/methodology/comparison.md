@@ -15,8 +15,8 @@
 import numpy as np
 from eval_toolkit import (
     bootstrap_ci, paired_bootstrap_diff, mde_from_ci, cv_clt_ci,
-    pr_auc, roc_auc,
 )
+from eval_toolkit.metrics import pr_auc, roc_auc
 ```
 
 Two synthetic scorers: A (random) and B (informative).
@@ -98,7 +98,8 @@ estimator, so the resample's bin assignments need to match the
 condition's bin definitions:
 
 ```python
-from eval_toolkit import expected_calibration_error_l2_debiased, paired_bootstrap_ece_diff
+from eval_toolkit import paired_bootstrap_ece_diff
+from eval_toolkit.metrics import expected_calibration_error_l2_debiased
 
 # Using two probability-score scorers in [0, 1].
 diff_ece = paired_bootstrap_ece_diff(

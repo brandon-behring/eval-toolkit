@@ -12,17 +12,18 @@ The three variants:
 - :func:`encode` — encode the text (default ``base64``); the LLM is told to
   decode but treat the result as data, not instructions
 
-A :data:`spotlighting` namespace (``SimpleNamespace``) exposes the
-function-style API verbatim from the upstream issue spec:
+The 3 ``Variant`` dataclasses (:class:`DelimitVariant`,
+:class:`DatamarkVariant`, :class:`EncodeVariant`) added at v0.47 wrap the
+functions in the :class:`~eval_toolkit.TextTransform` Protocol shape so
+they compose with adversarial-side strategies via the top-level
+:func:`eval_toolkit.sweep` entry point.
 
->>> from eval_toolkit.preprocessing import spotlighting
->>> spotlighting.delimit("hello")  # doctest: +SKIP
-'<<hello>>'
+The v0.44–v0.46 module-level ``sweep()`` function and ``spotlighting``
+``SimpleNamespace`` were removed at v0.47 (Decisions D + K + N; plan
+§§4C/4E). The 12-technique top-level sweep covers the same surface
+without API duplication.
 
-:func:`sweep` applies all 3 variants to a batch of texts and returns a
-``(N*3)``-row DataFrame for downstream evaluation.
-
-All three variants are deterministic, side-effect-free, and base-install
+All three transforms are deterministic, side-effect-free, and base-install
 safe — only stdlib used.
 
 References
@@ -35,19 +36,16 @@ from __future__ import annotations
 
 import base64
 import re
-from collections.abc import Sequence
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    import pandas as pd
+from dataclasses import dataclass
+from typing import Literal
 
 __all__ = [
+    "DatamarkVariant",
+    "DelimitVariant",
+    "EncodeVariant",
     "datamark",
     "delimit",
     "encode",
-    "spotlighting",
-    "sweep",
 ]
 
 
@@ -172,88 +170,66 @@ def encode(text: str, *, encoding: Literal["base64"] = _DEFAULT_ENCODING) -> str
     raise ValueError(f"encode: unsupported encoding {encoding!r}; supported: 'base64'")
 
 
-def sweep(
-    texts: Sequence[str],
-    *,
-    variants: Sequence[str] = ("delimit", "datamark", "encode"),
-    delimit_kwargs: dict[str, object] | None = None,
-    datamark_kwargs: dict[str, object] | None = None,
-    encode_kwargs: dict[str, object] | None = None,
-) -> pd.DataFrame:
-    """Apply one or more Spotlighting variants to each text in ``texts``.
+# ─────────────────────────────────────────────────────────────────────────────
+# Spotlighting variants as ``TextTransform``-shaped dataclasses (v0.47)
+#
+# Decision K + Audit R5-F3: the functional API (``delimit`` / ``datamark``
+# / ``encode``) remains the implementation; these frozen dataclasses are
+# thin ``TextTransform`` wrappers so the top-level :func:`sweep` and
+# downstream code can treat them uniformly with adversarial-side
+# strategies (``ZeroWidthSpaceInjection`` etc.) via structural subtyping.
+#
+# All three satisfy the top-level :class:`eval_toolkit.TextTransform`
+# Protocol: ``name: str`` attribute + ``transform(text: str) -> str``
+# method. Frozen + ``slots=True`` per house style.
+# ─────────────────────────────────────────────────────────────────────────────
 
-    For each ``(text, variant)`` pair, runs the corresponding transform
-    and emits a row in the result DataFrame. Useful for batch evaluation
-    of detector accuracy under each defense variant.
 
-    Parameters
-    ----------
-    texts : sequence of str
-        Input texts. Each is identified by its 0-based ``text_id``.
-    variants : sequence of str, optional
-        Which variants to apply. Default ``("delimit", "datamark", "encode")``
-        (all 3). Unknown variant names raise :class:`ValueError`.
-    delimit_kwargs, datamark_kwargs, encode_kwargs : dict or None, optional
-        Per-variant kwargs forwarded to the underlying transform
-        function. Default ``None`` (use each variant's defaults).
+@dataclass(frozen=True, slots=True)
+class DelimitVariant:
+    """:class:`TextTransform` wrapper around :func:`delimit`.
 
-    Returns
-    -------
-    pandas.DataFrame
-        Columns: ``text_id`` (int), ``variant`` (str), ``transformed_text`` (str).
-        Row order: ``(variant, text_id)`` nested.
-
-    Raises
-    ------
-    ValueError
-        On any unknown variant name in ``variants``.
-
-    Examples
-    --------
-    >>> # Synthetic 2-text sweep — see docs/source/examples/spotlighting.md
-    >>> # for a runnable end-to-end demo.
-    >>> # df = sweep(["hello", "world"])
-    >>> # df.shape  # (6, 3)
+    See the underlying function for semantics; this dataclass exists so
+    callers can pass a uniform-shape strategy object into
+    :func:`eval_toolkit.sweep` alongside adversarial-side strategies.
     """
-    import pandas as pd
 
-    delimit_kw = delimit_kwargs or {}
-    datamark_kw = datamark_kwargs or {}
-    encode_kw = encode_kwargs or {}
+    name: str = "delimit"
+    delimiter: str = _DEFAULT_DELIMITER
+    end: str | None = None
 
-    def _apply(variant: str, t: str) -> str:
-        if variant == "delimit":
-            return delimit(t, **delimit_kw)  # type: ignore[arg-type]
-        if variant == "datamark":
-            return datamark(t, **datamark_kw)  # type: ignore[arg-type]
-        if variant == "encode":
-            return encode(t, **encode_kw)  # type: ignore[arg-type]
-        raise ValueError(
-            f"sweep: unknown variant {variant!r}; " f"supported: 'delimit', 'datamark', 'encode'"
-        )
-
-    rows: list[dict[str, object]] = []
-    for variant in variants:
-        if variant not in {"delimit", "datamark", "encode"}:
-            raise ValueError(
-                f"sweep: unknown variant {variant!r}; "
-                f"supported: 'delimit', 'datamark', 'encode'"
-            )
-        for i, text in enumerate(texts):
-            rows.append(
-                {
-                    "text_id": int(i),
-                    "variant": variant,
-                    "transformed_text": _apply(variant, text),
-                }
-            )
-    return pd.DataFrame(rows, columns=["text_id", "variant", "transformed_text"])
+    def transform(self, text: str) -> str:
+        """Delegate to :func:`delimit` with the dataclass's configured kwargs."""
+        return delimit(text, delimiter=self.delimiter, end=self.end)
 
 
-# Module-level function namespace (matches issue spec API)
-spotlighting = SimpleNamespace(
-    delimit=delimit,
-    datamark=datamark,
-    encode=encode,
-    sweep=sweep,
-)
+@dataclass(frozen=True, slots=True)
+class DatamarkVariant:
+    """:class:`TextTransform` wrapper around :func:`datamark`."""
+
+    name: str = "datamark"
+    marker: str = _DEFAULT_MARKER
+
+    def transform(self, text: str) -> str:
+        """Delegate to :func:`datamark` with the dataclass's configured kwargs."""
+        return datamark(text, marker=self.marker)
+
+
+@dataclass(frozen=True, slots=True)
+class EncodeVariant:
+    """:class:`TextTransform` wrapper around :func:`encode`."""
+
+    name: str = "encode"
+    encoding: Literal["base64"] = _DEFAULT_ENCODING
+
+    def transform(self, text: str) -> str:
+        """Delegate to :func:`encode` with the dataclass's configured kwargs."""
+        return encode(text, encoding=self.encoding)
+
+
+# Module-level ``sweep`` removed at v0.47 — consolidated into the top-level
+# :func:`eval_toolkit.sweep` which accepts any :class:`TextTransform`
+# (Decisions K + D + plan §4C). Module-level ``spotlighting``
+# :class:`SimpleNamespace` removed at v0.47 (Decision N + plan §4E) — the
+# 3 ``Variant`` dataclasses + the underlying functional ``delimit`` /
+# ``datamark`` / ``encode`` functions are now the only public API.

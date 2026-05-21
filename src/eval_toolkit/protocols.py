@@ -20,6 +20,7 @@ __all__ = [
     "PredictionReader",
     "Scorer",
     "SliceAwareScorer",
+    "TextTransform",
     "Versioned",
 ]
 
@@ -66,6 +67,40 @@ class Versioned(Protocol):
     @property
     def version(self) -> str:  # pragma: no cover
         """Stable version string for this implementation."""
+        ...
+
+
+@runtime_checkable
+class TextTransform(Protocol):
+    """Uniform text-transform shape for sweep + defence + attack strategies.
+
+    Decision K (plan §4B) + Audit R5-F3 (Codex Round 5): the v0.47 sweep
+    consolidation requires a single Protocol that both preprocessing
+    (Spotlighting) variants and adversarial (character-injection) variants
+    structurally satisfy. Concrete classes anywhere in eval-toolkit that
+    expose ``name: str`` + ``transform(text: str) -> str`` will type-check
+    as :class:`TextTransform` instances without inheriting from this class.
+
+    The 9th strict Tier-2 Protocol per ADR 0003 (Decision M); method shape
+    frozen at v1.0 modulo SemVer-major bumps. Additive subprotocols (e.g.,
+    a future ``BatchTextTransform`` with ``transform_batch(...)``) are
+    permitted per the additive-only contract.
+
+    Concrete implementations in v0.47:
+
+    - :class:`eval_toolkit.preprocessing.DelimitVariant` /
+      :class:`~eval_toolkit.preprocessing.DatamarkVariant` /
+      :class:`~eval_toolkit.preprocessing.EncodeVariant` — defence side.
+    - :class:`eval_toolkit.adversarial.ZeroWidthSpaceInjection` and the
+      other 5 core + 6 advanced character-injection dataclasses —
+      attack side. All satisfy structurally without source changes.
+    """
+
+    name: str
+    """Stable identifier; participates in sweep row labels + result keys."""
+
+    def transform(self, text: str) -> str:  # pragma: no cover
+        """Return the transformed text. Deterministic + side-effect-free."""
         ...
 
 

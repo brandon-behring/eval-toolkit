@@ -31,22 +31,36 @@ _logging.getLogger("eval_toolkit").addHandler(_logging.NullHandler())
 # tests/golden/public_api/ reads dict keys + values, not comments.
 _EXPORTS: dict[str, str] = {
     # --- adversarial ---
+    "ADVANCED_TECHNIQUES": "eval_toolkit.adversarial",
+    "ALL_TECHNIQUES": "eval_toolkit.adversarial",
+    "BidiRTLInjection": "eval_toolkit.adversarial",
     "CORE_TECHNIQUES": "eval_toolkit.adversarial",
     "CaseRandomization": "eval_toolkit.adversarial",
-    "CharacterInjectionStrategy": "eval_toolkit.adversarial",
     "DiacriticInjection": "eval_toolkit.adversarial",
     "HomoglyphSubstitution": "eval_toolkit.adversarial",
+    "InvisibleCharsInjection": "eval_toolkit.adversarial",
     "PunctuationInjection": "eval_toolkit.adversarial",
+    "SynonymSubstitution": "eval_toolkit.adversarial",
+    "TagStrippingInjection": "eval_toolkit.adversarial",
+    "TokenSplitting": "eval_toolkit.adversarial",
+    "UnicodeNormalization": "eval_toolkit.adversarial",
     "WhitespaceInjection": "eval_toolkit.adversarial",
     "ZeroWidthSpaceInjection": "eval_toolkit.adversarial",
-    "character_injection": "eval_toolkit.adversarial",
+    # CharacterInjectionStrategy + character_injection SimpleNamespace
+    # removed at v0.47 (Decision N + plan §4E). TextTransform Protocol +
+    # the 12 concrete dataclasses are now the only public path.
     # --- losses ---
     "RecallAtLowFPR": "eval_toolkit.losses",
     # --- preprocessing ---
+    # `spotlighting` SimpleNamespace removed at v0.47 (Decision N + plan §4E).
+    # The 3 Variant dataclasses + the underlying functional API are the
+    # only public path.
+    "DatamarkVariant": "eval_toolkit.preprocessing",
+    "DelimitVariant": "eval_toolkit.preprocessing",
+    "EncodeVariant": "eval_toolkit.preprocessing",
     "datamark": "eval_toolkit.preprocessing",
     "delimit": "eval_toolkit.preprocessing",
     "encode": "eval_toolkit.preprocessing",
-    "spotlighting": "eval_toolkit.preprocessing",
     # --- probes ---
     "ActivationDeltaProbe": "eval_toolkit.probes",
     "ActivationExtractor": "eval_toolkit.probes",
@@ -247,6 +261,7 @@ _EXPORTS: dict[str, str] = {
     "PredictionReader": "eval_toolkit.protocols",
     "Scorer": "eval_toolkit.protocols",
     "SliceAwareScorer": "eval_toolkit.protocols",
+    "TextTransform": "eval_toolkit.protocols",
     "Versioned": "eval_toolkit.protocols",
     # --- seeds ---
     "set_global_seeds": "eval_toolkit.seeds",
@@ -298,61 +313,28 @@ _EXPORTS: dict[str, str] = {
     "MetricSpec": "eval_toolkit._scorecard",
     "Scorecard": "eval_toolkit._scorecard",
     "scorecard": "eval_toolkit._scorecard",
+    # --- sweep (top-level v0.47 unification — Decision K + Decision D) ---
+    "sweep": "eval_toolkit._sweep",
 }
 
 __all__ = ["__version__", *_EXPORTS.keys()]
 
 
-# ── BEGIN TRANSITIONAL DEPRECATION BRANCH (Decision L; REMOVE AT v0.47) ──
-# At v0.46 the scalar metric functions left the top-level `_EXPORTS` map (above)
-# in favor of the `scorecard()` surface (Decision A). To give the consumer one
-# release of overlap before the hard removal at v0.47, the names below remain
-# reachable via the package-level `__getattr__` (which delegates to the
-# `eval_toolkit.metrics` submodule) but emit a `DeprecationWarning` on first
-# lookup pointing at the new API.
-#
-# WHY THIS IS A BRANCH, NOT A REPLACEMENT (Audit F4 — Round 5):
-# `__getattr__` below is the load-bearing lazy export resolver for every name
-# in `_EXPORTS`. The deprecation branch is a discrete `if name in
-# _DEPRECATED_SCALARS` check ABOVE the resolver — the resolver's existing
-# behavior for non-deprecated names is unchanged. At v0.47 we delete this
-# transitional block and the resolver continues to work for every remaining
-# `_EXPORTS` entry.
-_DEPRECATED_SCALARS: frozenset[str] = frozenset(
-    {
-        "pr_auc",
-        "roc_auc",
-        "brier_score",
-        "expected_calibration_error",
-        "expected_calibration_error_debiased",
-        "expected_calibration_error_equal_mass",
-        "expected_calibration_error_l2",
-        "expected_calibration_error_l2_debiased",
-    }
-)
-# ── END TRANSITIONAL DEPRECATION (Decision L; REMOVE AT v0.47) ──
-
-
 def __getattr__(name: str) -> Any:
-    """Resolve public symbols lazily."""
+    """Resolve public symbols lazily.
+
+    v0.47 cleanup (Decision L): the BEGIN/END TRANSITIONAL DEPRECATION
+    BRANCH that v0.46 inserted in front of the resolver — together with the
+    ``_DEPRECATED_SCALARS`` frozenset and the ``_deprecation_warning_for``
+    helper — has been removed. The lazy resolver below is the v0.46 base
+    behavior; with the transitional block gone, deprecated v0.45 scalar names
+    (``pr_auc``, ``roc_auc``, ``brier_score``, the 5 ``expected_calibration_*``
+    variants) now raise :class:`AttributeError` cleanly. Submodule-level
+    access (e.g., ``from eval_toolkit.metrics import pr_auc``) is unaffected
+    per Decision C / ADR 0002.
+    """
     if name == "__version__":
         return __version__
-    # ── BEGIN TRANSITIONAL DEPRECATION BRANCH (Decision L; REMOVE AT v0.47) ──
-    if name in _DEPRECATED_SCALARS:
-        import warnings
-
-        warnings.warn(
-            _deprecation_warning_for(name),
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        module = import_module("eval_toolkit.metrics")
-        value = getattr(module, name)
-        # Do NOT cache in globals() — repeated lookups should keep re-warning
-        # (one warning per call site, modulo Python's default
-        # DeprecationWarning de-duplication).
-        return value
-    # ── END TRANSITIONAL DEPRECATION (Decision L; REMOVE AT v0.47) ──
     module_name = _EXPORTS.get(name)
     if module_name is None:
         raise AttributeError(f"module 'eval_toolkit' has no attribute {name!r}")
@@ -360,113 +342,6 @@ def __getattr__(name: str) -> Any:
     value = getattr(module, name)
     globals()[name] = value
     return value
-
-
-# ── BEGIN TRANSITIONAL DEPRECATION HELPER (Decision L; REMOVE AT v0.47) ──
-#
-# Per Round 6 audit (Codex R6-F2 + Gemini R6-F2; Decisions R6-F + R6-G):
-# - For deprecated scalars with a first-party `metric_specs` equivalent, the
-#   warning emits an EXECUTABLE scorecard snippet (factory expression + the
-#   correct encoded scorecard key, not the factory call string).
-# - For the 3 ECE variants without a `metric_specs` equivalent
-#   (expected_calibration_error_debiased / _l2 / _l2_debiased), the warning
-#   instead points at the submodule path per Decision R6-G — no first-party
-#   replacement is shipped at v0.47.
-# - ECE `n_bins=10` preserves the pre-v0.46 default (verified at
-#   `metrics.py:730-734`) — Decision R6-F. A migration note explains that
-#   the v0.46+ `metric_specs.ece()` factory defaults to `n_bins=15` (matching
-#   Hines et al.) and how to opt in.
-_FirstParty = tuple[str, str]  # (factory_expression, scorecard_key)
-"""Type alias for a deprecated-scalar that has a metric_specs replacement.
-
-The factory expression is what the user types after ``metric_specs.``; the
-scorecard key is the literal string that indexes ``Scorecard``.
-"""
-
-
-_FIRST_PARTY_REPLACEMENTS: dict[str, _FirstParty] = {
-    "pr_auc": ("pr_auc", "pr_auc"),
-    "roc_auc": ("roc_auc", "roc_auc"),
-    "brier_score": ("brier", "brier"),
-    # ECE variants: use n_bins=10 (pre-v0.46 default per Decision R6-F).
-    # The migration note in the warning text explains how to switch to
-    # n_bins=15 if the user wants the v0.46+ metric_specs.ece() default.
-    "expected_calibration_error": (
-        "ece(n_bins=10)",
-        "ece_n_bins_10_strategy_uniform",
-    ),
-    "expected_calibration_error_equal_mass": (
-        'ece(n_bins=10, strategy="quantile")',
-        "ece_n_bins_10_strategy_quantile",
-    ),
-}
-"""Names that have a first-party metric_specs replacement at v0.46.
-
-The 3 ECE variants NOT in this map (_debiased, _l2, _l2_debiased) get the
-submodule-path warning template instead (Decision R6-G).
-"""
-
-
-def _deprecation_warning_for(name: str) -> str:
-    """Render the DeprecationWarning message for a deprecated scalar name.
-
-    Branches on whether ``name`` has a first-party `metric_specs` replacement
-    (Decision R6-G):
-
-    - First-party (5 names): scorecard snippet with the correct encoded key
-      (Decision R6-F).
-    - Submodule-only (3 ECE variants): point at the submodule path per
-      Decision R6-G.
-
-    The first-party variants for ECE include a migration note explaining the
-    new ``metric_specs.ece()`` factory default of ``n_bins=15`` so users can
-    opt in to the new convention; the snippet itself uses ``n_bins=10`` for
-    bit-identical pre-v0.46 math (Decision R6-F).
-
-    Parameters
-    ----------
-    name : str
-        A name in ``_DEPRECATED_SCALARS``.
-
-    Returns
-    -------
-    str
-        The warning message, ready to pass to ``warnings.warn``.
-    """
-    first_party = _FIRST_PARTY_REPLACEMENTS.get(name)
-    if first_party is not None:
-        factory_expr, scorecard_key = first_party
-        msg = (
-            f"eval_toolkit.{name} is deprecated and will be removed in v0.47. "
-            f"For the same math, use:\n"
-            f"    scorecard(y, s, metrics=[metric_specs.{factory_expr}])"
-            f'["{scorecard_key}"].value\n'
-            f"Or import from the eval_toolkit.metrics submodule directly "
-            f"(internal API per ADR 0002 — stable across v1.x, subject to "
-            f"refactor in major versions)."
-        )
-        # ECE-specific migration note about the n_bins default change.
-        if name.startswith("expected_calibration_error"):
-            msg += (
-                "\nNote: the v0.46+ metric_specs.ece() factory defaults to "
-                "n_bins=15 (matching Hines et al.); the n_bins=10 in this "
-                "snippet preserves the pre-v0.46 math. Pass n_bins=15 to use "
-                "the new convention."
-            )
-        return msg
-    # Decision R6-G: 3 ECE variants without first-party replacements →
-    # submodule path only.
-    return (
-        f"eval_toolkit.{name} is deprecated and will be removed in v0.47. "
-        f"This variant is NOT in v0.46+ metric_specs. Use:\n"
-        f"    from eval_toolkit.metrics import {name}\n"
-        f"(internal API per ADR 0002 — stable across v1.x, subject to "
-        f"refactor in major versions). Or contribute the variant to "
-        f"metric_specs if you use it regularly."
-    )
-
-
-# ── END TRANSITIONAL DEPRECATION HELPER (Decision L; REMOVE AT v0.47) ──
 
 
 def __dir__() -> list[str]:

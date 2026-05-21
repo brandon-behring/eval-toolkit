@@ -44,29 +44,28 @@ References
 from __future__ import annotations
 
 import random
-from collections.abc import Sequence
 from dataclasses import dataclass
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
-
-import numpy as np
-
-from eval_toolkit.protocols import Scorer
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    import pandas as pd
+    pass
 
 __all__ = [
+    "ADVANCED_TECHNIQUES",
+    "ALL_TECHNIQUES",
+    "BidiRTLInjection",
     "CORE_TECHNIQUES",
     "CaseRandomization",
-    "CharacterInjectionStrategy",
     "DiacriticInjection",
     "HomoglyphSubstitution",
+    "InvisibleCharsInjection",
     "PunctuationInjection",
+    "SynonymSubstitution",
+    "TagStrippingInjection",
+    "TokenSplitting",
+    "UnicodeNormalization",
     "WhitespaceInjection",
     "ZeroWidthSpaceInjection",
-    "character_injection",
-    "sweep",
 ]
 
 
@@ -115,25 +114,12 @@ _COMBINING_MARKS: tuple[str, ...] = (
 _WHITESPACE_VARIANTS: tuple[str, ...] = (_NBSP, _TAB)
 
 
-@runtime_checkable
-class CharacterInjectionStrategy(Protocol):
-    """Apply a deterministic character-level adversarial transformation.
-
-    Implementations are frozen dataclasses configured via constructor
-    params (e.g. ``ratio`` + ``seed``) and expose:
-
-    - ``name`` — stable technique identifier used in sweep result rows
-    - ``transform(text: str) -> str`` — the transformation itself
-
-    Strategies must be picklable for parallel sweep dispatch (no
-    closures over local state; ``frozen=True, slots=True`` enforced).
-    """
-
-    name: str
-
-    def transform(self, text: str) -> str:  # pragma: no cover
-        """Return the transformed text."""
-        ...
+# The v0.43–v0.46 ``CharacterInjectionStrategy`` per-module Protocol was
+# removed at v0.47 (Decision K + plan §4B). Use the top-level
+# :class:`eval_toolkit.TextTransform` Protocol instead — it has the same
+# shape (``name: str`` + ``transform(text) -> str``) and covers both
+# adversarial and preprocessing strategies. Every concrete adversarial
+# class continues to satisfy ``TextTransform`` structurally.
 
 
 @dataclass(frozen=True, slots=True)
@@ -378,10 +364,269 @@ class PunctuationInjection:
         return "".join(out)
 
 
+# ----------------------------------------------------------------------------
+# Advanced 6 — added at v0.47.0 (Decision Q11→11.3; closes the forward-look
+# from the v0.43.0 CHANGELOG). All satisfy the top-level
+# :class:`eval_toolkit.TextTransform` Protocol structurally.
+# ----------------------------------------------------------------------------
+
+
+# Unicode bidi controls used by BidiRTLInjection
+_RLO = "‮"  # RIGHT-TO-LEFT OVERRIDE
+_LRO = "‭"  # LEFT-TO-RIGHT OVERRIDE
+_PDF = "‬"  # POP DIRECTIONAL FORMATTING
+
+# Invisible / ignorable Unicode code points used by InvisibleCharsInjection.
+# These render to zero advance width in most environments and are skipped by
+# many tokenizers / search engines, but contribute distinct bytes that perturb
+# subword segmentation.
+_INVISIBLE_CHARS: tuple[str, ...] = (
+    "​",  # ZERO WIDTH SPACE
+    "‌",  # ZERO WIDTH NON-JOINER
+    "‍",  # ZERO WIDTH JOINER
+    "⁠",  # WORD JOINER
+    "﻿",  # ZERO WIDTH NO-BREAK SPACE (BOM)
+)
+
+# Light synonym table — restricted to function words + a handful of common
+# verbs so the substitution preserves semantics with high probability.
+# Intentionally tiny; larger tables introduce semantic drift that defeats
+# the "looks-like-the-original" invariant the technique relies on.
+_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "ignore": ("disregard", "overlook"),
+    "instructions": ("directions", "guidance"),
+    "system": ("framework", "platform"),
+    "secret": ("private", "confidential"),
+    "send": ("transmit", "forward"),
+    "all": ("every", "all of"),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class BidiRTLInjection:
+    """Wrap the input in a Unicode bidi-RTL override block.
+
+    Prepends ``U+202E`` (RIGHT-TO-LEFT OVERRIDE) and appends ``U+202C``
+    (POP DIRECTIONAL FORMATTING). Visually the text often renders in
+    reverse; many naive tokenizers ignore the controls entirely, so the
+    byte stream differs from the original while the semantic intent
+    survives.
+
+    Parameters
+    ----------
+    name : str, optional
+        Override technique name. Default ``"bidi_rtl"``.
+    """
+
+    name: str = "bidi_rtl"
+
+    def transform(self, text: str) -> str:
+        if not text:
+            return text
+        return f"{_RLO}{text}{_PDF}"
+
+
+@dataclass(frozen=True, slots=True)
+class TagStrippingInjection:
+    """Strip HTML/XML-like tags from the input.
+
+    Removes anything matching ``<...>`` (greedy, single-line). Useful for
+    studying how detectors trained on tagged markup behave when callers
+    pre-strip tags. Idempotent — running twice produces the same output
+    as running once.
+
+    Parameters
+    ----------
+    name : str, optional
+        Override technique name. Default ``"tag_strip"``.
+    """
+
+    name: str = "tag_strip"
+
+    def transform(self, text: str) -> str:
+        # Non-greedy match so `<a><b>` strips both tags rather than
+        # collapsing the whole interval. ``re.DOTALL`` so `<…\n…>` also
+        # gets stripped — pathological but represented in real prompt-
+        # injection payloads.
+        import re as _re
+
+        return _re.sub(r"<[^>]*>", "", text, flags=_re.DOTALL)
+
+
+@dataclass(frozen=True, slots=True)
+class SynonymSubstitution:
+    """Replace whitelisted words with deterministic synonyms.
+
+    Only the keys in the internal whitelist (``_SYNONYMS``) are eligible.
+    For each eligible word the choice is deterministic given ``seed``.
+
+    Parameters
+    ----------
+    ratio : float, optional
+        Per-word substitution probability among the eligible set.
+        Default ``1.0`` (always substitute).
+    seed : int, optional
+        Random seed for determinism. Default ``42``.
+    name : str, optional
+        Override technique name. Default ``"synonym"``.
+    """
+
+    ratio: float = 1.0
+    seed: int = 42
+    name: str = "synonym"
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.ratio <= 1.0:
+            raise ValueError(f"SynonymSubstitution: ratio must be in [0, 1]; got {self.ratio}")
+
+    def transform(self, text: str) -> str:
+        rng = random.Random(self.seed)
+        import re as _re
+
+        def _maybe_swap(match: _re.Match[str]) -> str:
+            word = match.group(0)
+            key = word.lower()
+            if key not in _SYNONYMS:
+                return word
+            if rng.random() >= self.ratio:
+                return word
+            choice = rng.choice(_SYNONYMS[key])
+            # Best-effort case preservation for capitalized words
+            if word.istitle():
+                return choice.capitalize()
+            if word.isupper():
+                return choice.upper()
+            return choice
+
+        return _re.sub(r"\b\w+\b", _maybe_swap, text)
+
+
+@dataclass(frozen=True, slots=True)
+class TokenSplitting:
+    """Insert a single space inside each long enough word.
+
+    Forces subword tokenizers to break a single token into two, often
+    enough to slip past a detector's keyword-style heuristics while
+    leaving the text human-readable.
+
+    Parameters
+    ----------
+    min_word_length : int, optional
+        Only words with at least this many characters are split. Default
+        ``5``.
+    ratio : float, optional
+        Probability of splitting each eligible word. Default ``1.0``.
+    seed : int, optional
+        Random seed for determinism. Default ``42``.
+    name : str, optional
+        Override technique name. Default ``"token_split"``.
+    """
+
+    min_word_length: int = 5
+    ratio: float = 1.0
+    seed: int = 42
+    name: str = "token_split"
+
+    def __post_init__(self) -> None:
+        if self.min_word_length < 2:
+            raise ValueError(
+                f"TokenSplitting: min_word_length must be >= 2; got {self.min_word_length}"
+            )
+        if not 0.0 <= self.ratio <= 1.0:
+            raise ValueError(f"TokenSplitting: ratio must be in [0, 1]; got {self.ratio}")
+
+    def transform(self, text: str) -> str:
+        rng = random.Random(self.seed)
+        import re as _re
+
+        def _maybe_split(match: _re.Match[str]) -> str:
+            word = match.group(0)
+            if len(word) < self.min_word_length:
+                return word
+            if rng.random() >= self.ratio:
+                return word
+            # Split near the middle (deterministic given seed: position
+            # offset depends on `rng.randint` not on the word content).
+            offset = rng.randint(1, max(1, len(word) - 1))
+            return word[:offset] + " " + word[offset:]
+
+        return _re.sub(r"\b\w+\b", _maybe_split, text)
+
+
+@dataclass(frozen=True, slots=True)
+class UnicodeNormalization:
+    """Apply a Unicode normalization form to the input.
+
+    Defaults to NFKC which folds compatibility characters (e.g., ``ＡＢＣ``
+    fullwidth → ``ABC`` ASCII). The byte stream changes substantially; many
+    detectors trained on natural text don't see the variant code points,
+    while NFKC produces a canonical ASCII-ish equivalent.
+
+    Parameters
+    ----------
+    form : {"NFC", "NFD", "NFKC", "NFKD"}, optional
+        Normalization form. Default ``"NFKC"``.
+    name : str, optional
+        Override technique name. Default ``"unicode_normalize"``.
+    """
+
+    form: str = "NFKC"
+    name: str = "unicode_normalize"
+
+    def __post_init__(self) -> None:
+        if self.form not in {"NFC", "NFD", "NFKC", "NFKD"}:
+            raise ValueError(
+                f"UnicodeNormalization: form must be NFC / NFD / NFKC / NFKD; got {self.form!r}"
+            )
+
+    def transform(self, text: str) -> str:
+        import unicodedata as _ud
+
+        return _ud.normalize(self.form, text)  # type: ignore[arg-type]
+
+
+@dataclass(frozen=True, slots=True)
+class InvisibleCharsInjection:
+    """Insert invisible / zero-width Unicode characters between characters.
+
+    Distinct from :class:`ZeroWidthSpaceInjection` in that this technique
+    samples from a tuple of 5 invisible code points (ZWSP, ZWNJ, ZWJ,
+    word joiner, BOM) instead of always inserting U+200B.
+
+    Parameters
+    ----------
+    ratio : float, optional
+        Per-position insertion probability. Default ``0.5``.
+    seed : int, optional
+        Random seed for determinism. Default ``42``.
+    name : str, optional
+        Override technique name. Default ``"invisible_chars"``.
+    """
+
+    ratio: float = 0.5
+    seed: int = 42
+    name: str = "invisible_chars"
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.ratio <= 1.0:
+            raise ValueError(f"InvisibleCharsInjection: ratio must be in [0, 1]; got {self.ratio}")
+
+    def transform(self, text: str) -> str:
+        rng = random.Random(self.seed)
+        out: list[str] = []
+        for ch in text:
+            out.append(ch)
+            if rng.random() < self.ratio:
+                out.append(rng.choice(_INVISIBLE_CHARS))
+        return "".join(out)
+
+
 # Core 6 — registered by default in :func:`sweep` when ``techniques="all"``
-# during v0.43.0. Advanced 6 (bidi, tag stripping, synonym, token split,
-# Unicode normalization, invisible chars) land in v0.43.1 and will append
-# to this tuple.
+# at v0.43.0. Advanced 6 added at v0.47.0 (Decision Q11→11.3) live in
+# :data:`ADVANCED_TECHNIQUES`. Together they form the v0.47-final
+# 12-technique suite; ``ALL_TECHNIQUES`` is the union for callers wanting
+# the complete set.
+#
 # Annotated as ``tuple[type[Any], ...]`` because Protocol classes can't be
 # used as the parameter of ``type[...]`` in concrete tuple literals without
 # triggering a strict-mypy assignability error (Protocol is structural;
@@ -395,6 +640,15 @@ CORE_TECHNIQUES: tuple[type[Any], ...] = (
     CaseRandomization,
     PunctuationInjection,
 )
+ADVANCED_TECHNIQUES: tuple[type[Any], ...] = (
+    BidiRTLInjection,
+    TagStrippingInjection,
+    SynonymSubstitution,
+    TokenSplitting,
+    UnicodeNormalization,
+    InvisibleCharsInjection,
+)
+ALL_TECHNIQUES: tuple[type[Any], ...] = CORE_TECHNIQUES + ADVANCED_TECHNIQUES
 
 
 # ----------------------------------------------------------------------------
@@ -436,143 +690,9 @@ def _punctuation(text: str, ratio: float = 0.1, seed: int = 42) -> str:
     return PunctuationInjection(ratio=ratio, seed=seed).transform(text)
 
 
-# Namespace exposing the upstream-issue's preferred functional API
-# (``character_injection.zero_width_space(text)``). Built once at import time;
-# pickling-safe (SimpleNamespace + function references).
-character_injection = SimpleNamespace(
-    zero_width_space=_zero_width_space,
-    homoglyph=_homoglyph,
-    diacritic=_diacritic,
-    whitespace=_whitespace,
-    case_random=_case_random,
-    punctuation=_punctuation,
-    sweep=None,  # populated below after sweep is defined
-)
-
-
-# ----------------------------------------------------------------------------
-# Scorer-Protocol sweep
-# ----------------------------------------------------------------------------
-
-
-def sweep(
-    texts: Sequence[str],
-    scorer: Scorer,
-    *,
-    techniques: Sequence[CharacterInjectionStrategy] | str = "all",
-    threshold: float = 0.5,
-    seed: int = 42,
-) -> pd.DataFrame:
-    """Run a multi-technique adversarial sweep against ``scorer``.
-
-    For each input text and each technique:
-
-    1. Compute the original score ``s_orig = scorer.predict_proba([text])[0]``
-    2. Transform the text via the technique
-    3. Compute the transformed score ``s_adv = scorer.predict_proba([t'])[0]``
-    4. Record an attack-success flag: ``s_orig >= threshold > s_adv``
-       (the scorer detected the original but missed the adversarial)
-
-    The returned DataFrame has one row per ``(text_id, technique)`` pair plus
-    aggregate ASR available via ``.groupby("technique")["asr"].mean()``.
-
-    Parameters
-    ----------
-    texts : sequence of str
-        Inputs to test. Each is identified by its 0-based index as
-        ``text_id``.
-    scorer : Scorer
-        Any object satisfying the :class:`~eval_toolkit.protocols.Scorer`
-        Protocol (a ``predict_proba(X) -> np.ndarray`` method).
-    techniques : sequence of CharacterInjectionStrategy or {"all"}, optional
-        Which techniques to apply. ``"all"`` (default) instantiates each
-        class in :data:`CORE_TECHNIQUES` with default kwargs and the
-        sweep ``seed``. Pass pre-configured strategy instances for custom
-        ratios.
-    threshold : float, optional
-        Score threshold the scorer publishes as its decision boundary
-        (default ``0.5``). Used for the ASR flag.
-    seed : int, optional
-        Seed forwarded to ``"all"``-spawned techniques; ignored when
-        ``techniques`` is an explicit instance list (each instance carries
-        its own seed). Default ``42``.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Columns: ``text_id`` (int), ``technique`` (str), ``original_score``
-        (float), ``transformed_score`` (float), ``asr`` (bool — attack
-        succeeded for this row). Row order: ``(technique, text_id)``
-        nested.
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from eval_toolkit.adversarial import sweep
-    >>> class Detector:
-    ...     def predict_proba(self, X):
-    ...         return np.array([1.0 if "ignore" in t else 0.0 for t in X])
-    >>> df = sweep(["ignore prior", "weather today"], Detector())  # doctest: +SKIP
-    >>> df.groupby("technique")["asr"].mean().sort_index()  # doctest: +SKIP
-
-    Notes
-    -----
-    The sweep performs ``len(texts) * (1 + len(techniques))`` scorer calls
-    (one baseline + one per technique). For large corpora consider
-    pre-computing the baseline scores once and passing a pre-thresholded
-    subset of "originally-positive" texts (the ASR is only meaningful when
-    ``s_orig >= threshold``).
-    """
-    import pandas as pd
-
-    # Resolve techniques
-    if isinstance(techniques, str):
-        if techniques != "all":
-            raise ValueError(
-                f"sweep: techniques string must be 'all'; got {techniques!r}. "
-                f"Pass an explicit sequence of CharacterInjectionStrategy "
-                f"instances for custom configuration."
-            )
-        instances: list[CharacterInjectionStrategy] = [cls(seed=seed) for cls in CORE_TECHNIQUES]
-    else:
-        instances = list(techniques)
-        if not instances:
-            raise ValueError("sweep: techniques sequence is empty")
-
-    # Baseline scores
-    original_scores = np.asarray(scorer.predict_proba(list(texts))).astype(float)
-    if original_scores.shape != (len(texts),):
-        raise ValueError(
-            f"sweep: scorer returned shape {original_scores.shape} for {len(texts)} inputs; "
-            f"expected ({len(texts)},). Scorer must produce one P(positive) per input."
-        )
-
-    rows: list[dict[str, object]] = []
-    for strategy in instances:
-        transformed_texts = [strategy.transform(t) for t in texts]
-        transformed_scores = np.asarray(scorer.predict_proba(transformed_texts)).astype(float)
-        if transformed_scores.shape != (len(texts),):
-            raise ValueError(
-                f"sweep: scorer returned shape {transformed_scores.shape} for technique "
-                f"{strategy.name!r}; expected ({len(texts)},)."
-            )
-        for i in range(len(texts)):
-            orig = float(original_scores[i])
-            adv = float(transformed_scores[i])
-            asr = bool(orig >= threshold and adv < threshold)
-            rows.append(
-                {
-                    "text_id": int(i),
-                    "technique": strategy.name,
-                    "original_score": orig,
-                    "transformed_score": adv,
-                    "asr": asr,
-                }
-            )
-    return pd.DataFrame(
-        rows, columns=["text_id", "technique", "original_score", "transformed_score", "asr"]
-    )
-
-
-# Wire sweep into the namespace now that it's defined
-character_injection.sweep = sweep
+# Module-level ``character_injection`` SimpleNamespace + module-level
+# ``sweep`` were removed at v0.47 (Decisions D + K + N; plan §§4C/4E).
+# The top-level :func:`eval_toolkit.sweep` consumes any
+# :class:`TextTransform`; the 6 internal functional aliases above
+# (``_zero_width_space`` etc.) remain as implementation conveniences
+# used by the dataclasses' ``transform`` methods.

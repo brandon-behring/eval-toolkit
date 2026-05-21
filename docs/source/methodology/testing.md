@@ -55,7 +55,7 @@ A property test has the shape:
 ```python
 import numpy as np
 import pytest
-from eval_toolkit import roc_auc
+from eval_toolkit.metrics import roc_auc
 
 # Real test (mirrors tests/test_metrics_props.py:test_auroc_inversion):
 @pytest.mark.unit
@@ -114,7 +114,7 @@ on the same input and asserts numerical equality (within tolerance).
 ```python
 import numpy as np
 from sklearn.metrics import average_precision_score
-from eval_toolkit import pr_auc
+from eval_toolkit.metrics import pr_auc
 
 # Real test pattern (tests/test_metrics_unit.py:test_pr_auc_matches_sklearn):
 rng = np.random.default_rng(42)
