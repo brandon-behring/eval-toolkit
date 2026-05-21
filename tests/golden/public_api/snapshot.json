@@ -57,9 +57,11 @@
     "LeakageCheck",
     "LeakageFinding",
     "LeakageReport",
+    "LogisticStacker",
     "MANIFEST_SCHEMA_VERSION",
     "MDEEstimate",
     "MaxF1Selector",
+    "MetaLearner",
     "MetricFn",
     "MetricState",
     "MinHashLSHStrategy",
@@ -684,6 +686,14 @@
       "kind": "class",
       "signature": "(findings: 'list[LeakageFinding]' = <factory>) -> None"
     },
+    "LogisticStacker": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Reference :class:`MetaLearner` using :class:`sklearn.linear_model.LogisticRegression`.",
+      "kind": "class",
+      "signature": "(C: 'float' = 1.0, fit_intercept: 'bool' = True, class_weight: 'str | dict[Any, float] | None' = 'balanced', penalty: \"Literal['l1', 'l2', 'elasticnet'] | None\" = 'l2', solver: 'str' = 'lbfgs', max_iter: 'int' = 1000, random_state: 'int | None' = None) -> None"
+    },
     "MANIFEST_SCHEMA_VERSION": {
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
@@ -705,6 +715,14 @@
       "doc_first_line": "Argmax F1 over the PR curve. Replaces the v0.6 ``criterion=\"max_f1\"``.",
       "kind": "class",
       "signature": "(criterion: 'str' = 'max_f1') -> None"
+    },
+    "MetaLearner": {
+      "bases": [
+        "Protocol"
+      ],
+      "doc_first_line": "Combines per-sample scores from multiple base detectors into P(positive).",
+      "kind": "class",
+      "signature": "(*args, **kwargs)"
     },
     "MetricFn": {
       "doc_first_line": "",
@@ -1154,7 +1172,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'0.44.0'"
+      "value": "'0.45.0'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",

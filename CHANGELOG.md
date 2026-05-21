@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.0] — 2026-05-21 — Stacking: MetaLearner Protocol + LogisticStacker (closes #52)
+
+First minor of the staggered v0.45 → v0.46 → v0.47 → v0.48 → v1.0 sequence
+(per the v1.0 plan at `~/.claude/plans/evaluate-all-the-work-twinkly-kite.md`).
+Non-breaking — purely additive. No Protocol shape edits to the existing 6
+Tier-2 contracts (Gate 2 streak continues: 6 of 6 consecutive minors without
+Protocol-shape changes).
+
+### Added
+
+- `eval_toolkit.stacking` — new module providing the `MetaLearner` Protocol
+  and one reference impl, `LogisticStacker`, for combining outputs from
+  multiple binary detectors into a calibrated ensemble. Wraps
+  `sklearn.linear_model.LogisticRegression` with a stacker-shaped public API
+  (sklearn-style `fit(score_matrix, y)`, `predict(score_matrix)`,
+  `predict_proba(score_matrix)`, plus `coef_` / `classes_` / `intercept_`
+  attributes). No new dependencies — `scikit-learn` is already core since
+  v0.27. Closes #52.
+- `MetaLearner` Protocol — `@runtime_checkable`; sklearn-shape contract
+  taking a `(n_samples, n_detectors)` score matrix. Sized as a v1.0 Tier-2
+  contract per the v1.0 plan Decision M (tiered stability — strict freeze at
+  v1.0; additive subprotocols permitted in minor releases). Mirrors the
+  `Probe` Protocol pattern from v0.43.
+- `LogisticStacker` reference impl — configurable C, fit_intercept,
+  class_weight, penalty, solver, max_iter, random_state. Class-weight default
+  `"balanced"` for the common imbalanced-detection setting. Composes with the
+  4-binary-calibrator family (v0.40 + v0.42) via `fit_platt_binary` /
+  `fit_isotonic_binary` chaining on stacked output.
+- 24-test coverage in `tests/test_stacking.py`: Protocol satisfaction (both
+  structural and duck-typed), shape contracts (3-detector × 500-sample
+  fixtures), regularization behavior (C, L1 penalty), signal ordering,
+  calibration chaining (Platt + Isotonic), bootstrap CI on stacker output
+  (Audit F6a-aware — uses correct `BootstrapCI.ci_low/ci_high` attribute
+  names), determinism under fixed `random_state`, hypothesis property on
+  signal monotonicity, input validation (shape mismatch, single-class,
+  non-finite, unfit, wrong-n-detectors).
+- `docs/source/examples/stacking.md` — myst-nb worked example: 3 synthetic
+  detectors with descending signal-to-noise, stacker fit, post-stacking
+  Platt calibration. Cites Wolpert 1992 + Breiman 1996.
+
+### Notes
+
+- Sklearn 1.8+ deprecates `LogisticRegression(penalty=...)` in favor of
+  `l1_ratio`. The public `LogisticStacker(penalty=...)` API is preserved;
+  internal sklearn-side migration to `l1_ratio` will land when sklearn 1.10
+  lands and the warning becomes more visible. No user-facing impact.
+
 ## [0.44.0] — 2026-05-19 — Defenses + losses: Spotlighting variants + RecallAtLowFPR (closes #50, #51)
 
 ### Added

@@ -294,6 +294,8 @@ _EXPORTS: dict[str, str] = {
     "recall_at_fpr": "eval_toolkit.thresholds",
     "select_threshold": "eval_toolkit.thresholds",
     "wilson_interval": "eval_toolkit.thresholds",
+    "LogisticStacker": "eval_toolkit.stacking",
+    "MetaLearner": "eval_toolkit.stacking",
 }
 
 __all__ = ["__version__", *_EXPORTS.keys()]
