@@ -342,10 +342,7 @@ def __getattr__(name: str) -> Any:
         import warnings
 
         warnings.warn(
-            f"eval_toolkit.{name} is deprecated and will be removed in v0.47. "
-            f"Use `scorecard(y, s, metrics=[metric_specs.{_scorecard_spec_for(name)}])"
-            f'["{_scorecard_spec_for(name)}"].value` instead, or "import from the'
-            f" `eval_toolkit.metrics` submodule directly (internal API).",
+            _deprecation_warning_for(name),
             DeprecationWarning,
             stacklevel=2,
         )
@@ -366,23 +363,107 @@ def __getattr__(name: str) -> Any:
 
 
 # ── BEGIN TRANSITIONAL DEPRECATION HELPER (Decision L; REMOVE AT v0.47) ──
-def _scorecard_spec_for(deprecated_name: str) -> str:
-    """Map a deprecated-scalar name to its `metric_specs` replacement name.
+#
+# Per Round 6 audit (Codex R6-F2 + Gemini R6-F2; Decisions R6-F + R6-G):
+# - For deprecated scalars with a first-party `metric_specs` equivalent, the
+#   warning emits an EXECUTABLE scorecard snippet (factory expression + the
+#   correct encoded scorecard key, not the factory call string).
+# - For the 3 ECE variants without a `metric_specs` equivalent
+#   (expected_calibration_error_debiased / _l2 / _l2_debiased), the warning
+#   instead points at the submodule path per Decision R6-G — no first-party
+#   replacement is shipped at v0.47.
+# - ECE `n_bins=10` preserves the pre-v0.46 default (verified at
+#   `metrics.py:730-734`) — Decision R6-F. A migration note explains that
+#   the v0.46+ `metric_specs.ece()` factory defaults to `n_bins=15` (matching
+#   Hines et al.) and how to opt in.
+_FirstParty = tuple[str, str]  # (factory_expression, scorecard_key)
+"""Type alias for a deprecated-scalar that has a metric_specs replacement.
 
-    Used only inside the v0.46 deprecation warning message. Returns the
-    closest equivalent first-party spec name where one exists; falls back
-    to the original name for ECE variants whose exact-match spec isn't in
-    the v0.46 first-party namespace (e.g., the L2 / debiased variants —
-    callers either implement a custom `MetricSpec` or stay on the
-    submodule path).
+The factory expression is what the user types after ``metric_specs.``; the
+scorecard key is the literal string that indexes ``Scorecard``.
+"""
+
+
+_FIRST_PARTY_REPLACEMENTS: dict[str, _FirstParty] = {
+    "pr_auc": ("pr_auc", "pr_auc"),
+    "roc_auc": ("roc_auc", "roc_auc"),
+    "brier_score": ("brier", "brier"),
+    # ECE variants: use n_bins=10 (pre-v0.46 default per Decision R6-F).
+    # The migration note in the warning text explains how to switch to
+    # n_bins=15 if the user wants the v0.46+ metric_specs.ece() default.
+    "expected_calibration_error": (
+        "ece(n_bins=10)",
+        "ece_n_bins_10_strategy_uniform",
+    ),
+    "expected_calibration_error_equal_mass": (
+        'ece(n_bins=10, strategy="quantile")',
+        "ece_n_bins_10_strategy_quantile",
+    ),
+}
+"""Names that have a first-party metric_specs replacement at v0.46.
+
+The 3 ECE variants NOT in this map (_debiased, _l2, _l2_debiased) get the
+submodule-path warning template instead (Decision R6-G).
+"""
+
+
+def _deprecation_warning_for(name: str) -> str:
+    """Render the DeprecationWarning message for a deprecated scalar name.
+
+    Branches on whether ``name`` has a first-party `metric_specs` replacement
+    (Decision R6-G):
+
+    - First-party (5 names): scorecard snippet with the correct encoded key
+      (Decision R6-F).
+    - Submodule-only (3 ECE variants): point at the submodule path per
+      Decision R6-G.
+
+    The first-party variants for ECE include a migration note explaining the
+    new ``metric_specs.ece()`` factory default of ``n_bins=15`` so users can
+    opt in to the new convention; the snippet itself uses ``n_bins=10`` for
+    bit-identical pre-v0.46 math (Decision R6-F).
+
+    Parameters
+    ----------
+    name : str
+        A name in ``_DEPRECATED_SCALARS``.
+
+    Returns
+    -------
+    str
+        The warning message, ready to pass to ``warnings.warn``.
     """
-    return {
-        "pr_auc": "pr_auc",
-        "roc_auc": "roc_auc",
-        "brier_score": "brier",
-        "expected_calibration_error": "ece(n_bins=10)",
-        "expected_calibration_error_equal_mass": 'ece(n_bins=10, strategy="quantile")',
-    }.get(deprecated_name, deprecated_name)
+    first_party = _FIRST_PARTY_REPLACEMENTS.get(name)
+    if first_party is not None:
+        factory_expr, scorecard_key = first_party
+        msg = (
+            f"eval_toolkit.{name} is deprecated and will be removed in v0.47. "
+            f"For the same math, use:\n"
+            f"    scorecard(y, s, metrics=[metric_specs.{factory_expr}])"
+            f'["{scorecard_key}"].value\n'
+            f"Or import from the eval_toolkit.metrics submodule directly "
+            f"(internal API per ADR 0002 — stable across v1.x, subject to "
+            f"refactor in major versions)."
+        )
+        # ECE-specific migration note about the n_bins default change.
+        if name.startswith("expected_calibration_error"):
+            msg += (
+                "\nNote: the v0.46+ metric_specs.ece() factory defaults to "
+                "n_bins=15 (matching Hines et al.); the n_bins=10 in this "
+                "snippet preserves the pre-v0.46 math. Pass n_bins=15 to use "
+                "the new convention."
+            )
+        return msg
+    # Decision R6-G: 3 ECE variants without first-party replacements →
+    # submodule path only.
+    return (
+        f"eval_toolkit.{name} is deprecated and will be removed in v0.47. "
+        f"This variant is NOT in v0.46+ metric_specs. Use:\n"
+        f"    from eval_toolkit.metrics import {name}\n"
+        f"(internal API per ADR 0002 — stable across v1.x, subject to "
+        f"refactor in major versions). Or contribute the variant to "
+        f"metric_specs if you use it regularly."
+    )
 
 
 # ── END TRANSITIONAL DEPRECATION HELPER (Decision L; REMOVE AT v0.47) ──

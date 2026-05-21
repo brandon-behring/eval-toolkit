@@ -118,6 +118,23 @@ brier: MetricSpec = _BrierSpec()
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# Valid strategy values for ECE specs. Locked at v0.46.1 to prevent the
+# Round 6 R6-F1 footgun where `ece(strategy="typo")` silently dispatched to
+# quantile ECE and returned a scorecard cell with status="ok" under an
+# invalid key. See `docs/source/audit_findings.md` Round 6.
+_ECE_VALID_STRATEGIES: frozenset[str] = frozenset({"uniform", "quantile"})
+
+
+def _validate_ece_strategy(strategy: str) -> None:
+    """Validate ECE strategy value; raise ValueError with context if invalid.
+
+    Shared between the factory (eager validation) and ``_EceSpec.compute`` (defence in
+    depth for direct construction paths that bypass the factory).
+    """
+    if strategy not in _ECE_VALID_STRATEGIES:
+        raise ValueError(f"ECE strategy must be 'uniform' or 'quantile'; got {strategy!r}")
+
+
 @dataclass(frozen=True, slots=True)
 class _EceSpec:
     """Internal :class:`MetricSpec` for expected calibration error.
@@ -135,6 +152,10 @@ class _EceSpec:
         return f"ece_n_bins_{self.n_bins}_strategy_{self.strategy}"
 
     def compute(self, y_true: np.ndarray, y_score: np.ndarray) -> float:
+        # Defence-in-depth strategy validation — the factory validates first,
+        # but a caller bypassing the factory and constructing `_EceSpec` directly
+        # would otherwise produce a wrong-metric scorecard cell silently.
+        _validate_ece_strategy(self.strategy)
         if self.strategy == "uniform":
             return float(_ece_uniform(y_true, y_score, n_bins=self.n_bins))
         return float(_ece_equal_mass(y_true, y_score, n_bins=self.n_bins))
@@ -178,5 +199,19 @@ def ece(*, n_bins: int = 15, strategy: ECEStrategy = "uniform") -> MetricSpec:
     'ece_n_bins_15_strategy_uniform'
     >>> ece(n_bins=10, strategy="quantile").name
     'ece_n_bins_10_strategy_quantile'
+
+    Invalid strategies raise ``ValueError`` eagerly (v0.46.1+; Round 6 R6-F1
+    fix — prior to v0.46.1 this silently dispatched to quantile ECE):
+
+    >>> ece(strategy="typo")
+    Traceback (most recent call last):
+        ...
+    ValueError: ECE strategy must be 'uniform' or 'quantile'; got 'typo'
+
+    Raises
+    ------
+    ValueError
+        If ``strategy`` is not in ``{"uniform", "quantile"}``.
     """
+    _validate_ece_strategy(strategy)
     return _EceSpec(n_bins=n_bins, strategy=strategy)

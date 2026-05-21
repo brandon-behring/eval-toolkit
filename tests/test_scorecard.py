@@ -118,6 +118,47 @@ def test_ece_different_kwargs_different_instances() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ECE strategy validation (v0.46.1 — Round 6 R6-F1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("strategy", ["typo", "UNIFORM", "Quantile", "", "default"])
+def test_ece_factory_rejects_invalid_strategy(strategy: str) -> None:
+    """`ece(strategy=<invalid>)` raises ValueError at factory level (R6-F1).
+
+    Prior to v0.46.1, invalid strategies silently dispatched to quantile ECE
+    and returned a scorecard cell with `status="ok"` under an invalid key
+    like `"ece_n_bins_15_strategy_typo"`. Verified by Codex Round 6 runtime
+    probe.
+    """
+    with pytest.raises(ValueError, match="ECE strategy must be 'uniform' or 'quantile'"):
+        ms.ece(strategy=strategy)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("strategy", ["uniform", "quantile"])
+def test_ece_factory_accepts_valid_strategies(strategy: str) -> None:
+    """Both documented strategies still work after the v0.46.1 validation."""
+    spec = ms.ece(n_bins=10, strategy=strategy)  # type: ignore[arg-type]
+    assert spec.name == f"ece_n_bins_10_strategy_{strategy}"
+
+
+def test_ece_compute_defence_in_depth() -> None:
+    """`_EceSpec.compute()` ALSO validates strategy (defence-in-depth — R6-F1).
+
+    Direct construction of `_EceSpec(strategy="typo")` bypasses the factory's
+    validation. compute() catches the invalid strategy at the compute boundary
+    so the wrong-metric `ok`-status path can never happen.
+    """
+    from eval_toolkit.metric_specs import _EceSpec
+
+    spec = _EceSpec(n_bins=10, strategy="typo")  # type: ignore[arg-type]
+    y = np.array([0, 1, 0, 1, 1, 0, 1, 0])
+    s = np.array([0.2, 0.8, 0.3, 0.7, 0.9, 0.1, 0.6, 0.4])
+    with pytest.raises(ValueError, match="ECE strategy must be 'uniform' or 'quantile'"):
+        spec.compute(y, s)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Spec name encoding (Decision X.2 + name-mangling rule from §3A)
 # ─────────────────────────────────────────────────────────────────────────────
 

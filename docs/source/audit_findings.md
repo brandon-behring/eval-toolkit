@@ -60,11 +60,11 @@ for fix-tracking. Lower-severity findings are recorded here only.
 
 ---
 
-## Round 6 (active: post-v0.46 ship — pending Codex + Gemini reports)
+## Round 6 (complete: 2026-05-21 — Codex + Gemini + manual; 11 findings)
 
 **Ship date**: v0.46.0 tagged + published to PyPI 2026-05-21. STOP-GATE per
-Decision Y.2 — `release/v0.47.0` cannot open until this audit completes (or
-the 7-day timeout from 2026-05-21 expires).
+Decision Y.2 — `release/v0.47.0` opens once R6-F1 (BLOCKER) + R6-F2 (HIGH)
+are fixed via v0.46.1 hotfix and the remaining items are scheduled.
 
 **Reviewers**: author (manual) + Codex (independent) + Gemini (independent).
 
@@ -117,9 +117,30 @@ state.
 a row in this ledger. Either fix-as-v0.46.1-hotfix or fold into v0.47
 design (per Decision Q severity-tiered hotfix policy).
 
-| ID | Severity | Finding | Disposition | Issue |
-|----|----------|---------|-------------|-------|
-| _pending Codex + Gemini reports_ | | | | |
+| ID | Reviewer | Severity | Finding | Disposition | Lands |
+|----|----------|----------|---------|-------------|-------|
+| R6-F1 | Codex | **BLOCKER** before v0.47 opens | `metric_specs.ece(strategy="typo")` silently dispatches to quantile ECE and returns scorecard cell with `status="ok"` under invalid key (`"ece_n_bins_15_strategy_typo"`). Wrong-by-design data correctness path. Verified via Codex runtime probe. | Add strategy validation in `ece()` factory + `_EceSpec.compute()`; raise `ValueError("ECE strategy must be 'uniform' or 'quantile'; got {strategy!r}")` (plan §2.5A). | **v0.46.1** |
+| R6-F2 | Codex + Gemini | HIGH before v0.47 scalar hard-removal | ECE deprecation warnings in `__init__.py:_scorecard_spec_for()` emit broken migration snippets for all 5 ECE variants. Two-part bug: (a) for the 2 variants in `metric_specs`, the suggested scorecard key uses the factory-call expression (`"ece(n_bins=10)"`) instead of the encoded spec name (`"ece_n_bins_10_strategy_uniform"`); (b) for the 3 variants NOT in `metric_specs` (`_debiased`, `_l2`, `_l2_debiased`), the fallback name isn't an importable spec. Gemini claimed pre-v0.46 default was `n_bins=15` (verified incorrect — code at `metrics.py:730-734` shows `n_bins=10`); Decision R6-F resolves: warning uses `n_bins=10` to preserve pre-v0.46 math + adds migration note about new factory default. | Restructure `_scorecard_spec_for()` to return `(factory_expr, scorecard_key, has_first_party)` tuple; correct snippets for first-party variants with `n_bins=10`; submodule-path template for 3 non-first-party variants per Decision R6-G (plan §2.5B). | **v0.46.1** |
+| R6-F3 | Codex | HIGH before scorecard freeze | Duplicate `MetricSpec.name` values in the same `scorecard()` call silently overwrite earlier cells (last-wins). Not a documented contract. | Decision R6-B (locked): reject in `scorecard()` with `ValueError("Duplicate MetricSpec name 'X' at index N; ...")`. Forces caller to disambiguate; no silent data loss. (Plan §4G.) | **v0.47** |
+| R6-F4 (= Gemini R6-F1) | Codex + Gemini | HIGH before v1.0 | `scorecard(seed=None)` documented as non-deterministic; implementation coerces `None → 0`. Doc/impl contradiction. Verified by Codex via bit-for-bit equality test. | Decision R6-A (locked): deterministic-by-default; fix docs only. No behavior change. Plan §4G-prep. (Decision R6-E: rolls to v0.47 — R6-A is non-blocker per Decision Q's "docstring" category.) | **v0.47** |
+| R6-F5 | Codex | Contract-enforcement gap before v1.0 | ADR 0003 promises strict Tier-2 Protocol method-shape stability; current public-API drift guard only snapshots `(*args, **kwargs)` for Protocol classes, not method signatures. The guard does not see changes to `MetricSpec.compute`, `MetaLearner.fit`, etc. | Decision R6-D (locked): extend `tests/test_public_api.py` snapshot to capture Protocol method signatures via `inspect.signature` + `typing.get_type_hints` for the 9 Tier-2 Protocols. (Plan §4I.) | **v0.47** |
+| R6-F6 | Codex | Packet drift | v1.0 plan + roadmap still describe pre-v0.46 scorecard shapes that didn't ship: `ece_n_bins_15` without strategy in plan, `ece_quantile()` factory listed (shipped as `ece(strategy='quantile')`), `MetricUndefinedError` mentioned (ADR 0002 chose no new public exception), `n_resamples >= 100` floor (shipped is `>= 1`). Roadmap "Currently shipped" still says v0.44. | Plan §4L: refresh plan §3A scorecard examples + roadmap shipped-state section. Doc-only commit on v0.47 release branch. | **v0.47** |
+| R6-F3 (Gemini) | Gemini | MEDIUM (schema lock-in before v1.0) | `Scorecard.to_pandas()` MultiIndex columns expose `value, status, reason, ci_low, ci_high, confidence` but drop `n_resamples` + `method` from `BootstrapCI`. Provenance loss compared to `to_dict()`. v1.0 is about to lock the schema. | Decision R6-C (locked): add `n_resamples` + `method` columns at v0.47 (additive). Schema becomes lossless against `to_dict()`. (Plan §4H.) | **v0.47** |
+| R6-F4 (Gemini) | Gemini | LOW | `MetricSpec` Protocol doesn't enforce stable parameterized-spec naming. Custom users implementing multi-kwarg parameterized specs can silently spawn distinct dict keys if constructor arg order varies. | Decision R6-H (locked): add `make_spec_name(prefix, **kwargs)` canonicalization helper in `metric_specs.__all__` only (NOT top-level `_EXPORTS` — Tier-2 additive contract). Alphabetized kwargs, snake_cased, joined by underscore. (Plan §4J.) | **v0.47** |
+| R6-F5 (Gemini) | Gemini | LOW | `_evaluate_spec()` wraps `spec.compute()` in broad `except Exception`. Swallows `MemoryError`, `RecursionError`, `KeyboardInterrupt`, `SystemExit` into cell state — process exhaustion / user-interrupt signals get hidden as metric errors. | Narrow exception catch: `except (MemoryError, RecursionError, KeyboardInterrupt, SystemExit): raise` first, then existing broad catch. (Plan §4K.) | **v0.47** |
+
+**Round 6 totals**: 11 findings (Codex 6 + Gemini 5; 2 overlap on `seed=None` + ECE deprecation snippets but with different reasoning angles). 1 BLOCKER (R6-F1) + 5 HIGH + 2 MEDIUM/contract + 3 LOW. All dispositioned to either v0.46.1 (2 fixes) or v0.47 (9 fixes).
+
+**Key follow-on decisions** (driven by Round 6 — locked in plan):
+
+- **Decision R6-A**: `seed=None` deterministic-by-default; fix docs only.
+- **Decision R6-B**: Reject duplicate `MetricSpec.name` with `ValueError`.
+- **Decision R6-C**: Add `n_resamples` + `method` to `to_pandas()` schema.
+- **Decision R6-D**: Extend public-API snapshot to cover Protocol method signatures.
+- **Decision R6-E**: v0.46.1 scope = R6-F1 + R6-F2 only; R6-A rolls to v0.47 (non-blocker per Decision Q's "docstring" category).
+- **Decision R6-F**: Use `n_bins=10` (pre-v0.46 default) in deprecation warnings + migration note about new v0.46+ factory default of `n_bins=15`. Corrects Gemini's misverified pre-v0.46 default claim.
+- **Decision R6-G**: 3 ECE variants without `metric_specs` (debiased, l2, l2_debiased) route deprecation warnings to submodule path; do NOT add to `metric_specs` at v0.47.
+- **Decision R6-H**: `make_spec_name()` helper in `metric_specs` submodule only; not top-level.
 
 ---
 
