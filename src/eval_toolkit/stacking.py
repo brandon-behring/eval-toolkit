@@ -258,20 +258,24 @@ class LogisticStacker:
     def coef_(self) -> np.ndarray:
         """Fitted detector weights, shape ``(n_detectors,)``. Raises if unfit."""
         self._assert_fitted()
+        assert self._model is not None  # narrowed by _assert_fitted; tell mypy
         # sklearn returns (1, n_features) for binary; flatten to (n_features,)
-        return self._model.coef_.ravel()  # type: ignore[union-attr]
+        # np.asarray() wraps sklearn's Any-typed attribute into a known ndarray.
+        return np.asarray(self._model.coef_).ravel()
 
     @property
     def classes_(self) -> np.ndarray:
         """Class labels, shape ``(2,)``. Raises if unfit."""
         self._assert_fitted()
-        return self._model.classes_  # type: ignore[union-attr]
+        assert self._model is not None
+        return np.asarray(self._model.classes_)
 
     @property
     def intercept_(self) -> np.ndarray:
         """Fitted intercept, shape ``(1,)``. Raises if unfit."""
         self._assert_fitted()
-        return self._model.intercept_  # type: ignore[union-attr]
+        assert self._model is not None
+        return np.asarray(self._model.intercept_)
 
     def fit(self, score_matrix: np.ndarray, y: np.ndarray) -> LogisticStacker:
         """Fit the stacker on a ``(n_samples, n_detectors)`` score matrix.
@@ -328,9 +332,10 @@ class LogisticStacker:
             issues in ``score_matrix``.
         """
         self._assert_fitted()
+        assert self._model is not None  # narrowed by _assert_fitted; tell mypy
         sm = np.asarray(score_matrix, dtype=float)
         _validate_predict_inputs(sm, expected_n_features=self.coef_.shape[0])
-        return self._model.predict(sm)  # type: ignore[union-attr]
+        return np.asarray(self._model.predict(sm))
 
     def predict_proba(self, score_matrix: np.ndarray) -> np.ndarray:
         """Return ``(n_samples, 2)`` probability matrix.
@@ -345,9 +350,10 @@ class LogisticStacker:
             issues in ``score_matrix``.
         """
         self._assert_fitted()
+        assert self._model is not None
         sm = np.asarray(score_matrix, dtype=float)
         _validate_predict_inputs(sm, expected_n_features=self.coef_.shape[0])
-        return self._model.predict_proba(sm)  # type: ignore[union-attr]
+        return np.asarray(self._model.predict_proba(sm))
 
     def _assert_fitted(self) -> None:
         """Raise if :meth:`fit` has not been called."""
