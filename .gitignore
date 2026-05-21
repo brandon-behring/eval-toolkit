@@ -39,6 +39,12 @@ coverage.json
 # Logs
 *.log
 
+# Local environment overrides (machine-local credentials / config)
+.env.local
+
+# Mutation-testing output (mutmut / cargo-mutants — local run artifacts)
+mutants/
+
 # Claude Code project settings (machine-local)
 .claude/
 

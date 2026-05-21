@@ -8,7 +8,7 @@ This document is **descriptive of intent, not a commitment**. The
 priorities reflect today's understanding of what consumers need;
 order may change as feedback comes in.
 
-## Currently shipped (as of v0.36.0)
+## Currently shipped (as of v0.44.0)
 
 See [`CHANGELOG.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/CHANGELOG.md) for the full release history.
 Highlights since v0.33:
@@ -25,6 +25,33 @@ Highlights since v0.33:
   the unified parallelism pattern into the harness loop (closes #29,
   #30). CI actions bumped to Node 24 ahead of the 2026-06-02
   deprecation.
+- **v0.37.0** — `TokenizationLeakageCheck` (HF-tokenizer-aware dedup
+  leakage check; closes #35); restored per-module coverage floors
+  (closes #37).
+- **v0.38.0** — myst-nb migration of `docs/source/examples/`
+  (closes #31); executable doc cells via Sybil.
+- **v0.39.0** — consumer-feedback batch: `is_metric_defined_for_slice`
+  primitive (closes #39), `LeakageCheck.name` relaxed to read-only
+  `@property` (closes #40), `parallel_map` worker-copy memory docs
+  (closes #41).
+- **v0.40.0** — `fit_platt_binary` + `fit_beta_binary` calibrators
+  (closes #43).
+- **v0.41.0** — `HFDatasetsLoader` Croissant + tree-API hash
+  provenance (closes #42 + v1.0 Gate 4 MET).
+- **v0.42.0** — `fit_isotonic_binary` completes the 4-element binary
+  calibrator family (`temperature` / `isotonic` / `platt` / `beta`
+  all return `(params, apply)`; closes #44).
+- **v0.43.0** — P1 batch: `ood_dataset_from_manifest` declarative OOD
+  loader (closes #48), `character_injection` 6-core-technique
+  adversarial suite + Scorer-Protocol matrix (closes #49 core-6;
+  advanced-6 deferred), `ActivationDeltaProbe` TaskTracker-style
+  linear activation probe (closes #53). New optional extra `[probes]
+  = torch + transformers`.
+- **v0.44.0** — Defenses + losses: `preprocessing` module with 3
+  Spotlighting structural-defense variants (delimit / datamark /
+  encode; closes #51), `RecallAtLowFPR` Meta Prompt Guard 2 loss
+  recipe (closes #50). New optional extra `[losses] = torch>=2.0`
+  (separate from `[probes]` to allow loss-only installs).
 
 State-of-the-toolkit:
 
@@ -65,15 +92,20 @@ preserved in CHANGELOG entries for v0.7.x / v0.8.0.
 
 ## Tracked candidates (see GitHub Issues)
 
-The previously-untracked "v0.9 candidates" list has been filed as
-GitHub Issues. Issue state is the source of truth; this section is a
-navigational gloss.
+Issue state is the source of truth; this section is a navigational gloss.
+The May 2026 backlog burn closed 16 issues across v0.39–v0.44 (#30, #31,
+#35, #37, #38, #39, #40, #41, #42, #43, #44, #48, #49 core-6, #50, #51,
+#53). Remaining open:
 
-- [#35](https://github.com/brandon-behring/eval-toolkit/issues/35) (P2) — `TokenizationLeakageCheck` (HF-tokenizer-aware dedup; complements `NormalizedFormLeakageCheck`).
-- [#31](https://github.com/brandon-behring/eval-toolkit/issues/31) (P3) — Migrate `docs/source/examples/` from static MD to executable myst-nb cells.
-- [#36](https://github.com/brandon-behring/eval-toolkit/issues/36) (P3) — Inline bootstrap CI on every metric (Inspect-AI / lm-eval scorecard pattern).
-- [#37](https://github.com/brandon-behring/eval-toolkit/issues/37) (P3) — Restore per-module coverage floors (`seeds.py` 70 % due to optional torch path).
-- [#38](https://github.com/brandon-behring/eval-toolkit/issues/38) (P3) — CI doctests for `paths.py` / `provenance.py` / `seeds.py` / `docs.py`.
+- [#36](https://github.com/brandon-behring/eval-toolkit/issues/36) (P3) — Inline bootstrap CI on every metric (Inspect-AI / lm-eval scorecard pattern). Slated for **v0.46.0** as the new `scorecard()` primary metric surface — a top-level factory returning a `Scorecard` (`Mapping[str, MetricResult]`) container; supersedes the consumer's earlier `with_ci=True` kwarg sketch.
+- [#52](https://github.com/brandon-behring/eval-toolkit/issues/52) (P3) — `MetaLearner` Protocol + `LogisticStacker` reference impl. Slated for **v0.45.0** (no breaking changes).
+- A new issue tracking advanced-6 character_injection techniques (bidi-RTL, tag-strip, synonym, token-split, Unicode-normalize, invisible-chars) is planned for v0.47.0; v0.43.0's CHANGELOG forward-looked to "v0.43.1" for these but no v0.43.1 shipped.
+
+The current planning document is
+[`~/.claude/plans/evaluate-all-the-work-twinkly-kite.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/.claude/plans/evaluate-all-the-work-twinkly-kite.md)
+(local) — covers the staggered v0.45 → v0.46 → v0.47 → v0.48 → v1.0
+sequence and the 17 design decisions locked across four `/exploring-options`
+rounds.
 
 Run `gh issue list -R brandon-behring/eval-toolkit --label P2` or
 `--label P3` for live state.
@@ -106,21 +138,29 @@ v2.0. Gated on:
 2. **Protocol shapes survive ≥ 1 "should we change this?" review
    cycle.** v0.7.x added 5 Tier-2 Protocols (`Scorer`, `LeakageCheck`,
    `Splitter`, `ThresholdSelector`, `DatasetLoader`) + 1 opt-in
-   (`Versioned`). As of v0.41.0, all six have been stable across
-   34 minor releases (v0.7 → v0.41) except for one contract-tightening
+   (`Versioned`). As of v0.44.0, all six have been stable across
+   37 minor releases (v0.7 → v0.44) except for one contract-tightening
    edit to `LeakageCheck.name` in v0.39.0 (#40) — changing the
    Protocol declaration from a settable class-level attribute to a
    `@property` to align with the `@dataclass(frozen=True)`
-   implementation pattern. v0.40.0 and v0.41.0 both shipped without
-   Protocol shape edits (v0.40: `fit_platt_binary` + `fit_beta_binary`
-   additions; v0.41: `HFDatasetsLoader` enrichment — neither touched
-   Tier-2 Protocols). The stability window is now **2 of 2 minors
-   without Protocol edits** as of v0.41.0 — Gate 2 ✅ **MET**.
+   implementation pattern. The stability window now stands at
+   **5 of 5 minors without Protocol edits** (v0.40 + v0.41 + v0.42 +
+   v0.43 + v0.44 — all additive: new calibrators, Croissant
+   enrichment, OOD loader, adversarial suite, structural defenses,
+   losses, probes). Gate 2 ✅ **MET** and continues to track.
    The v1-prelude evidence APIs must also survive one real-consumer
    migration check (the `prompt-injection-detection-submission` repo).
-3. **Methodology docs peer-reviewed** by an external reader (statistics
-   / methodology background, ideally not part of the
-   `prompt_injection_*` core team).
+3. **Methodology docs reviewed via multi-model cross-review** —
+   redefined 2026-05-21 (see [`adr/0003-stability-contract-and-gate3-methodology.md`](adr/)).
+   Original intent was external academic peer review, but for a
+   single-author / single-consumer library that's a high-variance
+   calendar dependency. Replaced by three independent reads:
+   (a) manual review by author, (b) Codex independent report,
+   (c) Gemini independent report. Different model training corpora
+   provide the "outside eyes" value with predictable cycle time.
+   Any reviewer-flagged blocker becomes a `p1-gate3`-labelled issue;
+   must close before v1.0 tag. Gate 3 ⏳ **NOT STARTED** — kicks off
+   in parallel with v0.45 work.
 4. **Croissant interop verified end-to-end** — ✅ **MET as of v0.41.0**
    (see `tests/test_croissant_e2e.py`). `HFDatasetsLoader.describe()`
    fetches Croissant metadata + per-file `sha256` from HF Hub; the
