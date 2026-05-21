@@ -89,7 +89,7 @@ def test_deprecated_pr_auc_still_functional() -> None:
     """The returned function still works — only the WAY it's imported is deprecated."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        pr_auc = eval_toolkit.pr_auc  # type: ignore[attr-defined]
+        pr_auc = eval_toolkit.pr_auc
     y = np.array([0, 1, 0, 1, 1, 0, 1, 0])
     s = np.array([0.2, 0.8, 0.3, 0.7, 0.9, 0.1, 0.6, 0.4])
     assert 0.0 <= pr_auc(y, s) <= 1.0
@@ -99,7 +99,7 @@ def test_deprecated_pr_auc_still_functional() -> None:
 def test_deprecated_brier_score_still_functional() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        brier_score = eval_toolkit.brier_score  # type: ignore[attr-defined]
+        brier_score = eval_toolkit.brier_score
     y = np.array([0, 1, 0, 1])
     s = np.array([0.1, 0.9, 0.2, 0.8])
     assert 0.0 <= brier_score(y, s) <= 1.0
@@ -183,7 +183,7 @@ def test_full_all_resolves_without_attribute_error() -> None:
 def test_unknown_name_still_raises_attribute_error() -> None:
     """The deprecation branch must not swallow unknown-name errors."""
     with pytest.raises(AttributeError, match="no attribute"):
-        _ = eval_toolkit.nonexistent_symbol_xyz  # type: ignore[attr-defined]
+        _ = eval_toolkit.nonexistent_symbol_xyz
 
 
 # ─────────────────────────────────────────────────────────────────────────────

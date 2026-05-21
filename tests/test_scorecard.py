@@ -132,13 +132,13 @@ def test_ece_factory_rejects_invalid_strategy(strategy: str) -> None:
     probe.
     """
     with pytest.raises(ValueError, match="ECE strategy must be 'uniform' or 'quantile'"):
-        ms.ece(strategy=strategy)  # type: ignore[arg-type]
+        ms.ece(strategy=strategy)
 
 
 @pytest.mark.parametrize("strategy", ["uniform", "quantile"])
 def test_ece_factory_accepts_valid_strategies(strategy: str) -> None:
     """Both documented strategies still work after the v0.46.1 validation."""
-    spec = ms.ece(n_bins=10, strategy=strategy)  # type: ignore[arg-type]
+    spec = ms.ece(n_bins=10, strategy=strategy)
     assert spec.name == f"ece_n_bins_10_strategy_{strategy}"
 
 
@@ -180,7 +180,7 @@ def test_ece_spec_name_encodes_kwargs() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_scorecard_ok_status_with_bootstrap(well_mixed_data) -> None:
+def test_scorecard_ok_status_with_bootstrap(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True, n_resamples=200, seed=0)
     assert r["pr_auc"].status == "ok"
@@ -190,14 +190,16 @@ def test_scorecard_ok_status_with_bootstrap(well_mixed_data) -> None:
     assert r["brier"].status == "ok"
 
 
-def test_scorecard_ok_status_without_bootstrap(well_mixed_data) -> None:
+def test_scorecard_ok_status_without_bootstrap(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.brier], bootstrap=False)
     assert r["brier"].status == "ok"
     assert r["brier"].ci is None
 
 
-def test_single_class_slice_pr_auc_skipped(all_zeros_data) -> None:
+def test_single_class_slice_pr_auc_skipped(all_zeros_data: tuple[np.ndarray, np.ndarray]) -> None:
     """PR-AUC on a single-class slice → status='skipped', not raised."""
     y, s = all_zeros_data
     r = scorecard(y, s, metrics=[ms.pr_auc, ms.roc_auc, ms.brier], bootstrap=False)
@@ -210,7 +212,7 @@ def test_single_class_slice_pr_auc_skipped(all_zeros_data) -> None:
     assert r["brier"].value is not None
 
 
-def test_per_cell_error_isolation(well_mixed_data) -> None:
+def test_per_cell_error_isolation(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     """One metric's exception doesn't abort the others."""
     y, s = well_mixed_data
 
@@ -228,7 +230,7 @@ def test_per_cell_error_isolation(well_mixed_data) -> None:
     assert r["bad"].value is None
 
 
-def test_bootstrap_unavailable_keeps_ok_status(tiny_data) -> None:
+def test_bootstrap_unavailable_keeps_ok_status(tiny_data: tuple[np.ndarray, np.ndarray]) -> None:
     """When bootstrap_ci can't run (n<10 floor), point is ok but ci=None with reason."""
     y, s = tiny_data
     r = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=200, seed=0)
@@ -246,7 +248,7 @@ def test_bootstrap_unavailable_keeps_ok_status(tiny_data) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_scorecard_is_mapping(well_mixed_data) -> None:
+def test_scorecard_is_mapping(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.brier], bootstrap=False)
     assert isinstance(r, Scorecard)
@@ -255,7 +257,7 @@ def test_scorecard_is_mapping(well_mixed_data) -> None:
     assert isinstance(r, Mapping)
 
 
-def test_unknown_key_raises_key_error(well_mixed_data) -> None:
+def test_unknown_key_raises_key_error(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     """Typo in subscript → KeyError, not silent None."""
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.brier], bootstrap=False)
@@ -263,7 +265,7 @@ def test_unknown_key_raises_key_error(well_mixed_data) -> None:
         _ = r["pr_uac"]  # noqa: F841
 
 
-def test_mapping_iter_keys_items(well_mixed_data) -> None:
+def test_mapping_iter_keys_items(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=False)
     assert set(r.keys()) == {"pr_auc", "brier"}
@@ -280,7 +282,7 @@ def test_mapping_iter_keys_items(well_mixed_data) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_to_dict_roundtrip(well_mixed_data) -> None:
+def test_to_dict_roundtrip(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     """to_dict produces JSON-serializable output."""
     import json
 
@@ -294,7 +296,7 @@ def test_to_dict_roundtrip(well_mixed_data) -> None:
     assert "ci" in parsed["pr_auc"]
 
 
-def test_to_dict_handles_skipped_and_error(all_zeros_data) -> None:
+def test_to_dict_handles_skipped_and_error(all_zeros_data: tuple[np.ndarray, np.ndarray]) -> None:
     """to_dict serializes skipped + error states cleanly (None value)."""
     import json
 
@@ -314,7 +316,7 @@ def test_to_dict_handles_skipped_and_error(all_zeros_data) -> None:
     assert d["bad"]["status"] == "error"
 
 
-def test_to_pandas_one_row(well_mixed_data) -> None:
+def test_to_pandas_one_row(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     """to_pandas returns a 1-row DataFrame with metric × field multi-index."""
     pytest.importorskip("pandas")
     y, s = well_mixed_data
@@ -331,7 +333,9 @@ def test_to_pandas_one_row(well_mixed_data) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_point_estimate_agrees_with_submodule_scalar(well_mixed_data) -> None:
+def test_point_estimate_agrees_with_submodule_scalar(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
     """scorecard(...).pr_auc.value == metrics.pr_auc(y, s)."""
     y, s = well_mixed_data
     r = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=False)
@@ -384,7 +388,7 @@ def test_raises_on_negative_n_resamples() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_deterministic_under_seed(well_mixed_data) -> None:
+def test_deterministic_under_seed(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     y, s = well_mixed_data
     a = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, seed=42)
     b = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, seed=42)
