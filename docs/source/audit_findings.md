@@ -119,8 +119,8 @@ design (per Decision Q severity-tiered hotfix policy).
 
 | ID | Reviewer | Severity | Finding | Disposition | Lands |
 |----|----------|----------|---------|-------------|-------|
-| R6-F1 | Codex | **BLOCKER** before v0.47 opens | `metric_specs.ece(strategy="typo")` silently dispatches to quantile ECE and returns scorecard cell with `status="ok"` under invalid key (`"ece_n_bins_15_strategy_typo"`). Wrong-by-design data correctness path. Verified via Codex runtime probe. | Add strategy validation in `ece()` factory + `_EceSpec.compute()`; raise `ValueError("ECE strategy must be 'uniform' or 'quantile'; got {strategy!r}")` (plan §2.5A). | **v0.46.1** |
-| R6-F2 | Codex + Gemini | HIGH before v0.47 scalar hard-removal | ECE deprecation warnings in `__init__.py:_scorecard_spec_for()` emit broken migration snippets for all 5 ECE variants. Two-part bug: (a) for the 2 variants in `metric_specs`, the suggested scorecard key uses the factory-call expression (`"ece(n_bins=10)"`) instead of the encoded spec name (`"ece_n_bins_10_strategy_uniform"`); (b) for the 3 variants NOT in `metric_specs` (`_debiased`, `_l2`, `_l2_debiased`), the fallback name isn't an importable spec. Gemini claimed pre-v0.46 default was `n_bins=15` (verified incorrect — code at `metrics.py:730-734` shows `n_bins=10`); Decision R6-F resolves: warning uses `n_bins=10` to preserve pre-v0.46 math + adds migration note about new factory default. | Restructure `_scorecard_spec_for()` to return `(factory_expr, scorecard_key, has_first_party)` tuple; correct snippets for first-party variants with `n_bins=10`; submodule-path template for 3 non-first-party variants per Decision R6-G (plan §2.5B). | **v0.46.1** |
+| R6-F1 | Codex | **BLOCKER** before v0.47 opens | `metric_specs.ece(strategy="typo")` silently dispatches to quantile ECE and returns scorecard cell with `status="ok"` under invalid key (`"ece_n_bins_15_strategy_typo"`). Wrong-by-design data correctness path. Verified via Codex runtime probe. | Add strategy validation in `ece()` factory + `_EceSpec.compute()`; raise `ValueError("ECE strategy must be 'uniform' or 'quantile'; got {strategy!r}")` (plan §2.5A). | **RESOLVED v0.46.1** (commit `7a4bb14`, tag `v0.46.1` 2026-05-21; consumer pin bumped same day) |
+| R6-F2 | Codex + Gemini | HIGH before v0.47 scalar hard-removal | ECE deprecation warnings in `__init__.py:_scorecard_spec_for()` emit broken migration snippets for all 5 ECE variants. Two-part bug: (a) for the 2 variants in `metric_specs`, the suggested scorecard key uses the factory-call expression (`"ece(n_bins=10)"`) instead of the encoded spec name (`"ece_n_bins_10_strategy_uniform"`); (b) for the 3 variants NOT in `metric_specs` (`_debiased`, `_l2`, `_l2_debiased`), the fallback name isn't an importable spec. Gemini claimed pre-v0.46 default was `n_bins=15` (verified incorrect — code at `metrics.py:730-734` shows `n_bins=10`); Decision R6-F resolves: warning uses `n_bins=10` to preserve pre-v0.46 math + adds migration note about new factory default. | Restructure `_scorecard_spec_for()` to return `(factory_expr, scorecard_key, has_first_party)` tuple; correct snippets for first-party variants with `n_bins=10`; submodule-path template for 3 non-first-party variants per Decision R6-G (plan §2.5B). | **RESOLVED v0.46.1** (commit `7a4bb14`, tag `v0.46.1` 2026-05-21; consumer-side smoke verified all 5 ECE-variant warnings + submodule-path routing) |
 | R6-F3 | Codex | HIGH before scorecard freeze | Duplicate `MetricSpec.name` values in the same `scorecard()` call silently overwrite earlier cells (last-wins). Not a documented contract. | Decision R6-B (locked): reject in `scorecard()` with `ValueError("Duplicate MetricSpec name 'X' at index N; ...")`. Forces caller to disambiguate; no silent data loss. (Plan §4G.) | **v0.47** |
 | R6-F4 (= Gemini R6-F1) | Codex + Gemini | HIGH before v1.0 | `scorecard(seed=None)` documented as non-deterministic; implementation coerces `None → 0`. Doc/impl contradiction. Verified by Codex via bit-for-bit equality test. | Decision R6-A (locked): deterministic-by-default; fix docs only. No behavior change. Plan §4G-prep. (Decision R6-E: rolls to v0.47 — R6-A is non-blocker per Decision Q's "docstring" category.) | **v0.47** |
 | R6-F5 | Codex | Contract-enforcement gap before v1.0 | ADR 0003 promises strict Tier-2 Protocol method-shape stability; current public-API drift guard only snapshots `(*args, **kwargs)` for Protocol classes, not method signatures. The guard does not see changes to `MetricSpec.compute`, `MetaLearner.fit`, etc. | Decision R6-D (locked): extend `tests/test_public_api.py` snapshot to capture Protocol method signatures via `inspect.signature` + `typing.get_type_hints` for the 9 Tier-2 Protocols. (Plan §4I.) | **v0.47** |
@@ -141,6 +141,23 @@ design (per Decision Q severity-tiered hotfix policy).
 - **Decision R6-F**: Use `n_bins=10` (pre-v0.46 default) in deprecation warnings + migration note about new v0.46+ factory default of `n_bins=15`. Corrects Gemini's misverified pre-v0.46 default claim.
 - **Decision R6-G**: 3 ECE variants without `metric_specs` (debiased, l2, l2_debiased) route deprecation warnings to submodule path; do NOT add to `metric_specs` at v0.47.
 - **Decision R6-H**: `make_spec_name()` helper in `metric_specs` submodule only; not top-level.
+
+### Round 6 v0.46.1 ship status (2026-05-21)
+
+- **R6-F1** ✅ SHIPPED in v0.46.1 (PR #67, squash `7a4bb14`). End-to-end verified
+  in consumer: `ms.ece(strategy="typo")` raises `ValueError`; direct
+  `_EceSpec(strategy=...)` construction also raises (defence-in-depth).
+- **R6-F2** ✅ SHIPPED in v0.46.1 (PR #67, squash `7a4bb14`). End-to-end verified
+  in consumer: `eval_toolkit.expected_calibration_error` warning carries
+  `ece(n_bins=10)` + key `ece_n_bins_10_strategy_uniform` + migration note about
+  v0.46+ `n_bins=15` default. All 3 non-first-party variants (debiased, l2,
+  l2_debiased) route to `from eval_toolkit.metrics import …` submodule path.
+- **9 other Round 6 items** (R6-A docstring, R6-B duplicate-name guard, R6-C
+  to_pandas schema, R6-D Protocol method-shape snapshot, R6-F4-Gemini
+  `make_spec_name`, R6-F5-Gemini narrow `except`, R6-F6 plan/roadmap state-drift)
+  → folded into `release/v0.47.0` per Decision R6-E.
+- **Round 6 STOP-GATE status**: CLOSED. `release/v0.47.0` can open after the
+  v0.46.1 consumer cycle observation completes (1 cycle).
 
 ---
 
