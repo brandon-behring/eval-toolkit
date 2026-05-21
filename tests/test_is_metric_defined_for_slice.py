@@ -82,9 +82,32 @@ def test_unknown_metric_defaults_to_defined() -> None:
 
 @pytest.mark.unit
 def test_constant_is_frozenset() -> None:
-    """SINGLE_CLASS_INCOMPATIBLE_METRICS should be immutable."""
+    """SINGLE_CLASS_INCOMPATIBLE_METRICS should be immutable.
+
+    v0.46 prep (Decision X.2): both naming conventions are recognized —
+    ``auroc``/``roc_auc`` for the ROC ranking metric and
+    ``auprc``/``pr_auc`` for the PR ranking metric. This lets the v0.46
+    `scorecard()` surface (which uses `pr_auc`/`roc_auc` per the existing
+    scalar-function names) and the v0.39 harness paths (which use
+    `auroc`/`auprc`) both produce correct skipped-status behavior.
+    """
     assert isinstance(SINGLE_CLASS_INCOMPATIBLE_METRICS, frozenset)
-    assert {"auroc", "auprc"} == SINGLE_CLASS_INCOMPATIBLE_METRICS
+    assert {"auroc", "auprc", "roc_auc", "pr_auc"} == SINGLE_CLASS_INCOMPATIBLE_METRICS
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("metric", ["pr_auc", "roc_auc", "PR_AUC", "Roc_Auc"])
+def test_v0_46_alias_names_undefined_on_single_class(metric: str) -> None:
+    """v0.46 prep: `pr_auc` / `roc_auc` (used by scorecard `metric_specs`) are
+    recognized as single-class-incompatible just like `auprc` / `auroc`."""
+    assert not is_metric_defined_for_slice(metric, is_single_class=True)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("metric", ["pr_auc", "roc_auc"])
+def test_v0_46_alias_names_defined_on_mixed_class(metric: str) -> None:
+    """The alias names behave identically to the canonical names on mixed-class slices."""
+    assert is_metric_defined_for_slice(metric, is_single_class=False)
 
 
 @pytest.mark.unit
