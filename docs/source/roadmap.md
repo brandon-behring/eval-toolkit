@@ -8,7 +8,7 @@ This document is **descriptive of intent, not a commitment**. The
 priorities reflect today's understanding of what consumers need;
 order may change as feedback comes in.
 
-## Currently shipped (as of v0.44.0)
+## Currently shipped (as of v0.47.0)
 
 See [`CHANGELOG.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/CHANGELOG.md) for the full release history.
 Highlights since v0.33:
@@ -52,11 +52,44 @@ Highlights since v0.33:
   encode; closes #51), `RecallAtLowFPR` Meta Prompt Guard 2 loss
   recipe (closes #50). New optional extra `[losses] = torch>=2.0`
   (separate from `[probes]` to allow loss-only installs).
+- **v0.45.0** — Stacking: `MetaLearner` Protocol + `LogisticStacker`
+  reference impl (closes #52). Non-breaking; sklearn already core.
+- **v0.46.0** — Scorecard primary metric surface (closes #36):
+  `scorecard()` + `Scorecard` (`Mapping[str, MetricResult]`) +
+  `metric_specs` namespace + `MetricSpec` Protocol (the 6th Tier-2
+  Protocol). Soft-breaking — top-level scalar metric imports
+  (`pr_auc`, `roc_auc`, `brier_score`, 5 ECE variants) emit
+  `DeprecationWarning` via the `__getattr__` shim. ADR 0002 documents
+  the scorecard-as-primary-metric-surface decision.
+- **v0.46.1** — Round 6 audit hotfix per Decision R6-E: ECE strategy
+  validation (`metric_specs.ece(strategy=...)` raises ValueError on
+  invalid values; defence-in-depth at the `_EceSpec.compute()` boundary)
+  + deprecation-warning snippet correctness for all 5 ECE variants.
+- **v0.47.0** — Sweep unification + advanced-6 + cleanup (BREAKING):
+  top-level `sweep()` accepting any `TextTransform` Protocol satisfier;
+  `TextTransform` is the 9th strict Tier-2 Protocol (Decision K). 3
+  preprocessing dataclasses (`DelimitVariant` / `DatamarkVariant` /
+  `EncodeVariant`). 6 new advanced character-injection techniques
+  (`BidiRTLInjection`, `TagStrippingInjection`, `SynonymSubstitution`,
+  `TokenSplitting`, `UnicodeNormalization`, `InvisibleCharsInjection`)
+  → `ALL_TECHNIQUES` = 12. Removed: the v0.46 `__getattr__`
+  deprecation shim (top-level scalars now `AttributeError`), module-
+  level `adversarial.sweep` + `preprocessing.sweep`,
+  `character_injection` + `spotlighting` `SimpleNamespace` shortcuts,
+  `CharacterInjectionStrategy` per-module Protocol. Round 6 follow-on:
+  R6-A docstring fix, R6-B duplicate `MetricSpec.name` guard, R6-C
+  `to_pandas` schema gains `n_resamples` + `method` columns, R6-D
+  Protocol method-shape drift guard, R6-F5 narrow exception catch in
+  `_evaluate_spec()`, R6-H `metric_specs.make_spec_name()` helper.
+  Migration guide: [`migration/v0.47.md`](migration/v0.47.md).
 
 State-of-the-toolkit:
 
-- 5 Tier-2 Protocols (`Scorer`, `LeakageCheck`, `Splitter`,
-  `ThresholdSelector`, `DatasetLoader`) + 1 opt-in (`Versioned`).
+- 9 strict Tier-2 Protocols (`Scorer`, `LeakageCheck`, `Splitter`,
+  `ThresholdSelector`, `DatasetLoader`, `MetricSpec`, `MetaLearner`,
+  `Probe`, `TextTransform`) + 1 opt-in (`Versioned`). The
+  `tests/test_public_api.py` drift guard captures Protocol method
+  signatures so changes to any of these trigger SemVer-major review.
 - Reference impls: 6 selectors, 7 leakage checks (incl.
   `NormalizedFormLeakageCheck` for encoding-obfuscated dupes), 5
   splitters (incl. `SourceDisjointKFoldSplitter`), 4 loaders.
@@ -78,7 +111,9 @@ State-of-the-toolkit:
 - Per-version migration guides
   ([`migration/v0.7.md`](migration/v0.7.md),
   [`migration/v0.8.md`](migration/v0.8.md),
-  [`migration/v0.9.md`](migration/v0.9.md))
+  [`migration/v0.9.md`](migration/v0.9.md),
+  [`migration/v0.46.md`](migration/v0.46.md),
+  [`migration/v0.47.md`](migration/v0.47.md))
   + general [`MIGRATION.md`](MIGRATION.md).
 
 ## Consumer gap docs (input)
@@ -97,9 +132,20 @@ The May 2026 backlog burn closed 16 issues across v0.39–v0.44 (#30, #31,
 #35, #37, #38, #39, #40, #41, #42, #43, #44, #48, #49 core-6, #50, #51,
 #53). Remaining open:
 
-- [#36](https://github.com/brandon-behring/eval-toolkit/issues/36) (P3) — Inline bootstrap CI on every metric (Inspect-AI / lm-eval scorecard pattern). Slated for **v0.46.0** as the new `scorecard()` primary metric surface — a top-level factory returning a `Scorecard` (`Mapping[str, MetricResult]`) container; supersedes the consumer's earlier `with_ci=True` kwarg sketch.
-- [#52](https://github.com/brandon-behring/eval-toolkit/issues/52) (P3) — `MetaLearner` Protocol + `LogisticStacker` reference impl. Slated for **v0.45.0** (no breaking changes).
-- A new issue tracking advanced-6 character_injection techniques (bidi-RTL, tag-strip, synonym, token-split, Unicode-normalize, invisible-chars) is planned for v0.47.0; v0.43.0's CHANGELOG forward-looked to "v0.43.1" for these but no v0.43.1 shipped.
+All v0.45 / v0.46 / v0.46.1 / v0.47 tracked candidates closed:
+
+- #36 (scorecard) — closed by v0.46.0.
+- #52 (MetaLearner + LogisticStacker) — closed by v0.45.0.
+- Advanced-6 character_injection (v0.43.0 forward-look) — shipped at
+  v0.47.0 alongside the sweep consolidation per Decision Q11→11.3.
+
+Remaining roadmap items target v0.48 polish + v1.0 stability:
+
+- **v0.48 polish (planned)** — `metrics_at_threshold` key normalization,
+  `BootstrapCI.to_dict()` rewrite, lazy-extras error message audit,
+  docstring example sweep, ADRs 0001 (flat-module) + 0003 (stability
+  contract + Gate 3 governance) finalized.
+- **v1.0** — stability commitment, no new code; all 4 v1.0 gates closed.
 
 The current planning document is
 [`~/.claude/plans/evaluate-all-the-work-twinkly-kite.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/.claude/plans/evaluate-all-the-work-twinkly-kite.md)

@@ -5,10 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — release/v0.47.0 — Sweep unification + TextTransform + advanced-6 + cleanup + Round 6 follow-on
+## [0.47.0] — 2026-05-21 — Sweep unification + TextTransform + advanced-6 + cleanup + Round 6 follow-on
 
-In progress on the ``release/v0.47.0`` branch. Final shape will be reconciled
-into the v0.47.0 entry at release-prep time.
+Second BREAKING minor of the staggered v0.45 → v0.46 → v0.46.1 → v0.47 →
+v0.48 → v1.0 release sequence (plan
+``~/.claude/plans/evaluate-all-the-work-twinkly-kite.md``, Step 3).
+
+Closes:
+
+- The v0.43 CHANGELOG forward-look re: advanced-6 character-injection
+  techniques (Decision Q11→11.3 — "12-technique suite + new sweep API
+  in one migration step").
+- Round 6 audit follow-on items per Decision R6-E (R6-A docstring,
+  R6-B duplicate name guard, R6-C to_pandas schema, R6-D Protocol
+  method-shape drift guard, R6-F5 narrow except, R6-F6 plan/roadmap
+  refresh, R6-H make_spec_name helper) — see ``docs/source/audit_findings.md``
+  for the per-finding ledger.
 
 ### Removed (BREAKING)
 
