@@ -73,4 +73,6 @@ What would have to change for this decision to be reopened?
 
 | # | Title | Status | Date |
 |---|---|---|---|
-| _none yet_ | | | |
+| [0001](0001-flat-module-layout.md) | Flat single-file modules through v1.x | Accepted | 2026-05-21 |
+| [0002](0002-scorecard-as-primary-metric-surface.md) | `scorecard()` as the primary v1.0 metric surface | Accepted | 2026-05-21 |
+| [0003](0003-stability-contract-and-gate3-methodology.md) | v1.0 stability contract + Gate 3 methodology | Accepted | 2026-05-21 |

@@ -45,6 +45,13 @@ coverage.json
 # Mutation-testing output (mutmut / cargo-mutants — local run artifacts)
 mutants/
 
+# Local audit artifacts (Round 5+ Gate 3 LLM cross-review packets + reports).
+# The canonical prompt lives at ~/.claude/plans/gate3-audit-prompt.md and the
+# canonical findings ledger lives at docs/source/audit_findings.md; per-run
+# raw model outputs are author-local working copies.
+gate3-audit-prompt.md
+gate3-audit-report.md
+
 # Claude Code project settings (machine-local)
 .claude/
 
