@@ -257,6 +257,11 @@
       ],
       "doc_first_line": "Extract a hidden-state vector for each input text.",
       "kind": "class",
+      "protocol_methods": {
+        "backbone_id": "<property>",
+        "extract": "(self, texts: 'Sequence[str]') -> 'np.ndarray'",
+        "hidden_size": "<property>"
+      },
       "signature": "(*args, **kwargs)"
     },
     "AggregateEvidence": {
@@ -302,6 +307,10 @@
       ],
       "doc_first_line": "Apply a deterministic character-level adversarial transformation.",
       "kind": "class",
+      "protocol_methods": {
+        "name": "<attr: 'str'>",
+        "transform": "(self, text: 'str') -> 'str'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "ClaimReport": {
@@ -480,6 +489,10 @@
       ],
       "doc_first_line": "Yields one or more :class:`EvalSlice` keyed by split name.",
       "kind": "class",
+      "protocol_methods": {
+        "describe": "(self) -> 'dict[str, object]'",
+        "load_splits": "(self) -> 'dict[str, EvalSlice]'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "DeLongResult": {
@@ -528,6 +541,12 @@
       ],
       "doc_first_line": "Pandas-free slice surface needed by evaluation contracts.",
       "kind": "class",
+      "protocol_methods": {
+        "features": "<property>",
+        "name": "<property>",
+        "strata": "<property>",
+        "y_true": "<property>"
+      },
       "signature": "(*args, **kwargs)"
     },
     "EvidenceAxis": {
@@ -664,6 +683,10 @@
       ],
       "doc_first_line": "A pluggable validator over a dict of splits.",
       "kind": "class",
+      "protocol_methods": {
+        "name": "<property>",
+        "validate": "(self, splits: 'Mapping[str, EvalSlice]') -> 'LeakageFinding'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "LeakageFinding": {
@@ -718,6 +741,14 @@
       ],
       "doc_first_line": "Combines per-sample scores from multiple base detectors into P(positive).",
       "kind": "class",
+      "protocol_methods": {
+        "classes_": "<attr: 'np.ndarray'>",
+        "coef_": "<attr: 'np.ndarray'>",
+        "fit": "(self, score_matrix: 'np.ndarray', y: 'np.ndarray') -> 'MetaLearner'",
+        "intercept_": "<attr: 'np.ndarray'>",
+        "predict": "(self, score_matrix: 'np.ndarray') -> 'np.ndarray'",
+        "predict_proba": "(self, score_matrix: 'np.ndarray') -> 'np.ndarray'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "MetricFn": {
@@ -739,6 +770,10 @@
       ],
       "doc_first_line": "Public Protocol for metric specifications consumed by :func:`scorecard`.",
       "kind": "class",
+      "protocol_methods": {
+        "compute": "(self, y_true: 'np.ndarray', y_score: 'np.ndarray') -> 'float'",
+        "name": "<property>"
+      },
       "signature": "(*args, **kwargs)"
     },
     "MetricState": {
@@ -864,6 +899,9 @@
       ],
       "doc_first_line": "Augment a fold's train slice with an external pool and split off val.",
       "kind": "class",
+      "protocol_methods": {
+        "build": "(self, train: 'EvalSlice', *, fold_idx: 'int') -> 'dict[str, EvalSlice]'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "PredictionArrays": {
@@ -896,6 +934,9 @@
       ],
       "doc_first_line": "Reads manifest-referenced prediction artifacts into column arrays.",
       "kind": "class",
+      "protocol_methods": {
+        "read_predictions": "(self, uri: 'str', *, columns: 'Mapping[str, str]') -> 'Mapping[str, Sequence[object]]'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "Probe": {
@@ -904,6 +945,13 @@
       ],
       "doc_first_line": "Minimal probe surface: fit + predict on raw text inputs.",
       "kind": "class",
+      "protocol_methods": {
+        "classes_": "<attr: 'np.ndarray'>",
+        "coef_": "<attr: 'np.ndarray'>",
+        "fit": "(self, clean_texts: 'Sequence[str]', injected_texts: 'Sequence[str]') -> 'Probe'",
+        "predict": "(self, texts: 'Sequence[str]') -> 'np.ndarray'",
+        "predict_proba": "(self, texts: 'Sequence[str]') -> 'np.ndarray'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "PunctuationInjection": {
@@ -983,6 +1031,9 @@
       ],
       "doc_first_line": "Anything exposing ``predict_proba(X) -> np.ndarray of P(positive)``.",
       "kind": "class",
+      "protocol_methods": {
+        "predict_proba": "(self, X: 'Sequence[str] | np.ndarray | pd.Series') -> 'np.ndarray'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "SimilarityAuditFinding": {
@@ -1007,6 +1058,10 @@
       ],
       "doc_first_line": "Pluggable similarity backend for :func:`near_dedup` / :func:`cross_dedup`.",
       "kind": "class",
+      "protocol_methods": {
+        "pairs_across": "(self, query_texts: 'Sequence[str]', reference_texts: 'Sequence[str]', k: 'int') -> 'tuple[np.ndarray, np.ndarray]'",
+        "pairs_within": "(self, texts: 'Sequence[str]', k: 'int') -> 'tuple[np.ndarray, np.ndarray]'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "SingleSliceLoader": {
@@ -1024,6 +1079,9 @@
       ],
       "doc_first_line": "Optional scorer contract for cost-controlled slice skipping.",
       "kind": "class",
+      "protocol_methods": {
+        "should_score_slice": "(self, slice_name: 'str') -> 'bool'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "SourceDisjointKFoldSplitter": {
@@ -1048,6 +1106,10 @@
       ],
       "doc_first_line": "Iterates folds, each as a named-splits dict ready for ``evaluate(...)``.",
       "kind": "class",
+      "protocol_methods": {
+        "get_n_splits": "(self, slice_: 'EvalSlice') -> 'int'",
+        "iter_folds": "(self, slice_: 'EvalSlice', *, groups: 'np.ndarray | None' = None) -> 'Iterator[dict[str, EvalSlice]]'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "StratifiedKFoldSplitter": {
@@ -1125,6 +1187,10 @@
       ],
       "doc_first_line": "Selects a decision threshold from ``(y_true, y_score)``.",
       "kind": "class",
+      "protocol_methods": {
+        "criterion": "<property>",
+        "select": "(self, y_true: 'np.ndarray', y_score: 'np.ndarray') -> 'ThresholdResult'"
+      },
       "signature": "(*args, **kwargs)"
     },
     "ThresholdedMetricFn": {
@@ -1154,6 +1220,9 @@
       ],
       "doc_first_line": "Anything exposing a stable version string.",
       "kind": "class",
+      "protocol_methods": {
+        "version": "<property>"
+      },
       "signature": "(*args, **kwargs)"
     },
     "WhitespaceInjection": {

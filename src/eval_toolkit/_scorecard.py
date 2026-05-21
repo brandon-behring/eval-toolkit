@@ -261,10 +261,17 @@ class Scorecard(Mapping[str, MetricResult]):
         ``ImportError`` with an install hint when pandas is missing.
 
         The DataFrame has 1 row (one slice) and a 2-level column index:
-        outer = metric name, inner = field name in
-        ``{"value", "status", "reason", "ci_low", "ci_high", "confidence"}``.
-        ``ci_low`` / ``ci_high`` / ``confidence`` are ``NaN`` / ``""`` when
-        no CI is present.
+        outer = metric name, inner = field name in ``{"value", "status",
+        "reason", "ci_low", "ci_high", "confidence", "n_resamples",
+        "method"}``. CI-related columns (``ci_low``, ``ci_high``,
+        ``confidence``, ``n_resamples``, ``method``) are sentinel-valued
+        (``NaN`` for numeric, ``""`` for string) when no CI is present
+        (status="skipped" / "error", or bootstrap=False).
+
+        Decision R6-C (Round 6 audit, Gemini F3): the v0.47 expansion adds
+        ``n_resamples`` + ``method`` so the schema is lossless against
+        :meth:`BootstrapCI.to_dict` — trace provenance no longer drops in
+        the DataFrame view.
         """
         try:
             import pandas as pd
@@ -285,6 +292,8 @@ class Scorecard(Mapping[str, MetricResult]):
                     (name, "ci_low"),
                     (name, "ci_high"),
                     (name, "confidence"),
+                    (name, "n_resamples"),
+                    (name, "method"),
                 ]
             )
             values.extend(
@@ -295,6 +304,8 @@ class Scorecard(Mapping[str, MetricResult]):
                     result.ci.ci_low if result.ci is not None else float("nan"),
                     result.ci.ci_high if result.ci is not None else float("nan"),
                     result.ci.confidence if result.ci is not None else float("nan"),
+                    result.ci.n_resamples if result.ci is not None else float("nan"),
+                    result.ci.method if result.ci is not None else "",
                 ]
             )
 

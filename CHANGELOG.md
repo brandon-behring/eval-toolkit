@@ -34,6 +34,19 @@ into the v0.47.0 entry at release-prep time.
   out of ``scorecard()`` instead of being captured as a ``status="error"``
   cell. Per-cell isolation remains for ordinary application errors.
   (Decision R6-F5; closes Round 6 Gemini R6-F5.)
+- ``Scorecard.to_pandas()`` MultiIndex schema extended with two new inner-
+  field columns: ``n_resamples`` (int / NaN sentinel) and ``method``
+  (string / ``""`` sentinel). The DataFrame view is now lossless against
+  :meth:`BootstrapCI.to_dict` — trace provenance (resample count + CI
+  method) no longer drops at the DataFrame boundary. Callers indexing the
+  MultiIndex by name keep working; callers indexing by position must
+  re-check column offsets. (Decision R6-C; closes Round 6 Gemini R6-F3.)
+- ``tests/test_public_api.py`` drift guard now captures method signatures
+  for ``typing.Protocol`` classes in ``__all__`` (a ``protocol_methods``
+  sub-entry in the snapshot). Together with a Tier-2 coverage test, this
+  actually enforces the strict method-shape stability ADR 0003 promises
+  for the 9 Tier-2 Protocols. (Decision R6-D; closes Round 6 Codex R6-F5.)
+  Public-API golden regenerated alongside this change.
 
 ## [0.46.1] — 2026-05-21 — Round 6 hotfix: ECE strategy validation + deprecation warning content
 

@@ -80,6 +80,45 @@ def _value_summary(obj: Any) -> dict[str, Any]:
     return {"type": tname}
 
 
+def _protocol_method_snapshot(cls: type) -> dict[str, str]:
+    """Capture method + annotated-attr signatures for a ``typing.Protocol`` class.
+
+    Decision R6-D (Round 6 audit, Codex R6-F5): ADR 0003 promises strict
+    Tier-2 Protocol method-shape stability, but the bare ``inspect.signature``
+    of a Protocol class only yields ``(*args, **kwargs)`` — the public-API
+    drift guard cannot see changes to ``MetricSpec.compute``,
+    ``MetaLearner.fit``, etc. This helper introspects each public method on
+    the Protocol and returns a ``name → signature-string`` mapping so the
+    snapshot covers method shapes.
+
+    Only methods declared on the class itself (``cls.__dict__``) are
+    captured — Protocol / object machinery inherited from the base is
+    skipped. Underscore-prefixed names are skipped. ``@property`` accessors
+    are captured with signature ``"<property>"``. Annotated class
+    attributes (the ``name: str`` declarations Protocols use for
+    structural typing) are captured as ``"<attr: ...>"`` since their type
+    is part of the contract.
+    """
+    methods: dict[str, str] = {}
+    for attr_name, attr in cls.__dict__.items():
+        if attr_name.startswith("_"):
+            continue
+        if isinstance(attr, property):
+            methods[attr_name] = "<property>"
+            continue
+        if callable(attr):
+            try:
+                methods[attr_name] = _canonicalize_signature(str(inspect.signature(attr)))
+            except (TypeError, ValueError):
+                methods[attr_name] = "<no signature>"
+    annotations = getattr(cls, "__annotations__", {})
+    for ann_name, ann_type in annotations.items():
+        if ann_name.startswith("_"):
+            continue
+        methods.setdefault(ann_name, f"<attr: {ann_type!r}>")
+    return dict(sorted(methods.items()))
+
+
 def _entry_for(name: str, obj: Any) -> dict[str, Any]:
     """Build a stable snapshot entry for one exported symbol."""
     docstring = inspect.getdoc(obj)
@@ -91,12 +130,21 @@ def _entry_for(name: str, obj: Any) -> dict[str, Any]:
             sig = _canonicalize_signature(str(inspect.signature(obj)))
         except (TypeError, ValueError):
             sig = "<no signature>"
-        return {
+        entry: dict[str, Any] = {
             "kind": "class",
             "signature": sig,
             "bases": bases,
             "doc_first_line": doc_first,
         }
+        # Decision R6-D (Round 6 audit, Codex R6-F5): for ``typing.Protocol``
+        # classes, capture method signatures so the public-API drift guard
+        # actually enforces the Tier-2 method-shape stability contract
+        # promised by ADR 0003. The bare class signature
+        # (``(*args, **kwargs)``) does not change when a Protocol method
+        # is added / renamed / has its kwargs altered.
+        if getattr(obj, "_is_protocol", False):
+            entry["protocol_methods"] = _protocol_method_snapshot(obj)
+        return entry
 
     if callable(obj):
         try:
@@ -183,4 +231,84 @@ def test_public_api_drift_guard() -> None:
         + "\n".join(drift[:30])  # cap to first 30 for readability
         + (f"\n... ({len(drift) - 30} more)" if len(drift) > 30 else "")
         + "\nIf intentional, regenerate the golden + add a CHANGELOG entry."
+    )
+
+
+# Tier-2 Protocols (ADR 0003 strict-stability tier). Snapshotting their
+# method shapes is the v0.47 enforcement gap closed by Decision R6-D.
+# Update this list when a new Protocol is added to ``__all__`` so the
+# coverage test fails fast if someone introduces a Tier-2 Protocol without
+# also wiring it into the drift guard.
+#
+# NOTE: ``TextTransform`` will be added as the 9th strict Tier-2 Protocol
+# (Decision K, plan §4B) in a subsequent sub-PR of release/v0.47.0. Add it
+# here AT THE SAME TIME that ``TextTransform`` lands in ``__all__`` /
+# ``_EXPORTS`` so the coverage test stays green through every sub-commit.
+_TIER2_PROTOCOLS = frozenset(
+    {
+        "DatasetLoader",
+        "LeakageCheck",
+        "MetaLearner",
+        "MetricSpec",
+        "Probe",
+        "Scorer",
+        "Splitter",
+        # "TextTransform",  # ← uncomment in Sub-PR 3 (TextTransform addition)
+        "ThresholdSelector",
+    }
+)
+
+
+def test_tier2_protocols_have_method_shape_snapshot() -> None:
+    """Decision R6-D: each Tier-2 Protocol must have its methods snapshotted.
+
+    Fails fast when a new Protocol is exported without method-shape
+    coverage, or when one of the existing Tier-2 Protocols loses its
+    ``protocol_methods`` entry in the snapshot.
+    """
+    if not GOLDEN_PATH.exists():
+        pytest.skip("Golden snapshot missing; run test_public_api_drift_guard first.")
+    expected = json.loads(GOLDEN_PATH.read_text())
+    entries = expected["entries"]
+
+    # Every Tier-2 Protocol must (a) be in __all__ and (b) have method-shape coverage
+    missing_from_all = sorted(p for p in _TIER2_PROTOCOLS if p not in entries)
+    assert not missing_from_all, (
+        f"Tier-2 Protocols missing from __all__ / snapshot: {missing_from_all}. "
+        "Either remove from _TIER2_PROTOCOLS or restore the export."
+    )
+    missing_methods = sorted(p for p in _TIER2_PROTOCOLS if "protocol_methods" not in entries[p])
+    assert not missing_methods, (
+        f"Tier-2 Protocols missing protocol_methods snapshot: {missing_methods}. "
+        "Regenerate the golden after extending _entry_for() Protocol-aware branch."
+    )
+
+
+def test_protocol_methods_only_on_protocol_classes() -> None:
+    """``protocol_methods`` only appears on entries whose live class is a Protocol.
+
+    Sanity-check that the Decision R6-D conditional in ``_entry_for()``
+    only fires on actual ``typing.Protocol`` subclasses — otherwise the
+    snapshot would grow noisy keys on every concrete class.
+
+    Per-module Protocols (e.g. ``CharacterInjectionStrategy``) ARE Protocols
+    and so are allowed to carry ``protocol_methods`` here; this test does
+    NOT enforce the "Tier-2 only" subset (that is the
+    ``_TIER2_PROTOCOLS`` test's job).
+    """
+    if not GOLDEN_PATH.exists():
+        pytest.skip("Golden snapshot missing; run test_public_api_drift_guard first.")
+    expected = json.loads(GOLDEN_PATH.read_text())
+    leaks: list[str] = []
+    for name, entry in expected["entries"].items():
+        if entry.get("kind") != "class" or "protocol_methods" not in entry:
+            continue
+        live_obj = getattr(eval_toolkit, name, None)
+        if live_obj is None:
+            continue
+        if not getattr(live_obj, "_is_protocol", False):
+            leaks.append(name)
+    assert not leaks, (
+        f"Non-Protocol classes have protocol_methods in snapshot: {leaks}. "
+        "The Decision R6-D conditional in _entry_for() is misfiring."
     )

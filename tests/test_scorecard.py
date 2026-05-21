@@ -328,6 +328,67 @@ def test_to_pandas_one_row(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> No
     assert df.loc[0, ("brier", "status")] == "ok"
 
 
+def test_to_pandas_includes_n_resamples_and_method(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """Decision R6-C: to_pandas schema includes n_resamples + method columns.
+
+    v0.47 expansion makes the DataFrame schema lossless against
+    BootstrapCI.to_dict(); trace provenance (resample count + CI method) is
+    no longer dropped at the DataFrame boundary.
+    """
+    pytest.importorskip("pandas")
+    y, s = well_mixed_data
+    r = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, seed=0)
+    df = r.to_pandas()
+    # Both new columns present
+    assert ("brier", "n_resamples") in df.columns
+    assert ("brier", "method") in df.columns
+    # Values match the BootstrapCI fields
+    ci = r["brier"].ci
+    assert ci is not None
+    assert df.loc[0, ("brier", "n_resamples")] == ci.n_resamples
+    assert df.loc[0, ("brier", "method")] == ci.method
+
+
+def test_to_pandas_skipped_cells_carry_sentinels(
+    all_zeros_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """For skipped cells (no CI), the two new columns get sentinel values.
+
+    Numeric column ``n_resamples`` → NaN; string column ``method`` → "".
+    Matches the existing pattern for ``ci_low`` / ``ci_high`` / ``confidence``.
+    """
+    pytest.importorskip("pandas")
+    import math
+
+    y, s = all_zeros_data  # single-class slice → pr_auc skipped
+    r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True, n_resamples=100, seed=0)
+    df = r.to_pandas()
+    assert r["pr_auc"].status == "skipped"
+    # Sentinels in the skipped cell's new columns
+    assert math.isnan(df.loc[0, ("pr_auc", "n_resamples")])
+    assert df.loc[0, ("pr_auc", "method")] == ""
+    # Brier was still bootstrapped, so its new columns are populated
+    assert not math.isnan(df.loc[0, ("brier", "n_resamples")])
+    assert df.loc[0, ("brier", "method")] != ""
+
+
+def test_to_pandas_no_bootstrap_carries_sentinels(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """When bootstrap=False, the CI columns (incl. R6-C additions) all sentinel."""
+    pytest.importorskip("pandas")
+    import math
+
+    y, s = well_mixed_data
+    r = scorecard(y, s, metrics=[ms.brier], bootstrap=False)
+    df = r.to_pandas()
+    assert math.isnan(df.loc[0, ("brier", "ci_low")])
+    assert math.isnan(df.loc[0, ("brier", "n_resamples")])
+    assert df.loc[0, ("brier", "method")] == ""
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Point-agreement: scorecard().value matches the underlying scalar function
 # ─────────────────────────────────────────────────────────────────────────────
