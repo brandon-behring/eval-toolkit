@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 In progress on the ``release/v0.47.0`` branch. Final shape will be reconciled
 into the v0.47.0 entry at release-prep time.
 
+### Removed (BREAKING)
+
+- **Top-level scalar metric names** (``eval_toolkit.pr_auc``,
+  ``eval_toolkit.roc_auc``, ``eval_toolkit.brier_score``, all 5
+  ``expected_calibration_*`` variants) — the v0.46 ``__getattr__``
+  deprecation shim has been deleted. These names now raise
+  ``AttributeError`` at the top-level. Migration: use ``scorecard(...)``
+  with ``metric_specs`` (primary) OR import from the
+  ``eval_toolkit.metrics`` submodule (internal API per ADR 0002).
+  (Decision L; plan §4D.)
+- **Module-level ``adversarial.sweep`` + ``preprocessing.sweep``** —
+  consolidated into the top-level :func:`sweep` (Decision D + plan §4C).
+  Parity tests in Sub-PR 4 of this release proved 1:1 output equivalence
+  on the neutral subset.
+- **``adversarial.character_injection`` + ``preprocessing.spotlighting``
+  ``SimpleNamespace`` shortcuts** — removed (Decision N + plan §4E).
+  The 12 adversarial dataclasses + the 3 preprocessing variants + the
+  underlying functional API are the only public paths.
+- **``adversarial.CharacterInjectionStrategy``** per-module Protocol —
+  removed. The top-level :class:`TextTransform` Protocol (Decision K)
+  is the single canonical contract; all 12 character-injection
+  dataclasses + 3 preprocessing variants satisfy it structurally.
+
 ### Added
 
 - **``TextTransform`` Protocol** (top-level; ``eval_toolkit.protocols`` module).

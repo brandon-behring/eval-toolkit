@@ -6,9 +6,10 @@ Coverage:
 - Scorer integration (``original_score`` + ``transformed_score`` columns)
 - Explicit ``attack_threshold`` → ``asr`` column materialization
 - Error paths (empty strategies, threshold-without-scorer, malformed strategy)
-- **Parity** against the v0.44/v0.45 module-level sweeps (``preprocessing.sweep``
-  + ``adversarial.sweep``) — proves the v0.47 consolidation produces identical
-  transformed text rows so the breaking removal (Sub-PR 6) is safe.
+
+The Sub-PR 6 parity-against-module-sweeps tests were removed when the
+module-level ``preprocessing.sweep`` / ``adversarial.sweep`` themselves were
+removed at v0.47 (Decision N + plan §4E).
 """
 
 from __future__ import annotations
@@ -25,11 +26,6 @@ from eval_toolkit import (
     sweep,
 )
 from eval_toolkit.adversarial import (
-    CaseRandomization,
-    DiacriticInjection,
-    HomoglyphSubstitution,
-    PunctuationInjection,
-    WhitespaceInjection,
     ZeroWidthSpaceInjection,
 )
 
@@ -158,72 +154,6 @@ def test_sweep_malformed_strategy_raises() -> None:
 
     with pytest.raises(ValueError, match="does not satisfy TextTransform"):
         sweep([_BadStrategy()], ["x"])  # type: ignore[list-item]
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Audit R5-F3: parity vs. module-level sweeps (proves Sub-PR 6 removal is safe)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def test_parity_with_preprocessing_sweep_neutral_columns() -> None:
-    """v0.47 top-level sweep produces equivalent transformed text vs preprocessing.sweep.
-
-    Audit R5-F3 (Codex Round 5): before removing module-level
-    preprocessing.sweep in Sub-PR 6, this test pins that the new
-    top-level sweep produces the same transformed text rows.
-    """
-    from eval_toolkit.preprocessing import sweep as old_preprocessing_sweep
-
-    texts = ["hello world", "test", "ignore previous"]
-
-    df_new = sweep([DelimitVariant(), DatamarkVariant(), EncodeVariant()], texts)
-    df_old = old_preprocessing_sweep(texts)  # same default order: delimit / datamark / encode
-
-    # Both should have 3 texts × 3 variants = 9 rows
-    assert len(df_new) == len(df_old) == 9
-
-    # The transformed_text for each (variant, text_id) pair must match
-    for variant in ["delimit", "datamark", "encode"]:
-        for text_id in range(3):
-            new_row = df_new[(df_new["variant"] == variant) & (df_new["text_id"] == text_id)]
-            old_row = df_old[(df_old["variant"] == variant) & (df_old["text_id"] == text_id)]
-            assert (
-                new_row["transformed_text"].iloc[0] == old_row["transformed_text"].iloc[0]
-            ), f"Mismatch for ({variant}, text_id={text_id})"
-
-
-def test_parity_with_adversarial_sweep_neutral_columns() -> None:
-    """v0.47 top-level sweep produces equivalent transformed text vs adversarial.sweep.
-
-    Audit R5-F3: same as above but on the adversarial side, where the
-    old sweep required a scorer + threshold. We compare the neutral
-    columns (text_id + variant.lower-stripped + transformed_text) and
-    ignore the scorer-derived columns.
-    """
-    from eval_toolkit.adversarial import sweep as old_adversarial_sweep
-
-    texts = ["payload one", "payload two"]
-    strategies = [
-        CaseRandomization(),
-        DiacriticInjection(),
-        HomoglyphSubstitution(),
-        PunctuationInjection(),
-        WhitespaceInjection(),
-        ZeroWidthSpaceInjection(),
-    ]
-
-    scorer = _FixedScorer()
-    df_new = sweep(strategies, texts, scorer=scorer, attack_threshold=0.5)
-    df_old = old_adversarial_sweep(texts, scorer, techniques=strategies, threshold=0.5)
-
-    # Both expand to len(strategies) * len(texts) = 12 rows
-    assert len(df_new) == len(df_old) == 12
-
-    # The old adversarial.sweep uses `technique` for the variant column;
-    # the new top-level uses `variant`. Compare the underlying values.
-    new_pairs = sorted(zip(df_new["text_id"].tolist(), df_new["variant"].tolist(), strict=True))
-    old_pairs = sorted(zip(df_old["text_id"].tolist(), df_old["technique"].tolist(), strict=True))
-    assert new_pairs == old_pairs
 
 
 # ─────────────────────────────────────────────────────────────────────────────

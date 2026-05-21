@@ -1,7 +1,12 @@
 """Tests for ``eval_toolkit.preprocessing`` (v0.44.0; closes #51).
 
-Spotlighting variants: delimit / datamark / encode + sweep. Pure-stdlib;
+Spotlighting variants: delimit / datamark / encode. Pure-stdlib;
 no torch or optional deps required.
+
+At v0.47 the module-level ``spotlighting`` SimpleNamespace and the
+module-level ``sweep()`` function were removed (Decision N + plan §4E).
+The top-level ``eval_toolkit.sweep`` + the 3 Variant dataclasses are the
+only public path; this module covers their underlying functional API.
 """
 
 from __future__ import annotations
@@ -9,7 +14,6 @@ from __future__ import annotations
 import base64
 import re
 
-import pandas as pd
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -18,8 +22,6 @@ from eval_toolkit.preprocessing import (
     datamark,
     delimit,
     encode,
-    spotlighting,
-    sweep,
 )
 
 # ----------------------------------------------------------------------------
@@ -165,80 +167,6 @@ def test_delimit_recovery_via_known_pair(text: str) -> None:
     """Default delimiter pair → 2-char strip recovers original."""
     wrapped = delimit(text)
     assert wrapped[len("<<") : -len(">>")] == text
-
-
-# ----------------------------------------------------------------------------
-# sweep
-# ----------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-def test_sweep_default_all_three_variants() -> None:
-    texts = ["hello", "world", "ignore previous"]
-    df = sweep(texts)
-    assert len(df) == 3 * 3  # 3 texts × 3 variants
-    assert list(df.columns) == ["text_id", "variant", "transformed_text"]
-    assert set(df["variant"].unique()) == {"delimit", "datamark", "encode"}
-
-
-@pytest.mark.unit
-def test_sweep_subset_of_variants() -> None:
-    df = sweep(["a", "b"], variants=["delimit", "encode"])
-    assert len(df) == 2 * 2
-    assert set(df["variant"].unique()) == {"delimit", "encode"}
-
-
-@pytest.mark.unit
-def test_sweep_unknown_variant_raises() -> None:
-    with pytest.raises(ValueError, match="unknown variant"):
-        sweep(["x"], variants=["delimit", "rot13"])
-
-
-@pytest.mark.unit
-def test_sweep_kwargs_forwarded_to_each_variant() -> None:
-    df = sweep(
-        ["hello"],
-        variants=["delimit", "datamark"],
-        delimit_kwargs={"delimiter": "[["},
-        datamark_kwargs={"marker": "*"},
-    )
-    delim_row = df[df["variant"] == "delimit"].iloc[0]
-    dm_row = df[df["variant"] == "datamark"].iloc[0]
-    assert delim_row["transformed_text"] == "[[hello]]"
-    assert "*" not in dm_row["transformed_text"]  # no whitespace in 'hello'
-
-
-@pytest.mark.unit
-def test_sweep_preserves_text_id_order() -> None:
-    df = sweep(["a", "b", "c"], variants=["delimit"])
-    text_ids = df["text_id"].tolist()
-    assert text_ids == [0, 1, 2]
-
-
-# ----------------------------------------------------------------------------
-# spotlighting namespace
-# ----------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-def test_spotlighting_namespace_exposes_all_four() -> None:
-    for name in ("delimit", "datamark", "encode", "sweep"):
-        assert hasattr(spotlighting, name)
-        assert callable(getattr(spotlighting, name))
-
-
-@pytest.mark.unit
-def test_spotlighting_delimit_matches_module_function() -> None:
-    via_ns = spotlighting.delimit("hello", delimiter="((")
-    via_module = delimit("hello", delimiter="((")
-    assert via_ns == via_module
-
-
-@pytest.mark.unit
-def test_spotlighting_sweep_matches_module_function() -> None:
-    via_ns = spotlighting.sweep(["x"], variants=["encode"])
-    via_module = sweep(["x"], variants=["encode"])
-    pd.testing.assert_frame_equal(via_ns, via_module)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

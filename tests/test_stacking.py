@@ -219,7 +219,7 @@ def test_calibration_chaining_with_fit_isotonic_binary(three_detector_data) -> N
 
 def test_stacker_output_bootstrap_ci(three_detector_data) -> None:
     """Bootstrap CI on PR-AUC of stacker output — exercises the v0.45 → v0.34 chain."""
-    from eval_toolkit import pr_auc
+    from eval_toolkit.metrics import pr_auc
 
     scores, y = three_detector_data
     stacker = LogisticStacker(random_state=0).fit(scores, y)

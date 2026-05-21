@@ -11,7 +11,6 @@
     "CISafeThresholdSelector",
     "CORE_TECHNIQUES",
     "CaseRandomization",
-    "CharacterInjectionStrategy",
     "ClaimReport",
     "ClaimSpec",
     "CorrectionMethod",
@@ -142,7 +141,6 @@
     "brier_decomposition",
     "build_manifest",
     "capture_git_sha",
-    "character_injection",
     "compute_file_hash",
     "compute_label_overlap",
     "correct_p_values",
@@ -234,7 +232,6 @@
     "skipped_metric",
     "source_role_gate",
     "split_provenance_config",
-    "spotlighting",
     "stratified_recall",
     "strict_artifact_gate",
     "sweep",
@@ -331,18 +328,6 @@
       "doc_first_line": "Randomly flip the case of alphabetic characters.",
       "kind": "class",
       "signature": "(ratio: 'float' = 0.5, seed: 'int' = 42, name: 'str' = 'case_random') -> None"
-    },
-    "CharacterInjectionStrategy": {
-      "bases": [
-        "Protocol"
-      ],
-      "doc_first_line": "Apply a deterministic character-level adversarial transformation.",
-      "kind": "class",
-      "protocol_methods": {
-        "name": "<attr: 'str'>",
-        "transform": "(self, text: 'str') -> 'str'"
-      },
-      "signature": "(*args, **kwargs)"
     },
     "ClaimReport": {
       "bases": [
@@ -1420,11 +1405,6 @@
       "kind": "function",
       "signature": "(repo_root: 'Path | str | None' = None) -> 'str | None'"
     },
-    "character_injection": {
-      "doc_first_line": "A simple attribute-based namespace.",
-      "kind": "value",
-      "type": "types.SimpleNamespace"
-    },
     "compute_file_hash": {
       "doc_first_line": "SHA-256 hex digest of an existing file (sentinel-typed).",
       "kind": "function",
@@ -1879,11 +1859,6 @@
       "doc_first_line": "Walk a config dict and normalize Path-typed values to repo-relative strings.",
       "kind": "function",
       "signature": "(config: 'Mapping[str, Any]', repo_root: 'Path | str | None' = None, *, path_keys: 'tuple[str, ...]' = ('path', 'dir', 'file', 'splits_dir', 'model_path')) -> 'dict[str, Any]'"
-    },
-    "spotlighting": {
-      "doc_first_line": "A simple attribute-based namespace.",
-      "kind": "value",
-      "type": "types.SimpleNamespace"
     },
     "stratified_recall": {
       "doc_first_line": "Recall (TPR) per categorical stratum.",

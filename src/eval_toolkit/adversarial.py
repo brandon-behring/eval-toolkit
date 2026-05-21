@@ -44,17 +44,11 @@ References
 from __future__ import annotations
 
 import random
-from collections.abc import Sequence
 from dataclasses import dataclass
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
-
-import numpy as np
-
-from eval_toolkit.protocols import Scorer
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    import pandas as pd
+    pass
 
 __all__ = [
     "ADVANCED_TECHNIQUES",
@@ -62,7 +56,6 @@ __all__ = [
     "BidiRTLInjection",
     "CORE_TECHNIQUES",
     "CaseRandomization",
-    "CharacterInjectionStrategy",
     "DiacriticInjection",
     "HomoglyphSubstitution",
     "InvisibleCharsInjection",
@@ -73,8 +66,6 @@ __all__ = [
     "UnicodeNormalization",
     "WhitespaceInjection",
     "ZeroWidthSpaceInjection",
-    "character_injection",
-    "sweep",
 ]
 
 
@@ -123,25 +114,12 @@ _COMBINING_MARKS: tuple[str, ...] = (
 _WHITESPACE_VARIANTS: tuple[str, ...] = (_NBSP, _TAB)
 
 
-@runtime_checkable
-class CharacterInjectionStrategy(Protocol):
-    """Apply a deterministic character-level adversarial transformation.
-
-    Implementations are frozen dataclasses configured via constructor
-    params (e.g. ``ratio`` + ``seed``) and expose:
-
-    - ``name`` — stable technique identifier used in sweep result rows
-    - ``transform(text: str) -> str`` — the transformation itself
-
-    Strategies must be picklable for parallel sweep dispatch (no
-    closures over local state; ``frozen=True, slots=True`` enforced).
-    """
-
-    name: str
-
-    def transform(self, text: str) -> str:  # pragma: no cover
-        """Return the transformed text."""
-        ...
+# The v0.43–v0.46 ``CharacterInjectionStrategy`` per-module Protocol was
+# removed at v0.47 (Decision K + plan §4B). Use the top-level
+# :class:`eval_toolkit.TextTransform` Protocol instead — it has the same
+# shape (``name: str`` + ``transform(text) -> str``) and covers both
+# adversarial and preprocessing strategies. Every concrete adversarial
+# class continues to satisfy ``TextTransform`` structurally.
 
 
 @dataclass(frozen=True, slots=True)
@@ -712,143 +690,9 @@ def _punctuation(text: str, ratio: float = 0.1, seed: int = 42) -> str:
     return PunctuationInjection(ratio=ratio, seed=seed).transform(text)
 
 
-# Namespace exposing the upstream-issue's preferred functional API
-# (``character_injection.zero_width_space(text)``). Built once at import time;
-# pickling-safe (SimpleNamespace + function references).
-character_injection = SimpleNamespace(
-    zero_width_space=_zero_width_space,
-    homoglyph=_homoglyph,
-    diacritic=_diacritic,
-    whitespace=_whitespace,
-    case_random=_case_random,
-    punctuation=_punctuation,
-    sweep=None,  # populated below after sweep is defined
-)
-
-
-# ----------------------------------------------------------------------------
-# Scorer-Protocol sweep
-# ----------------------------------------------------------------------------
-
-
-def sweep(
-    texts: Sequence[str],
-    scorer: Scorer,
-    *,
-    techniques: Sequence[CharacterInjectionStrategy] | str = "all",
-    threshold: float = 0.5,
-    seed: int = 42,
-) -> pd.DataFrame:
-    """Run a multi-technique adversarial sweep against ``scorer``.
-
-    For each input text and each technique:
-
-    1. Compute the original score ``s_orig = scorer.predict_proba([text])[0]``
-    2. Transform the text via the technique
-    3. Compute the transformed score ``s_adv = scorer.predict_proba([t'])[0]``
-    4. Record an attack-success flag: ``s_orig >= threshold > s_adv``
-       (the scorer detected the original but missed the adversarial)
-
-    The returned DataFrame has one row per ``(text_id, technique)`` pair plus
-    aggregate ASR available via ``.groupby("technique")["asr"].mean()``.
-
-    Parameters
-    ----------
-    texts : sequence of str
-        Inputs to test. Each is identified by its 0-based index as
-        ``text_id``.
-    scorer : Scorer
-        Any object satisfying the :class:`~eval_toolkit.protocols.Scorer`
-        Protocol (a ``predict_proba(X) -> np.ndarray`` method).
-    techniques : sequence of CharacterInjectionStrategy or {"all"}, optional
-        Which techniques to apply. ``"all"`` (default) instantiates each
-        class in :data:`CORE_TECHNIQUES` with default kwargs and the
-        sweep ``seed``. Pass pre-configured strategy instances for custom
-        ratios.
-    threshold : float, optional
-        Score threshold the scorer publishes as its decision boundary
-        (default ``0.5``). Used for the ASR flag.
-    seed : int, optional
-        Seed forwarded to ``"all"``-spawned techniques; ignored when
-        ``techniques`` is an explicit instance list (each instance carries
-        its own seed). Default ``42``.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Columns: ``text_id`` (int), ``technique`` (str), ``original_score``
-        (float), ``transformed_score`` (float), ``asr`` (bool — attack
-        succeeded for this row). Row order: ``(technique, text_id)``
-        nested.
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from eval_toolkit.adversarial import sweep
-    >>> class Detector:
-    ...     def predict_proba(self, X):
-    ...         return np.array([1.0 if "ignore" in t else 0.0 for t in X])
-    >>> df = sweep(["ignore prior", "weather today"], Detector())  # doctest: +SKIP
-    >>> df.groupby("technique")["asr"].mean().sort_index()  # doctest: +SKIP
-
-    Notes
-    -----
-    The sweep performs ``len(texts) * (1 + len(techniques))`` scorer calls
-    (one baseline + one per technique). For large corpora consider
-    pre-computing the baseline scores once and passing a pre-thresholded
-    subset of "originally-positive" texts (the ASR is only meaningful when
-    ``s_orig >= threshold``).
-    """
-    import pandas as pd
-
-    # Resolve techniques
-    if isinstance(techniques, str):
-        if techniques != "all":
-            raise ValueError(
-                f"sweep: techniques string must be 'all'; got {techniques!r}. "
-                f"Pass an explicit sequence of CharacterInjectionStrategy "
-                f"instances for custom configuration."
-            )
-        instances: list[CharacterInjectionStrategy] = [cls(seed=seed) for cls in CORE_TECHNIQUES]
-    else:
-        instances = list(techniques)
-        if not instances:
-            raise ValueError("sweep: techniques sequence is empty")
-
-    # Baseline scores
-    original_scores = np.asarray(scorer.predict_proba(list(texts))).astype(float)
-    if original_scores.shape != (len(texts),):
-        raise ValueError(
-            f"sweep: scorer returned shape {original_scores.shape} for {len(texts)} inputs; "
-            f"expected ({len(texts)},). Scorer must produce one P(positive) per input."
-        )
-
-    rows: list[dict[str, object]] = []
-    for strategy in instances:
-        transformed_texts = [strategy.transform(t) for t in texts]
-        transformed_scores = np.asarray(scorer.predict_proba(transformed_texts)).astype(float)
-        if transformed_scores.shape != (len(texts),):
-            raise ValueError(
-                f"sweep: scorer returned shape {transformed_scores.shape} for technique "
-                f"{strategy.name!r}; expected ({len(texts)},)."
-            )
-        for i in range(len(texts)):
-            orig = float(original_scores[i])
-            adv = float(transformed_scores[i])
-            asr = bool(orig >= threshold and adv < threshold)
-            rows.append(
-                {
-                    "text_id": int(i),
-                    "technique": strategy.name,
-                    "original_score": orig,
-                    "transformed_score": adv,
-                    "asr": asr,
-                }
-            )
-    return pd.DataFrame(
-        rows, columns=["text_id", "technique", "original_score", "transformed_score", "asr"]
-    )
-
-
-# Wire sweep into the namespace now that it's defined
-character_injection.sweep = sweep
+# Module-level ``character_injection`` SimpleNamespace + module-level
+# ``sweep`` were removed at v0.47 (Decisions D + K + N; plan §§4C/4E).
+# The top-level :func:`eval_toolkit.sweep` consumes any
+# :class:`TextTransform`; the 6 internal functional aliases above
+# (``_zero_width_space`` etc.) remain as implementation conveniences
+# used by the dataclasses' ``transform`` methods.

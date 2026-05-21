@@ -33,7 +33,7 @@ from eval_toolkit import (
 from eval_toolkit import (
     metric_specs as ms,
 )
-from eval_toolkit import (
+from eval_toolkit.metrics import (
     pr_auc as scalar_pr_auc,
 )
 

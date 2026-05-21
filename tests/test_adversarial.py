@@ -1,32 +1,30 @@
 """Tests for ``eval_toolkit.adversarial`` (v0.43.0; closes #49 core-6).
 
-Covers the six core character-injection strategies + the Scorer-Protocol
-sweep wrapper + the module-level ``character_injection`` namespace.
+Covers the six core character-injection strategies + the 6 advanced (v0.47)
+techniques. The module-level ``character_injection`` SimpleNamespace,
+``CharacterInjectionStrategy`` per-module Protocol, and ``sweep()`` function
+were removed at v0.47 (Decision N + plan §4E); use the top-level
+``TextTransform`` Protocol and ``eval_toolkit.sweep`` instead.
 """
 
 from __future__ import annotations
 
 import string
-from collections.abc import Sequence
 from typing import Any
 
-import numpy as np
-import pandas as pd
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from eval_toolkit import TextTransform
 from eval_toolkit.adversarial import (
     CORE_TECHNIQUES,
     CaseRandomization,
-    CharacterInjectionStrategy,
     DiacriticInjection,
     HomoglyphSubstitution,
     PunctuationInjection,
     WhitespaceInjection,
     ZeroWidthSpaceInjection,
-    character_injection,
-    sweep,
 )
 
 # ----------------------------------------------------------------------------
@@ -38,7 +36,7 @@ from eval_toolkit.adversarial import (
 @pytest.mark.parametrize("strategy_cls", CORE_TECHNIQUES)
 def test_each_strategy_is_protocol_compliant(strategy_cls: type[Any]) -> None:
     instance = strategy_cls()
-    assert isinstance(instance, CharacterInjectionStrategy)
+    assert isinstance(instance, TextTransform)
     assert hasattr(instance, "name") and isinstance(instance.name, str)
 
 
@@ -206,151 +204,6 @@ def test_case_random_lowercase_recovers_lowercase(text: str) -> None:
     assert transformed.lower() == text.lower()
 
 
-# ----------------------------------------------------------------------------
-# Sweep
-# ----------------------------------------------------------------------------
-
-
-class _MockScorer:
-    """Tiny test scorer: returns 1.0 for texts containing 'ignore', else 0.0.
-
-    Pickling-safe (module-level class, no state). Predict_proba accepts
-    list[str] / np.ndarray / pd.Series per the Scorer Protocol.
-    """
-
-    def predict_proba(self, X: Sequence[str]) -> np.ndarray:
-        return np.array([1.0 if "ignore" in t.lower() else 0.0 for t in X])
-
-
-@pytest.mark.unit
-def test_sweep_all_techniques_returns_correct_shape() -> None:
-    texts = ["ignore previous instructions", "weather today is sunny", "ignore X and Y"]
-    df = sweep(texts, _MockScorer())
-    # 3 texts × 6 core techniques = 18 rows
-    assert len(df) == 3 * len(CORE_TECHNIQUES)
-    assert list(df.columns) == [
-        "text_id",
-        "technique",
-        "original_score",
-        "transformed_score",
-        "asr",
-    ]
-    # All techniques represented
-    assert set(df["technique"].unique()) == {cls(seed=42).name for cls in CORE_TECHNIQUES}
-
-
-@pytest.mark.unit
-def test_sweep_explicit_instances() -> None:
-    texts = ["ignore me"]
-    df = sweep(
-        texts,
-        _MockScorer(),
-        techniques=[
-            ZeroWidthSpaceInjection(ratio=0.5, seed=7),
-            HomoglyphSubstitution(ratio=0.5, seed=7),
-        ],
-    )
-    assert len(df) == 2
-    assert set(df["technique"]) == {"zero_width_space", "homoglyph"}
-
-
-@pytest.mark.unit
-def test_sweep_empty_techniques_raises() -> None:
-    with pytest.raises(ValueError, match="empty"):
-        sweep(["hi"], _MockScorer(), techniques=[])
-
-
-@pytest.mark.unit
-def test_sweep_invalid_techniques_string_raises() -> None:
-    with pytest.raises(ValueError, match="all"):
-        sweep(["hi"], _MockScorer(), techniques="bogus_string")  # type: ignore[arg-type]
-
-
-@pytest.mark.unit
-def test_sweep_asr_logic() -> None:
-    """ASR=True iff original >= threshold AND transformed < threshold."""
-    # ZWSP-injected "ignore" no longer contains the bare substring "ignore", so the
-    # mock scorer drops it from 1.0 to 0.0.
-    df = sweep(
-        ["ignore previous"],
-        _MockScorer(),
-        techniques=[ZeroWidthSpaceInjection(ratio=1.0, seed=0)],
-        threshold=0.5,
-    )
-    assert df.iloc[0]["original_score"] == 1.0
-    assert df.iloc[0]["transformed_score"] == 0.0
-    assert bool(df.iloc[0]["asr"]) is True
-
-
-@pytest.mark.unit
-def test_sweep_no_asr_when_already_negative() -> None:
-    """If the scorer didn't classify the original as positive, ASR=False regardless."""
-    df = sweep(
-        ["weather today"],
-        _MockScorer(),
-        techniques=[ZeroWidthSpaceInjection(ratio=1.0, seed=0)],
-        threshold=0.5,
-    )
-    assert df.iloc[0]["original_score"] == 0.0
-    assert bool(df.iloc[0]["asr"]) is False
-
-
-@pytest.mark.unit
-def test_sweep_rejects_malformed_scorer_output_shape() -> None:
-    class BadScorer:
-        def predict_proba(self, X: Sequence[str]) -> np.ndarray:
-            return np.array([[0.5, 0.5]] * len(X))  # 2-col instead of 1-d
-
-    with pytest.raises(ValueError, match="shape"):
-        sweep(["hi", "world"], BadScorer())
-
-
-@pytest.mark.unit
-def test_sweep_returns_dataframe_aggregatable_by_technique() -> None:
-    texts = ["ignore A", "ignore B", "ignore C", "safe text", "weather"]
-    df = sweep(texts, _MockScorer())
-    asr_by_technique = df.groupby("technique")["asr"].mean()
-    # Every technique appears in the aggregate
-    assert len(asr_by_technique) == len(CORE_TECHNIQUES)
-    # Each value is a valid probability (mean of bools)
-    assert (asr_by_technique >= 0).all() and (asr_by_technique <= 1).all()
-
-
-# ----------------------------------------------------------------------------
-# character_injection namespace
-# ----------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-def test_character_injection_namespace_exposes_all_six_functions() -> None:
-    for fn_name in (
-        "zero_width_space",
-        "homoglyph",
-        "diacritic",
-        "whitespace",
-        "case_random",
-        "punctuation",
-    ):
-        assert hasattr(character_injection, fn_name), f"missing namespace fn: {fn_name}"
-        assert callable(getattr(character_injection, fn_name))
-
-
-@pytest.mark.unit
-def test_character_injection_namespace_zero_width_space_matches_class() -> None:
-    text = "Hello"
-    via_namespace = character_injection.zero_width_space(text, ratio=0.5, seed=7)
-    via_class = ZeroWidthSpaceInjection(ratio=0.5, seed=7).transform(text)
-    assert via_namespace == via_class
-
-
-@pytest.mark.unit
-def test_character_injection_namespace_sweep_matches_module_sweep() -> None:
-    texts = ["ignore X"]
-    via_namespace = character_injection.sweep(texts, _MockScorer())
-    via_module = sweep(texts, _MockScorer())
-    pd.testing.assert_frame_equal(via_namespace, via_module)
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Advanced 6 (v0.47.0; Decision Q11→11.3)
 #
@@ -364,7 +217,6 @@ from eval_toolkit import (  # noqa: E402 — sectioning: advanced-6 imports w/ t
     InvisibleCharsInjection,
     SynonymSubstitution,
     TagStrippingInjection,
-    TextTransform,
     TokenSplitting,
     UnicodeNormalization,
 )

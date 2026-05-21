@@ -20,10 +20,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from eval_toolkit import bootstrap_ci, pr_auc
+from eval_toolkit import bootstrap_ci
 from eval_toolkit.harness import EvalSlice, evaluate
 from eval_toolkit.leakage import ExactDuplicateCheck, run_leakage_checks
 from eval_toolkit.loaders import DataFrameLoader
+from eval_toolkit.metrics import pr_auc
 
 
 @pytest.mark.unit
