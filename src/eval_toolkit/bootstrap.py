@@ -876,6 +876,21 @@ def paired_bootstrap_op_point_diff(
     .. [2] Bouckaert, R. R. "Choosing between two learning algorithms
            based on calibrated tests." ICML 2003.
     """
+    # Defensive identity-guard: the two-level bootstrap resamples val + test
+    # indices INDEPENDENTLY (see _paired_bootstrap_op_point_diff_step). Passing
+    # the same Python object for val and test causes ~63.2% overlap on each
+    # resample, violating the val/test independence assumption that lets the
+    # CI absorb threshold-selection variance honestly. Partition the data
+    # before calling — see docs/source/methodology/thresholds.md.
+    if val_y is test_y:
+        raise ValueError(
+            "paired_bootstrap_op_point_diff: val_y and test_y are the same array. "
+            "The two-level bootstrap requires DISJOINT val + test slices; the "
+            "resampler draws val_idx and test_idx independently, so identical "
+            "arrays cause ~63.2% overlap and violate the independence assumption. "
+            "Partition your data first (e.g., val = arr[:n//2], test = arr[n//2:])."
+        )
+
     val_y_arr = np.asarray(val_y)
     val_a, val_b = np.asarray(val_score_a), np.asarray(val_score_b)
     test_y_arr = np.asarray(test_y)
@@ -1190,12 +1205,16 @@ def cv_clt_ci(
 
     Computes a confidence interval on the cross-validation mean metric
     that correctly accounts for fold-level dependence. The standard
-    "naive" CI (compute std-of-folds then divide by sqrt(K)) is anti-
-    conservative because the folds share training data; Bayle et al.
-    2020 prove a CV-CLT with a correction factor that gives valid
-    coverage asymptotically.
+    "naive" CI (compute std-of-folds then divide by sqrt(K)) had long
+    been suspected to be anti-conservative because the folds share
+    training data. Bayle et al. 2020 prove that the naive sample-variance
+    estimator (with ``ddof=1``) gives valid asymptotic coverage under
+    stability conditions, resolving the historical concern that fold
+    correlation makes it anti-conservative. No additional correction
+    factor is applied.
 
-    The corrected variance estimator (Bayle 2020 Theorem 3.1):
+    The variance estimator (Bayle 2020 Theorem 3.1) is just the standard
+    sample variance over per-fold metrics:
 
     .. math::
 
@@ -1266,9 +1285,9 @@ def cv_clt_ci(
         raise ValueError(f"confidence must be in (0, 1), got {confidence}")
 
     point = float(arr.mean())
-    # Bayle 2020 Theorem 3.1 variance: sample variance with (K-1) denom; the
-    # CV-CLT correction is captured in this estimator's asymptotic guarantee
-    # (no extra fold-correlation factor needed for a balanced K-fold CV).
+    # Bayle 2020 Theorem 3.1: the naive sample-variance estimator (ddof=1)
+    # gives valid asymptotic coverage under stability conditions — no extra
+    # correction factor is applied for fold correlation.
     sigma_hat = float(np.std(arr, ddof=1))
     z = _normal_quantile(0.5 + confidence / 2.0)
     margin = z * sigma_hat / np.sqrt(K)
@@ -1291,9 +1310,10 @@ def block_bootstrap_on_folds(
 ) -> BootstrapCI:
     r"""Block bootstrap on folds: resample K folds with replacement; percentile CI on mean.
 
-    Sibling primitive to :func:`cv_clt_ci`. Where :func:`cv_clt_ci` applies
-    the Bayle et al. 2020 CV-CLT correction (correct asymptotically under
-    fold exchangeability), the block bootstrap is more *conservative* under
+    Sibling primitive to :func:`cv_clt_ci`. Where :func:`cv_clt_ci` relies on
+    Bayle et al. 2020's CV-CLT — the naive sample-variance estimator gives
+    valid asymptotic coverage under stability + fold exchangeability — the
+    block bootstrap is more *conservative* under
     fold-level **non-exchangeability** — situations where the K folds are
     not interchangeable (e.g., source-disjoint LODO folds where one source
     is intrinsically harder than the others). The sensitivity-check

@@ -142,21 +142,21 @@ Then:
 
 ## Currently parallel-capable functions
 
-As of v0.34.0:
+As of v0.36.0 the unified `n_jobs` pattern covers both the bootstrap
+family and the harness scoring loop:
 
 | Function | n_jobs threshold | Notes |
 |---|---|---|
-| {func}`~eval_toolkit.bootstrap.bootstrap_ci` | ``n_resamples >= 1000`` | All resamples are independent |
+| {func}`~eval_toolkit.bootstrap.bootstrap_ci` | ``n_resamples >= 1000`` | Effective ONLY for `method="studentized"` — `BCa` and `percentile` raise when `n_jobs != 1` (the BCa jackknife is sequential by construction; `percentile` is fast enough that parallel overhead dominates). `BCa` is the default `bootstrap_ci` method. |
 | {func}`~eval_toolkit.bootstrap.paired_bootstrap_diff` | ``n_resamples >= 1000`` | Original issue #17 ask |
 | {func}`~eval_toolkit.bootstrap.paired_bootstrap_ece_diff` | ``n_resamples >= 1000`` | |
 | {func}`~eval_toolkit.bootstrap.paired_bootstrap_op_point_diff` | ``n_resamples >= 1000`` | Per-resample threshold refit benefits most from parallelism |
 | {func}`~eval_toolkit.bootstrap.paired_mde` | Pass-through to internal ``paired_bootstrap_diff`` | |
+| {func}`~eval_toolkit.harness.evaluate` | ``n_jobs`` kwarg on the scorer × slice loop (v0.36, closes #29) | Scorer must be picklable — see [Scorer picklability](#scorer-picklability) below. |
+| {func}`~eval_toolkit.harness.evaluate_folded` | ``n_jobs`` kwarg on the (scorer × slice × fold) loop (v0.36, closes #30) | Same Scorer picklability requirement. |
 
 **Not yet parallelised** (filed as follow-up issues):
 
-- ``harness._score_all_slices`` and ``harness.evaluate_folded`` (slice ×
-  scorer loop) — Scorer picklability is the gatekeeper; see
-  [Scorer picklability](#scorer-picklability) below.
 - ``harness._attach_transferred_operating_points`` (OperatingPointSpec
   loops) — same Scorer gatekeeper.
 - ``text_dedup.MinHashLSHStrategy`` hash-bucket construction — race-
@@ -164,21 +164,23 @@ As of v0.34.0:
 
 ## Scorer picklability
 
-When the harness parallelization issues
+With harness parallelization wired in v0.36
 ([#29](https://github.com/brandon-behring/eval-toolkit/issues/29),
-[#30](https://github.com/brandon-behring/eval-toolkit/issues/30)) land, the
-work-unit dispatched to each loky worker bundles both a step function AND a
-{class}`~eval_toolkit.protocols.Scorer` instance. ``joblib`` pickles the
-*entire* delayed call — function plus bound arguments — so an unpicklable
-``Scorer`` fails at dispatch even when the step function itself is fine.
+[#30](https://github.com/brandon-behring/eval-toolkit/issues/30) — both
+closed), the work-unit dispatched to each loky worker bundles both a step
+function AND a {class}`~eval_toolkit.protocols.Scorer` instance.
+``joblib`` pickles the *entire* delayed call — function plus bound
+arguments — so an unpicklable ``Scorer`` fails at dispatch even when the
+step function itself is fine.
 
 The existing ``parallel_map`` sniff (Principle #6 above) covers the function;
 this section establishes the parallel contract for the Scorer surface.
 
 **Rule.** Any ``Scorer`` passed to a parallel-capable harness call
-(``evaluate(..., n_jobs > 1)`` once #29/#30 land) MUST be picklable. The
-toolkit's existing helper raises a clean ``TypeError`` with the underlying
-pickle error attached — no special exception subclass.
+(``evaluate(..., n_jobs > 1)`` and ``evaluate_folded(..., n_jobs > 1)``
+since v0.36) MUST be picklable. The toolkit's existing helper raises a
+clean ``TypeError`` with the underlying pickle error attached — no
+special exception subclass.
 
 **Picklable** (works — top-level class, picklable state):
 

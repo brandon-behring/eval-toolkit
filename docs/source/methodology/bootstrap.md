@@ -128,10 +128,13 @@ help.
 (bootstrap-cv-ci)=
 ## CV-CI: K-fold bootstrap
 [`cv_clt_ci`](../api/bootstrap.md) computes a
-CLT-corrected confidence interval over per-fold metric values. Per-fold
-metrics are *not* independent — they share training data, so naive
-Student's-t CIs over fold metrics are anti-conservative. The
-correction (Bates et al. 2024) accounts for this.
+CLT-based confidence interval over per-fold metric values. Per-fold
+metrics are *not* independent — they share training data, raising the
+historical concern that naive Student's-t CIs over fold metrics are
+anti-conservative. Bayle et al. 2020 resolve that concern: the naive
+sample-variance estimator (`ddof=1`) gives valid asymptotic coverage
+under stability conditions, so no additional correction factor is
+applied.
 
 ```python
 fold_metrics = np.array([0.74, 0.76, 0.71, 0.78, 0.73])
@@ -188,9 +191,10 @@ externally and feeds them in).
 - DiCiccio, T. & Efron, B. *Bootstrap confidence intervals.*
   Statistical Science 11(3), 1996. — comparison of CI methods + when
   each fails.
-- Bates, S., Hastie, T., & Tibshirani, R. *Cross-validation: what
-  does it estimate and how well does it do it?* JASA 2024. — basis
-  for `cv_clt_ci`'s CLT correction.
+- Bayle, P., Bayle, A., Janson, L., & Mackey, L. *Cross-validation
+  confidence intervals for test error.* Annals of Statistics 48(6), 2020.
+  — basis for `cv_clt_ci`: proves the naive sample-variance estimator
+  gives valid asymptotic coverage under stability conditions.
 - Davison, A. C. & Hinkley, D. V. *Bootstrap Methods and their
   Application.* Cambridge, 1997. — alternate canonical text;
   good complement to Efron & Tibshirani.

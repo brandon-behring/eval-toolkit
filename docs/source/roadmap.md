@@ -238,9 +238,13 @@ These are valuable but **not** on the roadmap:
 - **Native fairness metrics (demographic parity, equalized odds,
   calibration parity).** Consumer computes via [fairlearn](https://fairlearn.org/)
   + the toolkit's slicing primitives; eval-toolkit shouldn't duplicate.
-- **McNemar / DeLong tests.** Consumer computes via `scipy.stats`;
+- **McNemar's test.** Consumer computes via `scipy.stats.contingency`;
   the toolkit's bootstrap framework covers the same ground for
-  arbitrary metrics.
+  arbitrary metrics. (DeLong's closed-form ROC-AUC variance is exported
+  as {func}`~eval_toolkit.bootstrap.delong_roc_variance` +
+  {class}`~eval_toolkit.bootstrap.DeLongResult` — it predates the
+  comparison-curriculum write-up; bootstrap remains the documented
+  default for general-purpose comparison.)
 - **Common metrics (MCC, Cohen's kappa, balanced accuracy, log-loss).**
   Design intent keeps the metric set focused on the four headline
   primitives + ECE family + threshold selection. Consumers add what

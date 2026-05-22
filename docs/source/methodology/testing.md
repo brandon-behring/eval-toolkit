@@ -132,8 +132,12 @@ gets one equivalence test. From the v0.3 research audit:
 > against its sklearn equivalent. For a "wraps and validates" library,
 > one such test per wrapped function is the table-stakes contract.*
 
-This is a known v0.7 gap closing in PR 1.5 alongside the property
-tests for the new modules.
+This audit framing is preserved for historical context. The gap has since
+closed: reference-equivalence tests now ship for `pr_auc`, `roc_auc`,
+`brier_score`, `reliability_curve`, `bootstrap_ci`,
+`fit_isotonic_calibrator`, and `fit_platt_calibrator` (see
+[`roadmap.md`](../roadmap.md) "Currently shipped"). The wrapping-faithful
+contract is a steady-state invariant going forward.
 
 (golden-tests)=
 ## Golden tests

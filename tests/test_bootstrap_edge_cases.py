@@ -29,8 +29,10 @@ from eval_toolkit.bootstrap import (
     bootstrap_ci,
     paired_bootstrap_diff,
     paired_bootstrap_ece_diff,
+    paired_bootstrap_op_point_diff,
 )
 from eval_toolkit.metrics import expected_calibration_error, pr_auc
+from eval_toolkit.thresholds import MaxF1Selector
 
 
 def test_bootstrap_ci_raises_on_n_lt_10() -> None:
@@ -109,6 +111,61 @@ def test_paired_bootstrap_ece_diff_shape_mismatch_raises() -> None:
     b = np.array([0.5] * 19)
     with pytest.raises(ValueError, match="shapes mismatch"):
         paired_bootstrap_ece_diff(y, a, b, ece_fn=expected_calibration_error, n_resamples=100)
+
+
+def test_paired_bootstrap_op_point_diff_rejects_identical_val_test_arrays() -> None:
+    """``paired_bootstrap_op_point_diff`` raises ValueError when ``val_y is test_y``.
+
+    Round 5 audit finding R5-F6e (Codex): the two-level resampler draws
+    ``val_idx`` and ``test_idx`` independently, so passing the same array
+    object for val and test causes ~63.2% overlap and silently violates the
+    independence assumption that lets the CI absorb threshold-selection
+    variance honestly. The identity guard catches the most common
+    foot-shoot pattern at the API boundary (style invariant 1: no silent
+    failures).
+    """
+    rng = np.random.default_rng(42)
+    y = rng.integers(0, 2, size=50)
+    s_a = rng.uniform(0, 1, size=50)
+    s_b = rng.uniform(0, 1, size=50)
+
+    def threshold_fn(yt: np.ndarray, ys: np.ndarray) -> float:
+        return float(MaxF1Selector().select(yt, ys).threshold)
+
+    def f1_at(yt: np.ndarray, ys: np.ndarray, t: float) -> float:
+        from eval_toolkit import metrics_at_threshold
+
+        return float(metrics_at_threshold(yt, ys, t)["f1"])
+
+    with pytest.raises(ValueError, match="val_y and test_y are the same array"):
+        paired_bootstrap_op_point_diff(
+            val_y=y,
+            val_score_a=s_a,
+            val_score_b=s_b,
+            test_y=y,
+            test_score_a=s_a,
+            test_score_b=s_b,
+            threshold_fn=threshold_fn,
+            metric_fn=f1_at,
+            n_resamples=50,
+            seed=42,
+        )
+
+    # Disjoint slices succeed — the guard is identity-only, not a content check.
+    half = len(y) // 2
+    out = paired_bootstrap_op_point_diff(
+        val_y=y[:half],
+        val_score_a=s_a[:half],
+        val_score_b=s_b[:half],
+        test_y=y[half:],
+        test_score_a=s_a[half:],
+        test_score_b=s_b[half:],
+        threshold_fn=threshold_fn,
+        metric_fn=f1_at,
+        n_resamples=50,
+        seed=42,
+    )
+    assert hasattr(out, "delta")
 
 
 def test_bootstrap_ci_invalid_confidence_raises() -> None:

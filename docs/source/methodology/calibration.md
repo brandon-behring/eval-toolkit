@@ -14,7 +14,14 @@
 
 This chapter covers how to *measure* calibration (ECE variants, Brier
 decomposition, reliability diagrams), how to *fix* it (temperature,
-isotonic, Platt), and when *not* to.
+isotonic, Platt, and Beta — all four shipped as binary-adapter pairs
+returning `(params, apply)`: {func}`~eval_toolkit.calibration.fit_temperature_binary`
+[v0.35], {func}`~eval_toolkit.calibration.fit_isotonic_binary` [v0.42],
+{func}`~eval_toolkit.calibration.fit_platt_binary` [v0.40], and
+{func}`~eval_toolkit.calibration.fit_beta_binary` [v0.40]), and when
+*not* to. The 4-binary-adapter family is the v1.0 calibrator surface;
+cross-reference [`roadmap.md`](../roadmap.md) "Currently shipped" for the
+shipped baseline.
 
 ## Setup
 

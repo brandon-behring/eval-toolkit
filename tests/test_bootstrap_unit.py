@@ -175,9 +175,16 @@ def test_bootstrap_ci_to_dict_self_describing_at_non_default_confidence() -> Non
 def test_paired_bootstrap_op_point_diff_runs(
     informative_signal: tuple[np.ndarray, np.ndarray],
 ) -> None:
-    """Two-level bootstrap returns a CI on operating-point Δ."""
-    y_val, s_val = informative_signal
-    y_test, s_test = informative_signal
+    """Two-level bootstrap returns a CI on operating-point Δ.
+
+    Uses DISJOINT val + test slices — passing the same array for both is
+    rejected at the API boundary by the v0.48 identity guard (Round 5
+    R5-F6e audit finding); see methodology/thresholds.md.
+    """
+    y_all, s_all = informative_signal
+    half = len(y_all) // 2
+    y_val, y_test = y_all[:half], y_all[half:]
+    s_val, s_test = s_all[:half], s_all[half:]
 
     def threshold_fn(yt: np.ndarray, ys: np.ndarray) -> float:
         return MaxF1Selector().select(yt, ys).threshold

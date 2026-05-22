@@ -154,41 +154,53 @@ ci = cv_clt_ci(fold_metrics, confidence=0.95)
 print(f"CV mean: {ci.point_estimate:.3f}  CI [{ci.ci_low:.3f}, {ci.ci_high:.3f}]")
 ```
 
-The CLT correction (Bates et al. 2024) accounts for the fact that
-per-fold metrics are *not* independent — they share training data.
-Naive Student's-t CIs over fold metrics are anti-conservative.
+Per-fold metrics are *not* independent — they share training data, so
+naive Student's-t CIs over fold metrics had long been suspected to be
+anti-conservative. Bayle et al. 2020 prove that the naive sample-variance
+estimator (`ddof=1`) gives valid asymptotic coverage under stability
+conditions; no additional correction factor is applied.
 
 (comparison-out-of-scope)=
-## What's NOT in eval-toolkit (and why)
-Two classical paired tests are *deliberately* out of scope:
+## DeLong (shipped) and McNemar (out of scope)
+Bootstrap is the preferred general-purpose comparison path in
+eval-toolkit: `paired_bootstrap_diff` works for arbitrary metrics, is
+paired-sample-aware, and supports any operating point. Two classical
+paired tests sit on opposite sides of that default:
 
-- **McNemar's test.** Compares the proportion of *disagreements* between
-  two binary classifiers — A right / B wrong vs A wrong / B right. Use
-  when you have hard predictions, not probability scores. Compute via
+- **DeLong's ROC-AUC variance — shipped as a public primitive.** When
+  the metric is exactly ROC-AUC and bootstrap cost dominates (e.g.,
+  thousands of pairwise comparisons across a benchmark grid), the
+  Mann-Whitney closed-form variance derivation in DeLong et al. 1988 +
+  the Sun & Xu 2014 fast-computation form is available as
+  {func}`~eval_toolkit.bootstrap.delong_roc_variance`, returning a
+  {class}`~eval_toolkit.bootstrap.DeLongResult` with both AUCs, the
+  delta, and an asymptotic CI on the delta. Use this when bootstrap is
+  too expensive AND the metric is ROC-AUC AND you accept the
+  asymptotic-normality assumption. For PR-AUC, threshold metrics,
+  Brier, or ECE — stick with `paired_bootstrap_diff`.
+- **McNemar's test — deliberately out of scope.** Compares the
+  proportion of *disagreements* between two binary classifiers (A right
+  / B wrong vs A wrong / B right). Useful only when you have hard
+  predictions, not probability scores. Compute via
   [`scipy.stats.contingency`](https://docs.scipy.org/doc/scipy/reference/stats.contingency.html)
   + the McNemar `2×2` table.
-- **DeLong's test.** Compares ROC-AUC between two scorers using the
-  Mann-Whitney form's variance. Specific to ROC-AUC; doesn't generalize
-  to PR-AUC or threshold metrics. Several Python implementations (e.g.,
-  `pyroc-utils`, manual
-  [DeLong implementations](https://github.com/yandexdataschool/roc_comparison)
-  on GitHub).
 
-Neither pays rent in eval-toolkit because:
+Bootstrap remains the documented default for general-purpose comparison
+because:
 
-1. **Bootstrap covers the same ground.** `paired_bootstrap_diff` gives
-   a CI on any metric difference; McNemar and DeLong are special cases
-   for binary predictions and ROC-AUC respectively.
-2. **They don't generalize.** DeLong is ROC-AUC-only; McNemar is hard-
-   prediction-only. The toolkit's bootstrap framework is metric-
-   agnostic.
-3. **Multiple-testing correction.** When comparing K > 2 models,
-   bootstrap-CI on every pair is straightforward; McNemar / DeLong
-   require explicit Bonferroni / FDR corrections.
+1. **It covers any metric.** `paired_bootstrap_diff` gives a CI on any
+   metric difference; DeLong is ROC-AUC-specific and McNemar is
+   hard-prediction-only.
+2. **No closed-form distributional assumptions.** DeLong's CI is
+   asymptotic; the bootstrap CI is data-driven and works for small
+   slices where the asymptotic regime is suspect.
+3. **Multiple-testing correction is straightforward.** When comparing
+   K > 2 models, bootstrap-CI on every pair carries through cleanly;
+   DeLong / McNemar require explicit Bonferroni / FDR corrections.
 
-If you need them anyway, both are fine to compute alongside
-eval-toolkit — they'll generally agree with the bootstrap result on
-informative data.
+Use DeLong when its assumptions hold AND bootstrap cost is the binding
+constraint; otherwise prefer bootstrap. McNemar stays out of scope —
+consumer computes via `scipy.stats` if needed.
 
 (comparison-pitfalls)=
 ## Pitfalls / Common mistakes
