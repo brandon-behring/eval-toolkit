@@ -144,6 +144,7 @@ def sweep(
                 f"sweep(): strategy at index {i} ({type(strategy).__name__}) "
                 f"does not satisfy TextTransform (missing 'name' or 'transform')."
             )
+    _validate_unique_strategy_ids(strategies)
 
     text_list = list(texts)
     rows: list[dict[str, object]] = []
@@ -155,6 +156,7 @@ def sweep(
         original_scores = np.asarray(scorer.predict_proba(text_list))
 
     for strategy in strategies:
+        sid = _strategy_id_for(strategy)
         transformed_list = [strategy.transform(t) for t in text_list]
         transformed_scores: np.ndarray | None = None
         if scorer is not None and transformed_list:
@@ -162,6 +164,7 @@ def sweep(
         for text_id, (_, transformed) in enumerate(zip(text_list, transformed_list, strict=True)):
             row: dict[str, object] = {
                 "text_id": text_id,
+                "strategy_id": sid,
                 "variant": strategy.name,
                 "transformed_text": transformed,
             }
@@ -176,9 +179,78 @@ def sweep(
                     row["asr"] = bool(s_orig >= attack_threshold > s_adv)
             rows.append(row)
 
-    base_cols = ["text_id", "variant", "transformed_text"]
+    base_cols = ["text_id", "strategy_id", "variant", "transformed_text"]
     if scorer is not None:
         base_cols += ["original_score", "transformed_score"]
     if attack_threshold is not None:
         base_cols += ["asr"]
     return pd.DataFrame(rows, columns=base_cols)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers — strategy identity (Decision R7-B; v0.48 §5I)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _strategy_id_for(strategy: TextTransform) -> str:
+    """Build a stable, repr-stable identifier from a strategy's configured state.
+
+    Decision R7-B (Round 7 audit, Codex R7-F2): a strategy's ``name`` alone is
+    not enough to identify a configured instance. Two instances of the same
+    dataclass with different kwargs (e.g., ``DelimitVariant(delimiter="<<")``
+    and ``DelimitVariant(delimiter="[[")``) share ``name == "delimit"`` and
+    would silently merge under ``groupby("variant")``. The ``strategy_id``
+    column carries the canonical configured identity so downstream
+    analysis can disambiguate.
+
+    Format (pseudo-URI; chosen for groupby-friendliness + special-char
+    safety via ``repr()``):
+
+    - Frozen dataclass strategies: ``"<name>/<k1>=<repr(v1)>,<k2>=<repr(v2)>,..."``
+      with kwargs alphabetized (excluding the ``name`` field itself). Mirrors
+      :func:`eval_toolkit.metric_specs.make_spec_name` but uses ``repr(value)``
+      instead of ``str(value)`` so string kwargs with special chars (``<<``,
+      ``[[``, ``^``, etc.) round-trip cleanly.
+    - Plain :class:`TextTransform`-Protocol-satisfying objects without
+      ``__dataclass_fields__``: falls back to ``strategy.name``.
+
+    Examples
+    --------
+    >>> from eval_toolkit.preprocessing import DelimitVariant
+    >>> _strategy_id_for(DelimitVariant(delimiter="<<", end=">>"))
+    "delimit/delimiter='<<',end='>>'"
+    >>> from eval_toolkit.adversarial import ZeroWidthSpaceInjection
+    >>> _strategy_id_for(ZeroWidthSpaceInjection(ratio=0.5, seed=42))
+    'zero_width_space/ratio=0.5,seed=42'
+    """
+    fields = getattr(strategy, "__dataclass_fields__", None)
+    if fields is None:
+        return strategy.name
+    kw_pairs = sorted((f, getattr(strategy, f)) for f in fields if f != "name")
+    if not kw_pairs:
+        return strategy.name
+    return f"{strategy.name}/" + ",".join(f"{k}={v!r}" for k, v in kw_pairs)
+
+
+def _validate_unique_strategy_ids(strategies: Sequence[TextTransform]) -> None:
+    """Reject duplicate ``strategy_id`` values in a single ``sweep()`` call.
+
+    Decision R7-B (Round 7 audit, Codex R7-F2): mirrors R6-B's duplicate
+    ``MetricSpec.name`` rejection in ``scorecard()`` — same anti-silent-merge
+    invariant, applied to the sweep surface. No methodology-honest reason to
+    put the same configured strategy twice in one sweep; cache-warming +
+    reproducibility re-runs use ``strategy.transform()`` directly outside
+    ``sweep()``.
+    """
+    seen: dict[str, int] = {}
+    for i, strategy in enumerate(strategies):
+        sid = _strategy_id_for(strategy)
+        if sid in seen:
+            raise ValueError(
+                f"sweep(): duplicate strategy_id {sid!r} at index {i} "
+                f"(previously at index {seen[sid]}); each strategy must "
+                f"produce a unique strategy_id. If you want two configurations "
+                f"of the same dataclass in the same sweep, vary their kwargs "
+                f"so the canonical identifier differs."
+            )
+        seen[sid] = i

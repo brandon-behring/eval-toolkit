@@ -35,17 +35,22 @@ from eval_toolkit.adversarial import (
 
 
 def test_sweep_defence_only_returns_text_columns() -> None:
-    """Default call (no scorer) returns exactly 3 columns: id, variant, text."""
+    """Default call (no scorer) returns 4 columns: id, strategy_id, variant, text.
+
+    v0.48 Decision R7-B (§5I): `strategy_id` is the canonical per-row
+    identifier carrying the strategy's configured kwargs; `variant` keeps
+    the dataclass `.name` attribute for backward-compat grouping.
+    """
     df = sweep([DelimitVariant(), DatamarkVariant(), EncodeVariant()], ["hello"])
-    assert df.shape == (3, 3)
-    assert list(df.columns) == ["text_id", "variant", "transformed_text"]
+    assert df.shape == (3, 4)
+    assert list(df.columns) == ["text_id", "strategy_id", "variant", "transformed_text"]
     assert set(df["variant"]) == {"delimit", "datamark", "encode"}
 
 
 def test_sweep_attack_only() -> None:
     """Attack-side strategies work the same way (TextTransform structural sharing)."""
     df = sweep([ZeroWidthSpaceInjection()], ["payload"])
-    assert df.shape == (1, 3)
+    assert df.shape == (1, 4)
     assert df.iloc[0]["variant"] == "zero_width_space"
 
 
@@ -55,7 +60,7 @@ def test_sweep_mixed_defence_attack() -> None:
         [DelimitVariant(), ZeroWidthSpaceInjection()],
         ["hello", "world"],
     )
-    assert df.shape == (4, 3)
+    assert df.shape == (4, 4)
     assert set(df["variant"]) == {"delimit", "zero_width_space"}
 
 
@@ -178,3 +183,127 @@ def test_sweep_accepts_custom_text_transform() -> None:
 def test_sweep_returns_pandas_dataframe() -> None:
     df = sweep([DelimitVariant()], ["x"])
     assert isinstance(df, pd.DataFrame)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Decision R7-B / §5I (v0.48): strategy_id column + duplicate rejection.
+#
+# Style-coherent with R6-B (scorecard duplicate MetricSpec.name rejection):
+# canonical identifier + reject duplicates IN THE CANONICAL DIMENSION.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_sweep_strategy_id_distinguishes_configurations() -> None:
+    """Two DelimitVariant instances with different delimiters share `variant`
+    but have distinct `strategy_id`. The whole point of R7-B.
+    """
+    df = sweep(
+        [DelimitVariant(delimiter="<<"), DelimitVariant(delimiter="[[")],
+        ["hello"],
+    )
+    assert df.shape == (2, 4)
+    # Both rows share variant
+    assert set(df["variant"]) == {"delimit"}
+    # But strategy_id distinguishes them
+    sids = df["strategy_id"].tolist()
+    assert sids[0] != sids[1]
+    assert "delimiter='<<'" in sids[0]
+    assert "delimiter='[['" in sids[1]
+
+
+def test_sweep_strategy_id_distinguishes_ratios() -> None:
+    """Same mechanism for adversarial-side dataclasses with numeric kwargs."""
+    df = sweep(
+        [ZeroWidthSpaceInjection(ratio=0.1), ZeroWidthSpaceInjection(ratio=0.9)],
+        ["hello"],
+    )
+    assert df.shape == (2, 4)
+    sids = df["strategy_id"].tolist()
+    assert "ratio=0.1" in sids[0]
+    assert "ratio=0.9" in sids[1]
+
+
+def test_sweep_rejects_duplicate_strategy_id() -> None:
+    """Two strategy instances with identical configured state must raise."""
+    with pytest.raises(ValueError, match="duplicate strategy_id"):
+        sweep([DelimitVariant(), DelimitVariant()], ["hello"])
+
+
+def test_sweep_duplicate_rejection_reports_both_indices() -> None:
+    """The error message names both the duplicate and the original index."""
+    with pytest.raises(ValueError) as excinfo:
+        sweep(
+            [DelimitVariant(delimiter="<<"), DatamarkVariant(), DelimitVariant(delimiter="<<")],
+            ["hello"],
+        )
+    msg = str(excinfo.value)
+    assert "index 2" in msg
+    assert "index 0" in msg
+
+
+def test_sweep_duplicate_rejection_catches_identical_instances() -> None:
+    """Passing the SAME instance twice is the simplest duplicate case."""
+    s = DelimitVariant()
+    with pytest.raises(ValueError, match="duplicate strategy_id"):
+        sweep([s, s], ["hello"])
+
+
+def test_sweep_groupby_strategy_id_disambiguates() -> None:
+    """The canonical use case: groupby('strategy_id') for per-config rollup.
+
+    Regression-guard: this is the analysis pattern R7-B exists to enable.
+    """
+    df = sweep(
+        [
+            DelimitVariant(delimiter="<<"),
+            DelimitVariant(delimiter="[["),
+            DelimitVariant(delimiter="(("),
+        ],
+        ["a", "b"],
+    )
+    # 3 configs × 2 texts = 6 rows
+    assert len(df) == 6
+    # groupby('variant') merges everything (the silent-merge footgun
+    # R7-B closes)
+    by_variant = df.groupby("variant").size()
+    assert by_variant.shape == (1,)  # all 6 rows under variant='delimit'
+    # groupby('strategy_id') distinguishes the 3 configs cleanly
+    by_id = df.groupby("strategy_id").size()
+    assert by_id.shape == (3,)
+    assert (by_id == 2).all()  # 2 texts per strategy_id
+
+
+def test_sweep_strategy_id_for_plain_protocol() -> None:
+    """Non-dataclass TextTransform-Protocol implementations fall back to `name`.
+
+    The strategy_id helper has no __dataclass_fields__ to alphabetize, so
+    it just returns strategy.name. Two plain implementations with the same
+    name → rejection. Two with distinct names → distinct strategy_ids.
+    """
+
+    class _Reverse:
+        name = "reverse"
+
+        def transform(self, text: str) -> str:
+            return text[::-1]
+
+    class _Upper:
+        name = "upper"
+
+        def transform(self, text: str) -> str:
+            return text.upper()
+
+    df = sweep([_Reverse(), _Upper()], ["hello"])
+    assert df["strategy_id"].tolist() == ["reverse", "upper"]
+
+
+def test_sweep_strategy_id_argument_order_invariant() -> None:
+    """A strategy's strategy_id doesn't depend on kwarg construction order.
+
+    Mirrors the metric_specs.make_spec_name argument-order-invariance contract.
+    """
+    a = DelimitVariant(delimiter="<<", end=">>")
+    b = DelimitVariant(end=">>", delimiter="<<")
+    from eval_toolkit._sweep import _strategy_id_for
+
+    assert _strategy_id_for(a) == _strategy_id_for(b)
