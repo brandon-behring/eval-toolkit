@@ -120,10 +120,29 @@ class BootstrapCI:
     method: str
 
     def to_dict(self) -> dict[str, object]:
-        """Serialize to a stable dict schema for JSON output."""
+        """Serialize to a stable, self-describing dict schema for JSON output.
+
+        v0.48 BREAKING (§5B): schema rewritten to drop the hard-coded
+        ``"ci_95"`` key that lied when ``confidence != 0.95``. The new
+        schema names the bounds neutrally and carries the actual
+        confidence level in a dedicated field; consumers can read
+        ``confidence`` to interpret the bound semantics.
+
+        Before v0.48:
+            {"point_estimate": p, "ci_95": [l, h], "confidence": 0.95,
+             "n_resamples": N, "method": "BCa"}
+
+        v0.48+:
+            {"point": p, "low": l, "high": h, "confidence": 0.95,
+             "n_resamples": N, "method": "BCa"}
+
+        Migration: rename ``point_estimate`` → ``point``; replace the
+        ``ci_95`` list-of-two with separate ``low`` + ``high`` keys.
+        """
         return {
-            "point_estimate": self.point_estimate,
-            "ci_95": [self.ci_low, self.ci_high],
+            "point": self.point_estimate,
+            "low": self.ci_low,
+            "high": self.ci_high,
             "confidence": self.confidence,
             "n_resamples": self.n_resamples,
             "method": self.method,
@@ -185,10 +204,24 @@ class PairedBootstrapCI:
     n_resamples: int
 
     def to_dict(self) -> dict[str, object]:
-        """Serialize to a stable dict schema for JSON output."""
+        """Serialize to a stable, self-describing dict schema for JSON output.
+
+        v0.48 BREAKING (§5B): same rewrite as :meth:`BootstrapCI.to_dict`.
+        ``"ci_95"`` is replaced by ``"low"`` + ``"high"``; ``"confidence"``
+        carries the actual level.
+
+        Before v0.48:
+            {"delta": d, "ci_95": [l, h], "overlaps_zero": b,
+             "confidence": 0.95, "n_resamples": N}
+
+        v0.48+:
+            {"delta": d, "low": l, "high": h, "overlaps_zero": b,
+             "confidence": 0.95, "n_resamples": N}
+        """
         return {
             "delta": self.delta,
-            "ci_95": [self.ci_low, self.ci_high],
+            "low": self.ci_low,
+            "high": self.ci_high,
             "overlaps_zero": self.overlaps_zero,
             "confidence": self.confidence,
             "n_resamples": self.n_resamples,

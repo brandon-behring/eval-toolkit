@@ -156,16 +156,18 @@ def test_paired_mde_returns_estimate(
 
 @pytest.mark.unit
 def test_bootstrap_ci_to_dict_schema() -> None:
+    """v0.48 §5B: schema renamed from {ci_95: [l, h]} to {low: l, high: h}."""
     ci = BootstrapCI(0.5, 0.4, 0.6, 0.95, 100, "BCa")
     d = ci.to_dict()
-    assert set(d.keys()) == {"point_estimate", "ci_95", "confidence", "n_resamples", "method"}
+    assert set(d.keys()) == {"point", "low", "high", "confidence", "n_resamples", "method"}
 
 
 @pytest.mark.unit
 def test_paired_bootstrap_ci_to_dict_schema() -> None:
+    """v0.48 §5B: PairedBootstrapCI gets the same rewrite."""
     pci = PairedBootstrapCI(0.05, 0.02, 0.08, False, 0.95, 100)
     d = pci.to_dict()
-    assert set(d.keys()) == {"delta", "ci_95", "overlaps_zero", "confidence", "n_resamples"}
+    assert set(d.keys()) == {"delta", "low", "high", "overlaps_zero", "confidence", "n_resamples"}
 
 
 # ---------------------------------------------------------------------------

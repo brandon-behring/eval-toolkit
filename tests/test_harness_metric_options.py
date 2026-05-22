@@ -252,8 +252,10 @@ def test_evaluate_scorer_on_slice_full_kwarg_cross_product(signal_slice: EvalSli
     # Numeric sanity: every CI is in [0, 1] (or NaN for degenerate bootstrap).
     for ci_key in ("pr_auc_ci", "roc_auc_ci"):
         ci = result[ci_key]
-        ci_low, ci_high = ci["ci_95"]
+        # v0.48 §5B: schema rewritten from {ci_95: [l, h], point_estimate: p}
+        # to {low: l, high: h, point: p}.
+        ci_low, ci_high = ci["low"], ci["high"]
         if np.isfinite(ci_low) and np.isfinite(ci_high):
             assert (
-                0.0 <= ci_low <= ci["point_estimate"] <= ci_high <= 1.0
+                0.0 <= ci_low <= ci["point"] <= ci_high <= 1.0
             ), f"CI invariant violated for {ci_key}: {ci}"
