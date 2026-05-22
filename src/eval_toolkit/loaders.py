@@ -449,8 +449,7 @@ class HFDatasetsLoader:
             from datasets import load_dataset  # type: ignore[import-not-found]
         except ImportError as exc:
             raise ImportError(
-                "HFDatasetsLoader requires the optional 'datasets' package. "
-                "Install with: pip install datasets"
+                "HFDatasetsLoader requires datasets. Install with: pip install datasets"
             ) from exc
         if self.config_name is not None:
             return cast(Mapping[str, Any], load_dataset(self.repo_id, name=self.config_name))
@@ -622,7 +621,7 @@ def _load_yaml_manifest(yaml_path: str | Path) -> dict[str, Any]:
         import yaml
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
-            "ood_dataset_from_manifest requires the optional 'yaml' extra. "
+            "ood_dataset_from_manifest requires pyyaml. "
             "Install with: pip install eval-toolkit[yaml]"
         ) from exc
     path = Path(yaml_path).expanduser().resolve()
