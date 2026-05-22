@@ -2,7 +2,8 @@
 
 **Status:** Accepted
 **Date:** 2026-05-21 (drafted at v0.46-prep; finalized at v0.48)
-**Deciders:** Brandon Behring (author), Round 5 audit (Codex + Gemini)
+**Deciders:** Brandon Behring (author), Round 5 / Round 6 / Round 7 audits
+(Codex + Gemini)
 **Supersedes:** N/A. **Superseded by:** N/A.
 
 ## Context
@@ -52,17 +53,23 @@ bump to alter:
   return types. A new optional kwarg with a default is technically
   additive, but it changes the signature snapshot — handle via the
   additive-Protocol path below or accept the major bump.
-- **Tier-2 Protocols** (9 strict at v1.0):
-  - `Scorer` (from `protocols.py:28`)
+- **Tier-2 Protocols** (9 strict at v1.0, all shipped through v0.47.0):
+  - `Scorer` (from `protocols.py`)
   - `LeakageCheck` (from `leakage.py`)
   - `Splitter` (from `splits.py`)
-  - `ThresholdSelector` (from `thresholds.py:58`)
-  - `DatasetLoader` (from `loaders.py:110`)
-  - `MetricSpec` (from `_scorecard.py`, new at v0.46)
-  - `TextTransform` (from `__init__.py`, new at v0.47 — pending)
-  - `MetaLearner` (from `stacking.py`, new at v0.45)
+  - `ThresholdSelector` (from `thresholds.py`)
+  - `DatasetLoader` (from `loaders.py`)
+  - `MetricSpec` (from `_scorecard.py`, shipped v0.46)
+  - `TextTransform` (from `protocols.py`, shipped v0.47)
+  - `MetaLearner` (from `stacking.py`, shipped v0.45)
   - `Probe` (from `probes.py`, shipped v0.43)
   - PLUS 1 opt-in Protocol: `Versioned` (additive on top of Tier-2).
+
+  Tier-2 Protocol method signatures are pinned by the Decision R6-D drift
+  guard in `tests/test_public_api.py` (since v0.47.0): the golden
+  snapshot captures each Protocol's method signatures + return types via
+  `typing.get_type_hints` + `inspect.signature`, so a SemVer-major
+  review fires on any shape change.
 - **Current versioned JSON schemas** (`src/eval_toolkit/schemas/*.json`)
   per artifact type — `manifest.v3.json` (canonical), `manifest.v1.json`
   + `manifest.v2.json` (historical, kept for migration),
@@ -146,11 +153,19 @@ academic peer review.
 
 **Cycle structure** (per Decision Y.2):
 
-- Round 5 (pre-v0.46 implementation, **complete** 2026-05-21).
-- Round 6 (post-v0.46 ship) — **STOP-GATE before v0.47** opens.
-  7-day timeout from ship date; blocker findings either fix-as-vX.Y.1 or
-  fold into v0.47 design.
-- Round 7 (post-v0.47 ship) — STOP-GATE before v0.48 opens.
+- Round 5 (pre-v0.46 implementation) — **complete** 2026-05-21.
+  Surfaced 12 verified-real findings, including F1 / F2 (scorecard
+  shape blockers) and F7 (Gate 3 honesty — this ADR's framing).
+- Round 6 (post-v0.46 ship) — **complete** 2026-05-21. STOP-GATE
+  CLOSED before v0.47 opened. Codex R6-F1 (ECE strategy validation)
+  + Codex R6-F2 (deprecation warning content) shipped as v0.46.1
+  hotfix per Decision R6-E; the remaining findings (R6-A through R6-H)
+  folded into v0.47.0.
+- Round 7 (post-v0.47 ship) — **complete** 2026-05-21. STOP-GATE
+  CLOSED before v0.48 opened. Codex R7-F1 (MyST-NB doc-execution gap)
+  + R7-F2 (sweep strategy_id) + R7-F3 (sweep scorer output shape)
+  folded into v0.48.0; Gemini observations folded into v0.48
+  documentation polish (§5K) + the Makefile pre-push target (§5L).
 - Round 8 (post-v0.48 ship) — final pre-v1.0 packet review.
 - v1.0 tag requires Round 8 to close (or fall back per ADR amendment).
 
@@ -177,7 +192,9 @@ or "models flag uncertainty without confidence."
   "no commitment" of a narrow contract.
 - Gate 3 honesty: future maintainers can read this ADR and understand
   exactly what evidence the v1.0 release carries (and doesn't).
-- Round 5 demonstrated multi-LLM cross-review catches real issues; the
+- Rounds 5 / 6 / 7 demonstrated that multi-LLM cross-review catches
+  real issues at each stage (Round 5: 12 findings, Round 6: 11 findings,
+  Round 7: 3 substantive Codex findings + 6 Gemini observations); the
   cycle structure ensures coverage of every breaking minor before the
   final stability tag.
 
