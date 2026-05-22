@@ -439,6 +439,59 @@ def test_metrics_at_threshold_returns_exact_key_set() -> None:
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# §5N regression-guard tests — API-level ValueError on non-finite / non-scalar
+# threshold. Style invariant 3: wrap silent numpy-comparison semantics with a
+# contextual error tied to the offending kwarg.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_metrics_at_threshold_rejects_nan_threshold() -> None:
+    """NaN threshold silently produces all-zero predictions; reject at the boundary."""
+    from eval_toolkit.metrics import metrics_at_threshold
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 100)
+    s = rng.random(100)
+    with pytest.raises(ValueError, match=r"threshold must be finite"):
+        metrics_at_threshold(y, s, float("nan"))
+
+
+def test_metrics_at_threshold_rejects_inf_threshold() -> None:
+    """+/-Inf threshold degenerates silently; reject at the boundary."""
+    from eval_toolkit.metrics import metrics_at_threshold
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 100)
+    s = rng.random(100)
+    with pytest.raises(ValueError, match=r"threshold must be finite"):
+        metrics_at_threshold(y, s, float("inf"))
+    with pytest.raises(ValueError, match=r"threshold must be finite"):
+        metrics_at_threshold(y, s, float("-inf"))
+
+
+def test_metrics_at_threshold_rejects_array_threshold() -> None:
+    """Multi-element threshold silently broadcasts; reject at the boundary."""
+    from eval_toolkit.metrics import metrics_at_threshold
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 100)
+    s = rng.random(100)
+    with pytest.raises(ValueError, match=r"threshold must be a scalar"):
+        metrics_at_threshold(y, s, np.array([0.3, 0.5, 0.7]))
+
+
+def test_metrics_at_threshold_accepts_finite_negative_threshold() -> None:
+    """y_score is documented as any real-valued score; threshold can be < 0."""
+    from eval_toolkit.metrics import metrics_at_threshold
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 100)
+    s = rng.standard_normal(100)  # logit-style scores
+    result = metrics_at_threshold(y, s, -0.5)
+    assert result["threshold"] == -0.5
+
+
 def test_brier_decomposition_returns_exact_key_set() -> None:
     from eval_toolkit.metrics import brier_decomposition
 
