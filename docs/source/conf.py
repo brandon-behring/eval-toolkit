@@ -71,6 +71,15 @@ always_document_param_types = True
 nb_execution_mode = "cache"  # Q11 — execute on source change
 nb_execution_timeout = 90  # seconds per cell
 nb_execution_show_tb = True  # show full Python traceback on failure
+# v0.48 Decision R7-A (Round 7 audit): fail sphinx-build on notebook
+# execution errors instead of leaving them as advisory warnings. Without
+# this, docs CI runs `sphinx-build -b html` without `-W` (intentional
+# because ~56 pre-existing xref/duplicate-label warnings predate v0.47
+# polish per .github/workflows/docs.yml:51-58), so notebook execution
+# failures would silently pass the build. This narrower setting fails
+# specifically on notebook-execution failures while leaving the
+# unrelated xref warnings as advisory — Codex R7-F1's recommended fix.
+nb_execution_raise_on_error = True
 nb_merge_streams = True  # merge stdout/stderr cleanly
 myst_enable_extensions = [
     "amsmath",  # \begin{align} ... \end{align}
