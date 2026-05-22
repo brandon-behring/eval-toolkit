@@ -18,7 +18,26 @@ per tier with one-line summaries:
 
 ## Tier 1: Functional core
 
-### Metrics ([`metrics`](metrics.md))
+### Primary metric surface ([`scorecard`](scorecard.md), [`metric_specs`](metric_specs.md))
+
+The v1.0 entry point for "give me PR-AUC, ROC-AUC, Brier, ECE on a
+slice, with bootstrap CIs, in one call" — per ADR 0002.
+
+- `scorecard(y, score, metrics=[...])` — primary metric surface
+  returning a `Scorecard` (`Mapping[str, MetricResult]`) with
+  status-aware cells + optional bootstrap CIs
+- `metric_specs.pr_auc`, `metric_specs.roc_auc`, `metric_specs.brier`,
+  `metric_specs.ece(n_bins=..., strategy="uniform"|"quantile")` —
+  first-party `MetricSpec` instances
+- `MetricSpec` — public Protocol for custom specs
+- `MetricResult` — per-cell `value` / `status` / `ci` / `reason`
+- `Scorecard.to_pandas()` — MultiIndex DataFrame view
+
+### Metric primitives ([`metrics`](metrics.md))
+
+Scalar metric submodule — internal API per ADR 0002. Use `scorecard()`
+above for the stable surface; reach for these only when you need a
+bespoke `bootstrap_ci` configuration or a custom callback metric.
 
 - `pr_auc(y, score)` — area under the precision-recall curve
 - `roc_auc(y, score)` — area under the ROC curve
@@ -61,6 +80,30 @@ per tier with one-line summaries:
 - `RunResult` — JSON-serializable run container (schema-versioned)
 - `write_run_result(result, run_dir)` — persist + schema-validate
 
+### Sweep + text transforms ([`sweep`](sweep.md), [`adversarial`](adversarial.md), [`preprocessing`](preprocessing.md))
+
+The v0.47 unified `TextTransform` Protocol covers both defence-side
+(Spotlighting variants) and attack-side (character-injection) strategies.
+
+- `TextTransform` Protocol — `name: str` + `transform(text) -> str`
+- `sweep(strategies, texts, scorer=..., attack_threshold=...)` — top-level
+  enumeration; per-row `(text_id, variant, transformed_text)` with
+  optional `original_score` / `transformed_score` / `asr` columns
+- Defence: `DelimitVariant`, `DatamarkVariant`, `EncodeVariant`
+- Attack (core 6, v0.43+): `ZeroWidthSpaceInjection`, `HomoglyphSubstitution`,
+  `DiacriticInjection`, `WhitespaceInjection`, `CaseRandomization`,
+  `PunctuationInjection`
+- Attack (advanced 6, v0.47+): `BidiRTLInjection`, `TagStrippingInjection`,
+  `SynonymSubstitution`, `TokenSplitting`, `UnicodeNormalization`,
+  `InvisibleCharsInjection`
+- Convenience tuples: `CORE_TECHNIQUES`, `ADVANCED_TECHNIQUES`, `ALL_TECHNIQUES`
+
+### Stacking ([`stacking`](stacking.md))
+
+- `MetaLearner` Protocol — `coef_` / `classes_` / `intercept_` + `fit` /
+  `predict` / `predict_proba`
+- `LogisticStacker` — reference impl wrapping `sklearn.LogisticRegression`
+
 ### Splitters ([`splits`](splits.md))
 
 - `Splitter` Protocol
@@ -99,6 +142,17 @@ per tier with one-line summaries:
   `no_scorer_errors_gate`, `required_scorer_gate`,
   `low_fpr_feasibility_gate`, `strict_artifact_gate`, ...
 - `EvidenceAxis`, `AggregateEvidence` for typed aggregation
+
+### Optional-extra Tier-2: probes + losses ([`probes`](probes.md), [`losses`](losses.md))
+
+Optional-dependency modules that follow the same Protocol patterns but
+require `pip install eval-toolkit[probes]` or `eval-toolkit[losses]`.
+
+- `ActivationDeltaProbe` — TaskTracker-style linear probe over a
+  transformer's hidden states (probes extra)
+- `Probe` Protocol + `ActivationExtractor`
+- `RecallAtLowFPR` — differentiable recall-at-FPR loss for detector
+  training (Meta PG2 recipe; losses extra)
 
 ## Tier 3: Reproducibility scaffolding
 

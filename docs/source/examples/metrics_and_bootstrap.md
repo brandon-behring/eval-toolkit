@@ -11,9 +11,11 @@ kernelspec:
 
 # Worked example: metrics + bootstrap CIs
 
-> **What this shows.** Compute `pr_auc` / `roc_auc` / `brier_score` on a
-> synthetic binary-classification fixture, then attach a 95% bootstrap CI
-> via `bootstrap_ci`. The minimal entry point into the toolkit.
+> **What this shows.** Compute PR-AUC / ROC-AUC / Brier on a synthetic
+> binary-classification fixture via the v1.0 primary surface —
+> `scorecard()` with `metric_specs` — which returns each cell with its
+> 95% bootstrap CI attached. Then drop down to `bootstrap_ci` for
+> bespoke CI configurations.
 >
 > **Runtime:** ~1 s on a laptop. Pure numpy/scipy/sklearn core — no
 > optional dependencies.
@@ -23,9 +25,12 @@ kernelspec:
 ```{code-cell}
 import numpy as np
 from eval_toolkit import (
-    pr_auc, roc_auc, brier_score,
-    bootstrap_ci, set_global_seeds,
+    scorecard,
+    metric_specs as ms,
+    bootstrap_ci,
+    set_global_seeds,
 )
+from eval_toolkit.metrics import pr_auc  # internal API; needed for bespoke CIs below
 set_global_seeds(42)
 ```
 
@@ -45,28 +50,39 @@ y_score = np.clip(
 )
 ```
 
-## Point estimates: pr_auc, roc_auc, brier_score
+## Primary surface: `scorecard()` with bootstrap CIs
 
-Each is a single function call returning a float:
+The v1.0 entry point is `scorecard(y_true, y_score, metrics=[...])`,
+which returns a `Mapping[str, MetricResult]`. Each `MetricResult`
+carries `value`, `status`, an optional `BootstrapCI`, and (per ADR 0002)
+is the **stable** way to reach metric values:
 
 ```{code-cell}
-ap = pr_auc(y_true, y_score)
-auc = roc_auc(y_true, y_score)
-bs = brier_score(y_true, y_score)
-assert 0.0 <= ap <= 1.0
-assert 0.0 <= auc <= 1.0
-assert 0.0 <= bs <= 1.0
-print(f"pr_auc={ap:.3f}  roc_auc={auc:.3f}  brier={bs:.3f}")
+r = scorecard(
+    y_true, y_score,
+    metrics=[ms.pr_auc, ms.roc_auc, ms.brier],
+    n_resamples=200,
+    seed=42,
+)
+for name in ("pr_auc", "roc_auc", "brier"):
+    cell = r[name]
+    print(
+        f"{name}={cell.value:.3f}  "
+        f"[95% CI: {cell.ci.ci_low:.3f}, {cell.ci.ci_high:.3f}]"
+    )
+assert all(r[k].status == "ok" for k in r)
 ```
 
 The signal-to-noise here gives ~0.85 AUC / ~0.85 AP. Brier ~0.09 (good
 calibration on this fixture because the scores are well-spread).
 
-## 95% bootstrap CI
+## Bespoke CIs via `bootstrap_ci`
 
-`bootstrap_ci` wraps `scipy.stats.bootstrap` with BCa as the default
-method and produces a `BootstrapCI` dataclass with `point_estimate`,
-`ci_low`, `ci_high`:
+`bootstrap_ci` is the lower-level entry point used by `scorecard()`
+under the hood. Reach for it when you need a metric that isn't shipped
+in `metric_specs`, or when you want non-default CI knobs (e.g., a
+`percentile` fallback for tiny samples). The scalar metric functions
+live under `eval_toolkit.metrics` per ADR 0002:
 
 ```{code-cell}
 ci_ap = bootstrap_ci(y_true, y_score, metric=pr_auc, n_resamples=200, seed=42)

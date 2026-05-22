@@ -10,6 +10,8 @@
    DataFrameLoader
    DatasetLoader
    HFDatasetsLoader
+   OodManifestLoader
    ParquetGlobLoader
    SingleSliceLoader
+   ood_dataset_from_manifest
 ```

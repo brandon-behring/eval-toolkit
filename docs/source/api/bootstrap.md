@@ -12,16 +12,21 @@
    DEFAULT_N_RESAMPLES
    DEFAULT_SEED
    BootstrapCI
+   CorrectionMethod
    DeLongResult
    MDEEstimate
    MetricFn
    PairedBootstrapCI
    ThresholdedMetricFn
    ThresholdFn
+   block_bootstrap_on_folds
+   bonferroni_correct
    bootstrap_ci
+   correct_p_values
    cross_validate_metric
    cv_clt_ci
    delong_roc_variance
+   fdr_bh_correct
    mde_from_ci
    paired_bootstrap_diff
    paired_bootstrap_ece_diff

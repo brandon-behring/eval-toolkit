@@ -69,6 +69,7 @@ methodology/versioning
 :caption: API reference
 
 api/index
+api/adversarial
 api/analysis
 api/artifacts
 api/bootstrap
@@ -81,15 +82,22 @@ api/evidence
 api/harness
 api/leakage
 api/loaders
+api/losses
 api/manifest
+api/metric_specs
 api/metrics
 api/operating_points
 api/paths
 api/plotting
+api/preprocessing
+api/probes
 api/protocols
 api/provenance
+api/scorecard
 api/seeds
 api/splits
+api/stacking
+api/sweep
 api/text_dedup
 api/thresholds
 ```

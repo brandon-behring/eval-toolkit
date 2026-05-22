@@ -8,6 +8,7 @@
    :nosignatures:
 
    DEFAULT_ASSUMED_PRIORS
+   SINGLE_CLASS_INCOMPATIBLE_METRICS
    ThresholdResult
    brier_decomposition
    brier_score
@@ -17,6 +18,7 @@
    expected_calibration_error_l2
    expected_calibration_error_l2_debiased
    headline_metrics
+   is_metric_defined_for_slice
    metrics_at_threshold
    pr_auc
    precision_at_prior

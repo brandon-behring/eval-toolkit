@@ -1,4 +1,4 @@
-"""Adversarial robustness: character-injection bypass suite + Scorer-Protocol sweep.
+"""Adversarial robustness: 12-technique character-injection bypass suite.
 
 Implements the character-injection bypass techniques from Microsoft Research
 2024 ([1]_) for testing prompt-injection-detection scorers under adversarial
@@ -6,7 +6,7 @@ input perturbation. Each technique is deterministic given a ``seed`` and
 preserves the surface meaning of the text from a human reader's perspective
 while shifting the tokenizer / scorer's representation.
 
-Core techniques shipped in v0.43.0:
+Core techniques (shipped in v0.43.0):
 
 - :class:`ZeroWidthSpaceInjection` — insert U+200B zero-width spaces
 - :class:`HomoglyphSubstitution` — Latin → Cyrillic/Greek lookalikes
@@ -15,25 +15,24 @@ Core techniques shipped in v0.43.0:
 - :class:`CaseRandomization` — random case-flipping per character
 - :class:`PunctuationInjection` — non-semantic punctuation insertion
 
-The :func:`sweep` function applies a set of techniques against a
-:class:`~eval_toolkit.protocols.Scorer`-Protocol-compliant scorer and
-returns a DataFrame of
-``(text_id, technique, original_score, transformed_score, asr)``
-for adversarial robustness analysis. ASR (attack success rate) is the
-fraction of inputs where the scorer crossed the threshold from positive
-to negative under the transformation.
+Advanced techniques (shipped in v0.47 per Decision Q11.3):
 
-The six advanced techniques (bidi RTL override, tag stripping, synonym
-substitution, token splitting, Unicode normalization, invisible
-characters) are scheduled for v0.43.1 as a follow-up patch; the sweep
-API stabilizes in v0.43.0 so the v0.43.1 additions are pure extensions.
+- :class:`BidiRTLInjection` — U+202E…U+202C override block
+- :class:`TagStrippingInjection` — ``<…>`` tag removal (idempotent)
+- :class:`SynonymSubstitution` — whitelisted-word swap, seed-deterministic
+- :class:`TokenSplitting` — mid-word single-space insertion
+- :class:`UnicodeNormalization` — NFC / NFD / NFKC / NFKD form switch
+- :class:`InvisibleCharsInjection` — 5 invisible code points
 
-A module-level :data:`character_injection` namespace exposes the
-function-style API from the upstream issue spec:
+The convenience tuples :data:`CORE_TECHNIQUES` (6-tuple),
+:data:`ADVANCED_TECHNIQUES` (6-tuple), and :data:`ALL_TECHNIQUES`
+(12-tuple = core + advanced) enumerate the suite for sweep callers.
 
->>> from eval_toolkit.adversarial import character_injection
->>> character_injection.zero_width_space("hello")  # doctest: +SKIP
-'h​e​l​l​o'
+Use the v0.47 top-level :func:`eval_toolkit.sweep` to apply any set of
+:class:`~eval_toolkit.TextTransform` strategies against a corpus (and
+optionally a :class:`~eval_toolkit.protocols.Scorer`); the v0.43–v0.46
+module-level ``sweep()`` function and the ``character_injection``
+``SimpleNamespace`` were removed at v0.47 (Decisions D + K + N).
 
 References
 ----------

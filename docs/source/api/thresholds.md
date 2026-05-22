@@ -10,6 +10,7 @@
    CISafeThresholdSelector
    CostSensitiveSelector
    MaxF1Selector
+   RecallAtFprResult
    TargetFPRSelector
    TargetPrecisionSelector
    TargetRecallSelector
@@ -17,6 +18,7 @@
    ThresholdSelector
    WilsonInterval
    YoudenJSelector
+   recall_at_fpr
    select_threshold
    wilson_interval
 ```

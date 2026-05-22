@@ -106,8 +106,10 @@ State-of-the-toolkit:
   `bootstrap_ci`, `fit_isotonic_calibrator`, `fit_platt_calibrator`).
 - 90 % global coverage gate; per-module breakdown in CI.
 - Sybil-validated doc-blocks across `docs/source/methodology/`,
-  `docs/source/extending.md`, `docs/source/migration/`,
-  `docs/source/examples/`, `README.md`.
+  `docs/source/extending.md`, `docs/source/migration/`, and `README.md`;
+  `docs/source/examples/` is executed end-to-end via MyST-NB during the
+  Sphinx build (a separate execution surface from Sybil's pytest
+  collection).
 - Per-version migration guides
   ([`migration/v0.7.md`](migration/v0.7.md),
   [`migration/v0.8.md`](migration/v0.8.md),

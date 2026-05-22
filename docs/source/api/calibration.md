@@ -14,8 +14,11 @@
    DEFAULT_STRATEGY
    CostMatrix
    bayes_optimal_threshold
+   fit_beta_binary
    fit_beta_calibrator
+   fit_isotonic_binary
    fit_isotonic_calibrator
+   fit_platt_binary
    fit_platt_calibrator
    fit_temperature
    fit_temperature_binary

@@ -42,9 +42,8 @@ from eval_toolkit import (
     LogisticStacker,
     MetaLearner,
     fit_platt_binary,
-    pr_auc,
-    roc_auc,
 )
+from eval_toolkit.metrics import pr_auc, roc_auc
 
 rng = np.random.default_rng(0)
 N = 800
