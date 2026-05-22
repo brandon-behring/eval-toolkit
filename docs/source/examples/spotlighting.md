@@ -23,13 +23,8 @@ kernelspec:
 ## Setup
 
 ```{code-cell}
-from eval_toolkit.preprocessing import (
-    datamark,
-    delimit,
-    encode,
-    spotlighting,
-    sweep,
-)
+from eval_toolkit import sweep, DelimitVariant, DatamarkVariant, EncodeVariant
+from eval_toolkit.preprocessing import datamark, delimit, encode
 ```
 
 ## The three variants
@@ -68,6 +63,13 @@ reverses character-by-character (`BEGIN_DATA` → `ATAD_NIGEB`). Pass
 
 ## Batch sweep across all three variants
 
+The v0.47 top-level :func:`eval_toolkit.sweep` takes a list of
+:class:`~eval_toolkit.TextTransform` strategies + texts and returns one
+row per `(strategy, text)` pair. Defence variants like
+``DelimitVariant`` and adversarial variants from
+``eval_toolkit.adversarial`` satisfy the same Protocol and compose
+freely in the same call.
+
 ```{code-cell}
 texts = [
     "What is the weather today?",                           # benign
@@ -75,19 +77,24 @@ texts = [
     "Summarize this email for me.",                         # benign
 ]
 
-results = sweep(texts)
+results = sweep(
+    [DelimitVariant(), DatamarkVariant(), EncodeVariant()],
+    texts,
+)
 print(f"Total rows: {len(results)} (3 texts × 3 variants)")
 results
 ```
 
 ## Sweep with per-variant kwargs
 
+Each ``Variant`` dataclass is `frozen=True, slots=True`; pass kwargs at
+construction to control delimiter / marker / encoding choice, then drop
+the configured instance into the strategies list:
+
 ```{code-cell}
 custom = sweep(
-    texts=["alpha"],
-    variants=["delimit", "datamark"],
-    delimit_kwargs={"delimiter": "[["},
-    datamark_kwargs={"marker": "#"},
+    [DelimitVariant(delimiter="[["), DatamarkVariant(marker="#")],
+    ["alpha"],
 )
 custom
 ```
@@ -118,11 +125,19 @@ for name, rec in [("delimit", recovered_delim), ("datamark", recovered_dm), ("en
     print(f"  {name}: {rec == original} ({rec!r})")
 ```
 
-## The `spotlighting` namespace
+## Functional vs. dataclass API
+
+Both surfaces are public. The functional API (``delimit`` / ``datamark``
+/ ``encode``) is the lightest entry point for one-off transforms; the
+``Variant`` dataclasses wrap the same logic in the v0.47
+:class:`~eval_toolkit.TextTransform` Protocol shape so they slot into
+:func:`eval_toolkit.sweep` and any custom orchestrator that expects a
+``name`` + ``transform(text)`` pair.
 
 ```{code-cell}
-# Matches the upstream issue's function-style API verbatim
-print(spotlighting.delimit("hello"))
-print(spotlighting.encode("hello"))
-print(spotlighting.sweep(["a"]).iloc[0]["transformed_text"])
+print(delimit("hello"))
+print(encode("hello"))
+print(DelimitVariant().transform("hello"))      # equivalent
+df = sweep([DelimitVariant()], ["a"])
+print(df.iloc[0]["transformed_text"])
 ```

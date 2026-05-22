@@ -1,9 +1,12 @@
 """eval-toolkit — reusable evaluation contracts for binary classification.
 
-Public API remains available from ``eval_toolkit`` and from submodules:
+The v1.0 primary metric surface is :func:`~eval_toolkit.scorecard` plus the
+:mod:`~eval_toolkit.metric_specs` namespace (ADR 0002). Submodule paths
+remain available for scalar primitives and adapter authors:
 
-    from eval_toolkit import pr_auc, bootstrap_ci, BootstrapCI
-    from eval_toolkit.metrics import pr_auc
+    from eval_toolkit import scorecard, metric_specs as ms
+    from eval_toolkit import bootstrap_ci, BootstrapCI
+    from eval_toolkit.metrics import pr_auc  # internal API, ADR 0002
 
 The package root uses lazy exports so importing ``eval_toolkit`` does not
 eagerly import optional-heavy modules such as plotting, loaders, or harnesses.
@@ -207,12 +210,15 @@ _EXPORTS: dict[str, str] = {
     "SINGLE_CLASS_INCOMPATIBLE_METRICS": "eval_toolkit.metrics",
     "ThresholdResult": "eval_toolkit.metrics",
     "brier_decomposition": "eval_toolkit.metrics",
-    # `brier_score`, `pr_auc`, `roc_auc`, and the 5 ECE variants removed from
-    # `_EXPORTS` at v0.46 (Decision L). They remain reachable at the top
-    # level via the `__getattr__` deprecation branch (emits
-    # `DeprecationWarning`; branch removed at v0.47) and via the metrics
-    # submodule (`from eval_toolkit.metrics import pr_auc` — internal API
-    # per ADR 0002, not part of the v1.0 stability contract).
+    # `brier_score`, `pr_auc`, `roc_auc`, and the 5 ECE variants were removed
+    # from `_EXPORTS` at v0.46 (Decision L); the v0.46 `__getattr__`
+    # deprecation branch that kept them reachable with `DeprecationWarning`
+    # was removed at v0.47. They now raise `AttributeError` at the top level.
+    # The metrics submodule (`from eval_toolkit.metrics import pr_auc`)
+    # remains the only stable import path for scalar primitives — internal
+    # API per ADR 0002, not part of the v1.0 stability contract. The
+    # `scorecard()` + `metric_specs` surface is the primary path going
+    # forward (`metric_specs.pr_auc`, `metric_specs.roc_auc`, etc.).
     "headline_metrics": "eval_toolkit.metrics",
     "is_metric_defined_for_slice": "eval_toolkit.metrics",
     "metrics_at_threshold": "eval_toolkit.metrics",

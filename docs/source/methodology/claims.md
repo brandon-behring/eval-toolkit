@@ -105,7 +105,9 @@ result = {
             "paired_diffs": {
                 "candidate_minus_baseline": {
                     "delta": 0.17,
-                    "ci_95": [0.08, 0.26],
+                    # v0.48+ schema: separate `low` + `high` keys (was `ci_95: [l, h]`)
+                    "low": 0.08,
+                    "high": 0.26,
                 }
             },
         }

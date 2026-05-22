@@ -201,6 +201,17 @@ from eval_toolkit.metrics import pr_auc
 s_a = np.clip(rng.normal(0.5, 0.3, size=200), 0, 1)
 s_b = np.clip(y * 0.5 + rng.normal(0.2, 0.3, size=200), 0, 1)
 
+# Two-level bootstrap requires DISJOINT val + test slices — the resampler
+# draws val_idx and test_idx independently, so passing the same array for
+# val and test (or any overlapping pair) violates the independence
+# assumption (~63.2% overlap on a single-array bootstrap; the threshold
+# is "fit" on data that also appears in the test set). Partition first:
+n = len(y)
+half = n // 2
+val_y, test_y = y[:half], y[half:]
+val_s_a, test_s_a = s_a[:half], s_a[half:]
+val_s_b, test_s_b = s_b[:half], s_b[half:]
+
 def threshold_fn(yt, ys):
     return MaxF1Selector().select(yt, ys).threshold
 
@@ -211,13 +222,17 @@ def f1_at(yt, ys, t):
 # Two-level: refits the max-F1 threshold per resample on the val side,
 # applies it on the test side, computes paired F1 difference.
 diff = paired_bootstrap_op_point_diff(
-    val_y=y, val_score_a=s_a, val_score_b=s_b,
-    test_y=y, test_score_a=s_a, test_score_b=s_b,
+    val_y=val_y, val_score_a=val_s_a, val_score_b=val_s_b,
+    test_y=test_y, test_score_a=test_s_a, test_score_b=test_s_b,
     threshold_fn=threshold_fn, metric_fn=f1_at,
     n_resamples=200, seed=42,
 )
 print(f"Δ F1: {diff.delta:.3f}  CI [{diff.ci_low:.3f}, {diff.ci_high:.3f}]")
 ```
+
+Passing the same array (e.g., `val_y=y, test_y=y`) is now rejected at
+the API boundary with a `ValueError` — see
+{func}`~eval_toolkit.bootstrap.paired_bootstrap_op_point_diff`.
 
 (thresholds-threshold-transfer)=
 ## Applying validation thresholds to other slices

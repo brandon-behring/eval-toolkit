@@ -153,14 +153,24 @@ yourself citing in production-eval write-ups go first.
 - **Mitchell, M. et al.** *Model Cards for Model Reporting.* FAccT 2019.
   *Documentation pattern that consumes per-subgroup metrics.*
 
-## Statistical comparison (deferred from v0.7.0)
+## Statistical comparison
 
 - **DeLong, E. R., DeLong, D. M., & Clarke-Pearson, D. L.** *Comparing
   the areas under two or more correlated ROC curves: a nonparametric
   approach.* Biometrics 44, 1988.
-  *Out-of-scope alternative to bootstrap CI on ROC-AUC differences;
-  use [`scipy.stats`](https://docs.scipy.org/doc/scipy/reference/stats.html)
-  + a manual implementation if required.*
+  *ROC-AUC-specific closed-form variance using the Mann-Whitney form.
+  Shipped in the toolkit as
+  {func}`~eval_toolkit.bootstrap.delong_roc_variance` +
+  {class}`~eval_toolkit.bootstrap.DeLongResult` for callers who need
+  the closed-form alternative to bootstrap when the metric is exactly
+  ROC-AUC.*
+
+- **Sun, X. & Xu, W.** *Fast implementation of DeLong's algorithm for
+  comparing the areas under correlated receiver operating
+  characteristic curves.* IEEE Signal Processing Letters 21(11), 2014.
+  *The O(n log n) algorithm the toolkit's
+  {func}`~eval_toolkit.bootstrap.delong_roc_variance` is built on
+  (the original DeLong 1988 derivation is O(n²)).*
 
 - **DiCiccio, T. J. & Efron, B.** *Bootstrap confidence intervals.*
   Statistical Science 11(3), 1996. *Comparison of CI methods.*
@@ -172,9 +182,11 @@ that motivate them:
 
 - **Inline bootstrap CI on every metric.** Inspect AI / lm-eval-harness
   pattern; appropriate for scorecard-oriented harnesses.
-- **McNemar / DeLong as named functions.** Currently consumers compute
-  these on top of the bootstrap framework; see
-  [comparison.md §"What's NOT in eval-toolkit"](comparison.md#out-of-scope).
+- **McNemar as a named function.** Currently consumers compute it via
+  `scipy.stats.contingency`; see
+  [comparison.md §"DeLong (shipped) and McNemar (out of scope)"](comparison.md#out-of-scope).
+  (DeLong's ROC-AUC-specific closed-form variance is already shipped as
+  {func}`~eval_toolkit.bootstrap.delong_roc_variance`.)
 - **Full Croissant production by `DatasetLoader`.** Currently the
   `describe()` output is a Croissant-compatible *subset*; full
   production requires JSON-LD generation and schema validation against

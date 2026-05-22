@@ -476,6 +476,21 @@ def metrics_at_threshold(
     (0.0, 0.0)
     """
     _validate_inputs(y_true, y_score)
+    # API-level validation for `threshold` — without it, NaN silently produces
+    # the all-zero-predictions result (np.nan >= x is False for any x), and
+    # +/-inf silently degenerate to all-zero / all-one regardless of y_score.
+    # Style invariant 3 (§5N): wrap numpy-comparison semantics with a contextual
+    # ValueError tied to the offending kwarg.
+    threshold_arr = np.asarray(threshold, dtype=float)
+    if threshold_arr.ndim != 0:
+        raise ValueError(
+            f"metrics_at_threshold(): threshold must be a scalar; got ndim={threshold_arr.ndim}, "
+            f"shape={threshold_arr.shape}"
+        )
+    if not np.isfinite(threshold_arr):
+        raise ValueError(
+            f"metrics_at_threshold(): threshold must be finite; got threshold={threshold!r}"
+        )
     y_pred = (np.asarray(y_score) >= threshold).astype(int)
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
     n = len(y_true)

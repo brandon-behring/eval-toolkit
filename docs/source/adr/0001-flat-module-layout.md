@@ -2,7 +2,8 @@
 
 **Status:** Accepted
 **Date:** 2026-05-21 (drafted at v0.46-prep; finalized at v0.48)
-**Deciders:** Brandon Behring (author), Round 5 audit (Codex + Gemini)
+**Deciders:** Brandon Behring (author), Round 5 / Round 6 / Round 7 audits
+(Codex + Gemini)
 **Supersedes:** N/A. **Superseded by:** N/A.
 
 ## Context
@@ -17,18 +18,24 @@ from v0.x. Two pressure tests against the flat-module convention surfaced
 during planning + Round 5 audit:
 
 1. **Module size.** A ground-truth check at the planning round measured
-   9 modules exceeding 800 LOC (`metrics.py` 1819, `bootstrap.py` 1796,
-   `calibration.py` 1477, `harness.py` 1449, `text_dedup.py` 1403,
-   `plotting.py` 1351, `leakage.py` 1215, `loaders.py` 1081,
-   `thresholds.py` 953). The earlier "800 LOC trigger" criterion was
-   already violated by current code.
+   9 modules exceeding 800 LOC; at v0.48 the count is similar
+   (`metrics.py` 1863, `bootstrap.py` 1849, `calibration.py` 1515,
+   `harness.py` 1449, `text_dedup.py` 1403, `plotting.py` 1351,
+   `leakage.py` 1215, `loaders.py` 1080, `thresholds.py` 953). The
+   earlier "800 LOC trigger" criterion was already violated by current
+   code at the planning round and remains so at v0.48 — nine production
+   modules sit comfortably above the line without becoming
+   discoverability problems.
 
-2. **Functional grouping.** As v0.46 introduced `scorecard.py` and
-   `metric_specs.py`, and v0.47 will add a top-level `sweep.py` +
-   `TextTransform` Protocol, the question naturally arises: should
-   "metrics" become a subpackage with `metrics/scorecard.py`,
-   `metrics/specs.py`, `metrics/calibration.py`, etc.? Same for
-   `attacks/` (adversarial + preprocessing) or `bootstrap/`.
+2. **Functional grouping.** v0.46 introduced `_scorecard.py` and
+   `metric_specs.py`; v0.47 added a top-level `_sweep.py` +
+   `TextTransform` Protocol that unifies attacks and preprocessing under
+   one strategy surface (`adversarial.py` ships 12
+   character-injection techniques via `ALL_TECHNIQUES`). The question
+   naturally arises: should "metrics" become a subpackage with
+   `metrics/scorecard.py`, `metrics/specs.py`, `metrics/calibration.py`,
+   etc.? Same for `attacks/` (adversarial + preprocessing) or
+   `bootstrap/`.
 
 Either move (size-driven or grouping-driven) would be **breaking** at v1.0
 because consumer imports follow the flat module structure
@@ -90,8 +97,9 @@ Examples that could surface during v1.x development:
   `PairedBootstrapCI`, MDE estimation, and CV-CLT could group around the
   inference primitive theme.
 
-None of these have been demanded by the consumer or by audit feedback as
-of v0.46. The trigger is "asks for it," not "could conceivably be
+None of these have been demanded by the consumer or by audit feedback
+through v0.47.0 (Round 5 + Round 6 + Round 7 audits did not flag layout
+as a concern). The trigger is "asks for it," not "could conceivably be
 grouped."
 
 ### C. Discoverability complaint from real users
@@ -134,7 +142,7 @@ splitting trigger.
 
 **Negative:**
 
-- `metrics.py` at 1819 lines is genuinely cumbersome to navigate in an
+- `metrics.py` at ~1850 lines is genuinely cumbersome to navigate in an
   IDE. The mitigation is `__all__` (already in place) + the
   `metric_specs` namespace (v0.46+) which lets consumers reach individual
   metrics through a smaller surface without the IDE-navigation cost.
@@ -176,8 +184,11 @@ This ADR is locked at v1.0. Revisiting requires **SemVer-major (v2.0)**.
 Specific triggers per the criteria above (any ONE is sufficient):
 
 1. Second production consumer with materially different surface needs.
-2. Functional grouping the codebase asks for (sweep + TextTransform may
-   create grouping pressure once v0.47 ships — re-evaluate at v2.0 prep).
+2. Functional grouping the codebase asks for. With sweep + TextTransform
+   shipped at v0.47, the `attacks/` grouping (adversarial + preprocessing
+   under one namespace) becomes the most natural candidate; nothing has
+   demanded it as of v0.48, so the trigger stays cold pending consumer
+   feedback in the v1.x cycle.
 3. ≥2 independent discoverability complaints from real users.
 
 ## References

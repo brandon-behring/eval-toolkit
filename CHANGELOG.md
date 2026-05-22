@@ -5,6 +5,96 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.48.0] — 2026-05-22 — Polish + audit-driven tightening before v1.0 (Round 7 follow-on + cross-API consistency + doc-execution gates)
+
+Third + final BREAKING minor of the staggered v0.45 → v0.46 → v0.46.1 → v0.47
+→ v0.48 → v1.0 release sequence (plan
+``~/.claude/plans/evaluate-all-the-work-twinkly-kite.md``, Step 4). Migration
+guide: ``docs/source/migration/v0.48.md``.
+
+Closes:
+
+- Round 7 audit STOP-GATE per Decision Y.2 (Codex R7-F1/F2/F3 + 6 Gemini
+  observations; see ``docs/source/audit_findings.md`` for the per-finding
+  ledger).
+- Audit-as-seed extensions surfaced during plan refinement: full
+  module-docstring sweep across ``src/eval_toolkit/``; expanded
+  ``.doctest-modules`` from 11 → 21 modules; comprehensive cross-API
+  shape-validation consistency sweep.
+- Round 5 §5E-prep packet-drift fixes (7 methodology documentation
+  corrections).
+
+After v0.48 observes ≥1 consumer cycle, the Round 8 audit STOP-GATE
+opens before ``v1.0.0`` tag.
+
+### BREAKING
+
+- **``BootstrapCI.to_dict()`` + ``PairedBootstrapCI.to_dict()`` schema
+  rewrite** (§5B). Pre-v0.48 hard-coded a ``"ci_95"`` key regardless of
+  the actual ``confidence`` field — the key contradicted the data.
+  v0.48 schema is self-describing:
+
+    Before: ``{"point_estimate": p, "ci_95": [l, h], "confidence": 0.95, ...}``
+    After:  ``{"point": p, "low": l, "high": h, "confidence": 0.95, ...}``
+
+  Migration: ``d["point_estimate"]`` → ``d["point"]``; ``d["ci_95"]``
+  → ``(d["low"], d["high"])``. Same rewrite for ``PairedBootstrapCI``.
+- **``sweep()`` schema grows by 1 column** (§5I, Decision R7-B option C).
+  New ``strategy_id`` column inserted between ``text_id`` and ``variant``
+  carries the canonical per-row identifier built from configured
+  kwargs. Callers indexing by column position must re-check offsets.
+- **``sweep()`` rejects duplicate ``strategy_id``** (§5I). Mirrors
+  R6-B's duplicate ``MetricSpec.name`` rejection in ``scorecard()``.
+- **``sweep()`` validates scorer output shape** (§5J, Decision R7-C).
+  Wrong-shape arrays from ``Scorer.predict_proba`` raise contextual
+  ``ValueError`` at the boundary. Pre-v0.48: silent truncation
+  (overlong), ``IndexError`` (short), or ``TypeError`` (matrix-shaped).
+- **``paired_bootstrap_op_point_diff()`` rejects ``val_y is test_y``**
+  (§5E-prep). The two-level bootstrap assumes disjoint val + test
+  partitions; passing the same array causes ~63.2% silent overlap.
+
+### Added
+
+- **``make pre-push``** Makefile target (§5L) running all 3 doc-
+  execution surfaces — Sybil-collected ``.md`` fences, MyST-NB example
+  notebooks, and in-source ``>>>`` docstring examples. Closes the
+  v0.47 Sub-PR 7 incident class.
+- **``nb_execution_raise_on_error = True``** in ``docs/source/conf.py``
+  (§5H, Decision R7-A). Docs CI now fails on notebook execution errors.
+- **``.doctest-modules`` expanded** from 11 → 21 modules (§5M).
+
+### Changed
+
+- **Cross-API shape-validation consistency** (§5N). Every public-API
+  surface with array inputs now validates shape + raises ``ValueError``
+  with context (rather than leaking low-level numpy/sklearn errors).
+- **Standardized ``ImportError`` messages** across lazy-extras (§5C).
+  Canonical template: ``"<feature> requires <pkg>. Install with: pip
+  install eval-toolkit[<extra>]"``.
+- **Pin-exact-key-set regression-guards** (§5A) for every dict-returning
+  metrics function. Audit revealed no drift; the tests pin existing
+  key sets so future drift fails CI loud.
+- **Docs polish** (§5K + §5E-prep): ``SynonymSubstitution`` whitelist
+  ``Notes``; ``Scorecard.to_pandas()`` dtype coercion ``Notes``;
+  ``CostSensitiveSelector`` calibrated-prior ``Warning``; ``cv_clt_ci``
+  docstring per Bayle et al. (2020) Theorem 3.1; ``methodology/parallelism.md``
+  post-v0.36 state; ``methodology/testing.md`` reference-equivalence-gap
+  framing; ``methodology/calibration.md`` 4-binary-adapter family;
+  ``methodology/bootstrap.md`` disjoint-split example; DeLong docs
+  aligned to shipped state (Decision U).
+
+### Fixed
+
+- **R7-F1**: 6 MyST-NB example notebooks (``docs/source/examples/*.md``)
+  migrated to v0.47 API; 4 module-level docstrings rewritten; 5
+  drifted ``docs/source/api/*.md`` autosummary lists corrected;
+  8 missing ``api/*.md`` pages created; roadmap "Sybil-validated
+  examples" wording corrected (§5G).
+- **ADR 0001** (flat-module layout) + **ADR 0003** (stability contract
+  + Gate 3 methodology) finalized for v1.0 (§5E + §5F).
+- **schemas.md** + **methodology/claims.md** + **getting-started.md**:
+  ``BootstrapCI`` schema references updated for the §5B rewrite.
+
 ## [0.47.0] — 2026-05-21 — Sweep unification + TextTransform + advanced-6 + cleanup + Round 6 follow-on
 
 Second BREAKING minor of the staggered v0.45 → v0.46 → v0.46.1 → v0.47 →

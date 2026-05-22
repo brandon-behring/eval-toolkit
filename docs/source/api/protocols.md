@@ -11,5 +11,6 @@
    PredictionReader
    Scorer
    SliceAwareScorer
+   TextTransform
    Versioned
 ```

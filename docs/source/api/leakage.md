@@ -17,5 +17,6 @@
    NearDuplicateCheck
    NormalizedFormLeakageCheck
    TemporalLeakageCheck
+   TokenizationLeakageCheck
    run_leakage_checks
 ```

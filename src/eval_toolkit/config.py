@@ -89,7 +89,7 @@ def from_yaml[T](path: Path | str, cls: type[T]) -> T:
         import yaml  # noqa: PLC0415
     except ImportError as exc:
         raise ImportError(
-            "from_yaml requires pyyaml; install with `pip install eval-toolkit[yaml]`"
+            "from_yaml requires pyyaml. Install with: pip install eval-toolkit[yaml]"
         ) from exc
 
     if not is_dataclass(cls):

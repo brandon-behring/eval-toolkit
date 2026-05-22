@@ -62,9 +62,12 @@ metric set varies by toolkit minor version):
 Each per-scorer block carries:
 
 - `pr_auc`, `roc_auc`, `brier_score` (floats)
-- `pr_auc_ci`, `roc_auc_ci`, `brier_score_ci` (`BootstrapCI` dicts:
-  `{point_estimate, ci_95: [low, high], confidence, n_resamples,
-  method}`)
+- `pr_auc_ci`, `roc_auc_ci`, `brier_score_ci` (`BootstrapCI` dicts —
+  v0.48+ self-describing schema:
+  `{point, low, high, confidence, n_resamples, method}`. The pre-v0.48
+  `{point_estimate, ci_95: [low, high], ...}` shape was rewritten so
+  the key names don't lie when `confidence != 0.95`; see
+  `migration/v0.48.md`.)
 - `ece`, `ece_equal_mass`, `ece_equal_width`, `ece_equal_mass_error`
   (calibration errors)
 - `precision_at_prior` (float)

@@ -85,7 +85,7 @@ def make_minilm_embedder(
     except ImportError as e:
         raise ImportError(
             "make_minilm_embedder requires sentence-transformers. "
-            "Install via: pip install eval-toolkit[embeddings]"
+            "Install with: pip install eval-toolkit[embeddings]"
         ) from e
 
     # sentence-transformers-active path: excluded from CI coverage

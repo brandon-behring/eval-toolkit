@@ -120,10 +120,29 @@ class BootstrapCI:
     method: str
 
     def to_dict(self) -> dict[str, object]:
-        """Serialize to a stable dict schema for JSON output."""
+        """Serialize to a stable, self-describing dict schema for JSON output.
+
+        v0.48 BREAKING (§5B): schema rewritten to drop the hard-coded
+        ``"ci_95"`` key that lied when ``confidence != 0.95``. The new
+        schema names the bounds neutrally and carries the actual
+        confidence level in a dedicated field; consumers can read
+        ``confidence`` to interpret the bound semantics.
+
+        Before v0.48:
+            {"point_estimate": p, "ci_95": [l, h], "confidence": 0.95,
+             "n_resamples": N, "method": "BCa"}
+
+        v0.48+:
+            {"point": p, "low": l, "high": h, "confidence": 0.95,
+             "n_resamples": N, "method": "BCa"}
+
+        Migration: rename ``point_estimate`` → ``point``; replace the
+        ``ci_95`` list-of-two with separate ``low`` + ``high`` keys.
+        """
         return {
-            "point_estimate": self.point_estimate,
-            "ci_95": [self.ci_low, self.ci_high],
+            "point": self.point_estimate,
+            "low": self.ci_low,
+            "high": self.ci_high,
             "confidence": self.confidence,
             "n_resamples": self.n_resamples,
             "method": self.method,
@@ -185,10 +204,24 @@ class PairedBootstrapCI:
     n_resamples: int
 
     def to_dict(self) -> dict[str, object]:
-        """Serialize to a stable dict schema for JSON output."""
+        """Serialize to a stable, self-describing dict schema for JSON output.
+
+        v0.48 BREAKING (§5B): same rewrite as :meth:`BootstrapCI.to_dict`.
+        ``"ci_95"`` is replaced by ``"low"`` + ``"high"``; ``"confidence"``
+        carries the actual level.
+
+        Before v0.48:
+            {"delta": d, "ci_95": [l, h], "overlaps_zero": b,
+             "confidence": 0.95, "n_resamples": N}
+
+        v0.48+:
+            {"delta": d, "low": l, "high": h, "overlaps_zero": b,
+             "confidence": 0.95, "n_resamples": N}
+        """
         return {
             "delta": self.delta,
-            "ci_95": [self.ci_low, self.ci_high],
+            "low": self.ci_low,
+            "high": self.ci_high,
             "overlaps_zero": self.overlaps_zero,
             "confidence": self.confidence,
             "n_resamples": self.n_resamples,
@@ -843,6 +876,21 @@ def paired_bootstrap_op_point_diff(
     .. [2] Bouckaert, R. R. "Choosing between two learning algorithms
            based on calibrated tests." ICML 2003.
     """
+    # Defensive identity-guard: the two-level bootstrap resamples val + test
+    # indices INDEPENDENTLY (see _paired_bootstrap_op_point_diff_step). Passing
+    # the same Python object for val and test causes ~63.2% overlap on each
+    # resample, violating the val/test independence assumption that lets the
+    # CI absorb threshold-selection variance honestly. Partition the data
+    # before calling — see docs/source/methodology/thresholds.md.
+    if val_y is test_y:
+        raise ValueError(
+            "paired_bootstrap_op_point_diff: val_y and test_y are the same array. "
+            "The two-level bootstrap requires DISJOINT val + test slices; the "
+            "resampler draws val_idx and test_idx independently, so identical "
+            "arrays cause ~63.2% overlap and violate the independence assumption. "
+            "Partition your data first (e.g., val = arr[:n//2], test = arr[n//2:])."
+        )
+
     val_y_arr = np.asarray(val_y)
     val_a, val_b = np.asarray(val_score_a), np.asarray(val_score_b)
     test_y_arr = np.asarray(test_y)
@@ -1157,12 +1205,16 @@ def cv_clt_ci(
 
     Computes a confidence interval on the cross-validation mean metric
     that correctly accounts for fold-level dependence. The standard
-    "naive" CI (compute std-of-folds then divide by sqrt(K)) is anti-
-    conservative because the folds share training data; Bayle et al.
-    2020 prove a CV-CLT with a correction factor that gives valid
-    coverage asymptotically.
+    "naive" CI (compute std-of-folds then divide by sqrt(K)) had long
+    been suspected to be anti-conservative because the folds share
+    training data. Bayle et al. 2020 prove that the naive sample-variance
+    estimator (with ``ddof=1``) gives valid asymptotic coverage under
+    stability conditions, resolving the historical concern that fold
+    correlation makes it anti-conservative. No additional correction
+    factor is applied.
 
-    The corrected variance estimator (Bayle 2020 Theorem 3.1):
+    The variance estimator (Bayle 2020 Theorem 3.1) is just the standard
+    sample variance over per-fold metrics:
 
     .. math::
 
@@ -1233,9 +1285,9 @@ def cv_clt_ci(
         raise ValueError(f"confidence must be in (0, 1), got {confidence}")
 
     point = float(arr.mean())
-    # Bayle 2020 Theorem 3.1 variance: sample variance with (K-1) denom; the
-    # CV-CLT correction is captured in this estimator's asymptotic guarantee
-    # (no extra fold-correlation factor needed for a balanced K-fold CV).
+    # Bayle 2020 Theorem 3.1: the naive sample-variance estimator (ddof=1)
+    # gives valid asymptotic coverage under stability conditions — no extra
+    # correction factor is applied for fold correlation.
     sigma_hat = float(np.std(arr, ddof=1))
     z = _normal_quantile(0.5 + confidence / 2.0)
     margin = z * sigma_hat / np.sqrt(K)
@@ -1258,9 +1310,10 @@ def block_bootstrap_on_folds(
 ) -> BootstrapCI:
     r"""Block bootstrap on folds: resample K folds with replacement; percentile CI on mean.
 
-    Sibling primitive to :func:`cv_clt_ci`. Where :func:`cv_clt_ci` applies
-    the Bayle et al. 2020 CV-CLT correction (correct asymptotically under
-    fold exchangeability), the block bootstrap is more *conservative* under
+    Sibling primitive to :func:`cv_clt_ci`. Where :func:`cv_clt_ci` relies on
+    Bayle et al. 2020's CV-CLT — the naive sample-variance estimator gives
+    valid asymptotic coverage under stability + fold exchangeability — the
+    block bootstrap is more *conservative* under
     fold-level **non-exchangeability** — situations where the K folds are
     not interchangeable (e.g., source-disjoint LODO folds where one source
     is intrinsically harder than the others). The sensitivity-check

@@ -35,7 +35,8 @@ two near-identical distributions and concludes "no signal."
 
 ```{code-cell}
 import numpy as np
-from eval_toolkit import paired_bootstrap_diff, pr_auc, set_global_seeds
+from eval_toolkit import paired_bootstrap_diff, set_global_seeds
+from eval_toolkit.metrics import pr_auc
 set_global_seeds(42)
 ```
 

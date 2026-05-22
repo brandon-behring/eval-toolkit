@@ -83,12 +83,18 @@ def test_single_slice_loader_returns_all_key() -> None:
 
 @pytest.mark.unit
 def test_hf_datasets_loader_raises_clear_error_when_not_installed() -> None:
-    """If 'datasets' isn't installed (CI default), error message points at install."""
+    """If 'datasets' isn't installed (CI default), error message points at install.
+
+    v0.48 §5C standardized the canonical ImportError template to
+    "<feature> requires <pkg>. Install with: pip install <pkg>". The full
+    string contract is enforced by tests/test_lazy_extras_messages.py;
+    the loose match below survives future template tweaks.
+    """
     loader = HFDatasetsLoader(repo_id="dummy/example")
     try:
         import datasets  # noqa: F401
     except ImportError:
-        with pytest.raises(ImportError, match="optional 'datasets' package"):
+        with pytest.raises(ImportError, match=r"HFDatasetsLoader requires datasets"):
             loader.load_splits()
 
 

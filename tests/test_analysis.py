@@ -181,9 +181,8 @@ def test_bootstrap_metric_from_predictions_returns_ci(tmp_path: Path) -> None:
     _write_csv(path, rows)
     out = bootstrap_metric_from_predictions(_csv_ref(path), n_resamples=20, seed=7)
     assert out["n_resamples"] == 20
-    ci = out["ci_95"]
-    assert isinstance(ci, list) and len(ci) == 2
-    assert ci[0] <= ci[1]
+    # v0.48 §5B: schema rewritten from {ci_95: [l, h]} to {low: l, high: h}
+    assert out["low"] <= out["point"] <= out["high"]
 
 
 @pytest.mark.unit

@@ -128,30 +128,63 @@ def test_paired_bootstrap_overlaps_zero_field() -> None:
 
 @pytest.mark.unit
 def test_bootstrap_ci_to_dict_schema(informative_signal: tuple[np.ndarray, np.ndarray]) -> None:
+    """v0.48 §5B: schema renamed from {ci_95: [l,h]} to {low: l, high: h}."""
     y_true, y_score = informative_signal
     ci = bootstrap_ci(y_true, y_score, pr_auc, n_resamples=200, seed=42)
     d = ci.to_dict()
-    assert set(d.keys()) == {"point_estimate", "ci_95", "confidence", "n_resamples", "method"}
-    assert isinstance(d["ci_95"], list)
+    assert set(d.keys()) == {"point", "low", "high", "confidence", "n_resamples", "method"}
+    # Bounds are scalar floats now (not a list)
+    assert isinstance(d["low"], float)
+    assert isinstance(d["high"], float)
+    assert d["low"] <= d["point"] <= d["high"]
 
 
 @pytest.mark.unit
 def test_paired_bootstrap_diff_to_dict_schema() -> None:
+    """v0.48 §5B: PairedBootstrapCI gets the same rewrite as BootstrapCI."""
     rng = np.random.default_rng(7)
     y = rng.binomial(1, 0.3, size=200).astype(int)
     s = y + rng.normal(0, 0.3, size=200)
     diff = paired_bootstrap_diff(y, s, s, pr_auc, n_resamples=100, seed=42)
     d = diff.to_dict()
-    assert set(d.keys()) == {"delta", "ci_95", "overlaps_zero", "confidence", "n_resamples"}
+    assert set(d.keys()) == {"delta", "low", "high", "overlaps_zero", "confidence", "n_resamples"}
+    assert isinstance(d["low"], float)
+    assert isinstance(d["high"], float)
+
+
+@pytest.mark.unit
+def test_bootstrap_ci_to_dict_self_describing_at_non_default_confidence() -> None:
+    """v0.48 §5B: schema is self-describing — works at non-0.95 confidence.
+
+    Pre-v0.48 schema lied: {"ci_95": [l, h], "confidence": 0.90} → the
+    key name 'ci_95' implied 95% confidence regardless of the actual
+    confidence field. Post-v0.48 the bounds are named neutrally; consumers
+    interpret semantics from the confidence field.
+    """
+    rng = np.random.default_rng(7)
+    y = rng.binomial(1, 0.3, size=200).astype(int)
+    s = y + rng.normal(0, 0.3, size=200)
+    ci = bootstrap_ci(y, s, pr_auc, n_resamples=200, seed=42, confidence=0.90)
+    d = ci.to_dict()
+    # The schema does NOT carry a misleading "ci_95" key at confidence=0.90
+    assert "ci_95" not in d
+    assert d["confidence"] == 0.90
 
 
 @pytest.mark.unit
 def test_paired_bootstrap_op_point_diff_runs(
     informative_signal: tuple[np.ndarray, np.ndarray],
 ) -> None:
-    """Two-level bootstrap returns a CI on operating-point Δ."""
-    y_val, s_val = informative_signal
-    y_test, s_test = informative_signal
+    """Two-level bootstrap returns a CI on operating-point Δ.
+
+    Uses DISJOINT val + test slices — passing the same array for both is
+    rejected at the API boundary by the v0.48 identity guard (Round 5
+    R5-F6e audit finding); see methodology/thresholds.md.
+    """
+    y_all, s_all = informative_signal
+    half = len(y_all) // 2
+    y_val, y_test = y_all[:half], y_all[half:]
+    s_val, s_test = s_all[:half], s_all[half:]
 
     def threshold_fn(yt: np.ndarray, ys: np.ndarray) -> float:
         return MaxF1Selector().select(yt, ys).threshold

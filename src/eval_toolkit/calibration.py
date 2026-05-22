@@ -356,6 +356,20 @@ def bayes_optimal_threshold(π: float, c_fp: float, c_fn: float) -> float:
 
     .. math:: t^* = \frac{c_{FP} \cdot (1 - π)}{c_{FP} \cdot (1 - π) + c_{FN} \cdot π}
 
+    .. warning::
+
+        This formula assumes ``y_score`` is a calibrated probability with
+        respect to a **balanced prior** (or equivalently, a raw likelihood
+        ratio). If your scores are calibrated to the deployment prior (e.g.,
+        via :func:`fit_platt_binary` on a representative validation set), the
+        prior is already incorporated into the score and applying this
+        formula will **double-count it**. For deployment-prior-calibrated
+        scores, use the simpler prior-independent form
+        ``t* = c_fp / (c_fp + c_fn)`` (no ``prior`` kwarg) — that's literal
+        Elkan 2001 §4. The function in this file is the prior-corrected
+        variant for raw / balanced-prior scores; see the Examples for both
+        usage patterns.
+
     Parameters
     ----------
     π : float
@@ -396,6 +410,29 @@ def bayes_optimal_threshold(π: float, c_fp: float, c_fn: float) -> float:
     >>> bayes_optimal_threshold(1.0, c_fp=1.0, c_fn=1.0)
     0.0
 
+    **Two correct usages, side by side.** The choice depends on what your
+    ``y_score`` is calibrated to.
+
+    Usage A — raw or balanced-prior scores (use this function, pass ``π``):
+
+    >>> # Score from a model trained on a balanced (50/50) corpus, deployed
+    >>> # at a 1% positive prior, with FN cost 10× the FP cost.
+    >>> t_balanced = bayes_optimal_threshold(0.01, c_fp=1.0, c_fn=10.0)
+    >>> round(t_balanced, 4)
+    0.9083
+
+    Usage B — deployment-prior-calibrated scores (skip this function, use
+    the literal Elkan 2001 §4 prior-independent form):
+
+    >>> # Score already calibrated to the 1% deployment prior via
+    >>> # fit_platt_binary on a representative val slice — DO NOT pass π
+    >>> # to this function (you'd double-count it). Threshold the
+    >>> # already-prior-corrected probability against the cost ratio:
+    >>> c_fp, c_fn = 1.0, 10.0
+    >>> t_calibrated = c_fp / (c_fp + c_fn)
+    >>> round(t_calibrated, 4)
+    0.0909
+
     Notes
     -----
     Symmetric costs (c_fp == c_fn) collapse the formula to t* = 1 - π.
@@ -407,9 +444,10 @@ def bayes_optimal_threshold(π: float, c_fp: float, c_fn: float) -> float:
     *Bayes-calibrated* posterior P(y=1 | x). The formula implemented here
     is the **prior-corrected** form for thresholding raw scores at a known
     deployment prior π, which agrees with Elkan only under symmetric costs.
-    For our intended use (deployment prior + asymmetric costs) the
-    prior-corrected form is what the user wants — but the citation should
-    be read as "Elkan 2001 cost-sensitive framework", not literal §4.
+    For our intended use (deployment prior + asymmetric costs on raw /
+    balanced-prior scores) the prior-corrected form is what the user wants
+    — but the citation should be read as "Elkan 2001 cost-sensitive
+    framework", not literal §4.
 
     References
     ----------

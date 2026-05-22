@@ -24,9 +24,9 @@ import numpy as np
 from eval_toolkit import (
     fit_platt_calibrator,
     fit_isotonic_calibrator,
-    expected_calibration_error,
     set_global_seeds,
 )
+from eval_toolkit.metrics import expected_calibration_error
 set_global_seeds(42)
 ```
 
