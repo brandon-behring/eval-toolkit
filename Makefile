@@ -1,4 +1,4 @@
-.PHONY: help install hooks lint format test test-fast test-unit test-property test-smoke test-doctest type ci coverage clean release-prep
+.PHONY: help install hooks lint format test test-fast test-unit test-property test-smoke test-doctest type ci coverage clean release-prep pre-push
 
 PYTHON := .venv/bin/python
 VENV := .venv
@@ -24,6 +24,7 @@ help:
 	@echo "  ci            lint + test + coverage gate"
 	@echo "  clean         remove .venv, caches, build artifacts"
 	@echo "  release-prep  bump _version.py + regen public-api snapshot (VERSION=X.Y.Z)"
+	@echo "  pre-push      mirror CI doc-execution gate: pytest (NO path arg) + sphinx-build + --doctest-modules"
 
 install:
 	uv venv
@@ -121,3 +122,41 @@ release-prep:
 	@echo "                  git commit -m 'chore(release): v$(VERSION) — <theme>'"
 	@echo "  4. Push:        git push origin main"
 	@echo "  5. After CI green: git tag -a v$(VERSION) -m 'v$(VERSION) — <theme>' && git push origin v$(VERSION)"
+
+# pre-push — local mirror of CI's full doc-execution + test surface.
+#
+# Sub-PR-7 (v0.47.0) incident postmortem: my pre-push command was
+# `pytest tests/ --no-cov -q --ignore=tests/benchmarks`. Passing `tests/`
+# as a positional argument SILENTLY OVERRIDES the pyproject testpaths
+# config `["tests", "README.md", "docs/source"]`, dropping 159 sybil items
+# from collection. Removing the v0.46 __getattr__ deprecation shim then
+# activated 40 latent failures in those 159 items — and my pre-push gate
+# missed all of them. CI caught them; fix was the doc-migration commit.
+# See `feedback_sybil_python_blocks` + `feedback_degradation_layer_removal_hazard`.
+#
+# The fix is to run all three doc-execution surfaces with the correct
+# collection scopes:
+#
+#   Surface 1 (Sybil .md fences + tests/): bare pytest (no positional)
+#     so testpaths applies — covers tests/ + README.md + docs/source/.
+#   Surface 2 (MyST-NB example notebooks): sphinx-build runs the
+#     {code-cell} blocks per nb_execution_mode="cache". Best-effort
+#     until §5H lands (nb_execution_raise_on_error=True in conf.py),
+#     at which point this exits non-zero on notebook execution errors.
+#   Surface 3 (in-source >>> docstring examples): --doctest-modules
+#     over the curated DOCTEST_MODULES list.
+#
+# Each surface has a different collection scope; ensuring all three
+# are run is the v0.48 §5L lesson from the v0.47 release sequence.
+pre-push:
+	@echo "[pre-push] Surface 1: tests/ + Sybil .md fences (no positional path arg)"
+	$(PYTHON) -m pytest --no-cov -q --ignore=tests/benchmarks
+	@echo ""
+	@echo "[pre-push] Surface 2: MyST-NB example notebooks via sphinx-build"
+	@echo "           (best-effort until §5H lands — see conf.py nb_execution_raise_on_error)"
+	$(PYTHON) -m sphinx -b html -n docs/source/ docs/build/html/
+	@echo ""
+	@echo "[pre-push] Surface 3: in-source >>> docstring examples (curated DOCTEST_MODULES list)"
+	$(PYTHON) -m pytest --doctest-modules $(DOCTEST_MODULES) --no-cov -q
+	@echo ""
+	@echo "[pre-push] ALL THREE SURFACES GREEN. Safe to push."
