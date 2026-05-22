@@ -161,15 +161,56 @@ design (per Decision Q severity-tiered hotfix policy).
 
 ---
 
-## Round 7 (planned: post-v0.47 ship) — STOP-GATE before v0.48 release branch
+## Round 7 (complete: 2026-05-21 — Codex + Gemini; 3 substantive findings)
 
-_To be populated after v0.47 ships. Focus: sweep + `TextTransform` Protocol
-lock-in; advanced-6 character_injection structural satisfaction; SimpleNamespace
-removal acceptance._
+**Reviewers**: author (manual) + Codex (independent report) + Gemini
+(independent report).
 
-| ID | Severity | Finding | Disposition | Issue |
-|----|----------|---------|-------------|-------|
-| _pending_ | | | | |
+**Packet**: v0.47.0 code state + the v1.0 plan + `docs/source/methodology/`
+(16 chapters) + ADRs 0001/0002/0003 + `docs/source/migration/v0.46.md` +
+`docs/source/migration/v0.47.md` + Round 5/6 ledger.
+
+**Round-7 briefing**: `gate3-audit-round-7.md` (committed `a9e1114`).
+
+**Reports**: `gate3-audit-round-7-codex-report.md` + `gate3-audit-round-7-gemini-report.md` (untracked per `.gitignore`).
+
+**Headline**: Codex 3 substantive findings; Gemini 0. Overlap was zero
+between the two reports — the most consequential finding (R7-F1
+doc-migration boundary gap between Sybil-tested fences and
+MyST-NB-executed example notebooks) was Codex-only. Reinforces the
+Round 6 pattern (do not use overlap as a confidence floor; single-reviewer
+findings can be the most critical).
+
+| ID | Reviewer | Severity (their words) | Finding | Disposition | Lands |
+|----|----------|------------------------|---------|-------------|-------|
+| R7-F1 | Codex | high before v0.48 | v0.47 doc migration missed MyST-NB executable example notebooks (separate from Sybil-collected `.md` fences). 6 example pages + 4 module-level docstrings + `protocols.md` autosummary + roadmap wording still reference removed APIs. Docs CI runs `sphinx-build` without `-W`, so notebook execution failures pass as advisory warnings. Verified via `sphinx-build` runtime probe — 6 execution failures buried in the warning stream. | Decision R7-A (locked at /exploring-options Q3): bundle into v0.48 §5G/§5H. §5G migrates the 6 notebooks + 4 docstrings + autosummary + roadmap; §5H enables `nb_execution_raise_on_error = True` in `conf.py`. Audit-as-seed expansion (Q2 locked full sweep) covered ALL module docstrings + drift in 5 existing `api/*.md` autosummary lists + 8 missing `api/*.md` pages. | **RESOLVED v0.48.0** (§5G commit `e07db16` + §5H commit `6349472` on `release/v0.48.0`) |
+| R7-F2 | Codex | high before sweep freezes | `sweep()` records only `strategy.name` per row; two configured instances of same dataclass (e.g., `DelimitVariant(delimiter="<<")` + `DelimitVariant(delimiter="[[")`) silently merge under `groupby("variant")`. Style-coherent defect class with Round 6 R6-F3 (scorecard duplicate name) but with different semantics (row container vs. Mapping). | Decision R7-B option C (locked): emit `strategy_id` canonical column AND reject duplicate `strategy_id` at sweep boundary. Style invariants 1 (no silent failures) + 2 (natural call pattern is right) + 4 (canonical identifier + reject in canonical dimension) read together. | **RESOLVED v0.48.0** (§5I commit `f454afe`) |
+| R7-F3 | Codex | worth fixing before v1.0 | `sweep()` doesn't validate scorer output cardinality. Three failure modes via runtime probe: overlong 1-D → silent truncation (worst); short 1-D → IndexError later; (n,2) matrix → TypeError when `float()` applied. | Decision R7-C (locked): API-level `ValueError` with contextual label at the sweep boundary; replaces all three low-level failure modes. Style invariants 1 + 3. | **RESOLVED v0.48.0** (§5J commit `fcf99f0`) |
+
+### Gemini observations (Round 7)
+
+Gemini's report verdict was "highly stable; release/v0.48.0 is safe to open." Six minor observations / validations; nothing critical that Codex hadn't covered. The actionable items folded into v0.48:
+
+- §1-3 + 5-7: VALIDATIONS of v0.47 shipped state (`TextTransform` shape, shim removal, sweep design, R6-D Protocol method-shape snapshot, ADR 0003 tiers). No action needed.
+- §4 (pedagogical drift): Gemini noted "from eval_toolkit.metrics import pr_auc" is syntactically green but slightly undermines ADR 0002. v0.48 §5G migration explicitly chose `scorecard()` for example notebooks teaching METRIC USAGE; submodule path only where teaching the underlying math.
+- §4 (Makefile pre-push): Gemini recommended hardening to prevent the `pytest tests/` path-override trap. Landed as v0.48 §5L (`make pre-push` target running all 3 doc-execution surfaces; commit `9878a54`).
+- §5 (R6-C dtype coercion): Gemini noted `n_resamples` (int + NaN) → `float64` is an accepted tradeoff. Landed as v0.48 §5K (Notes section on `Scorecard.to_pandas()` docstring; commit `6304cea`).
+- §6 (SynonymSubstitution whitelist): Gemini recommended adding a docstring note about the hardcoded 6-entry whitelist. Landed as v0.48 §5K (`adversarial.py` Notes section; commit `6304cea`).
+
+### Audit-as-seed extensions (v0.48)
+
+Per user direction during plan refinement ("use the audits as seeds for things to reconsider"), the Round 7 findings + style-invariants framing surfaced additional v0.48 scope beyond Codex's explicit list:
+
+- **§5G expansion**: from 4 Codex-flagged module docstrings to full sweep across `src/eval_toolkit/` module docstrings + audit of all `docs/source/api/*.md` autosummary pages. Found 8 missing API pages + 5 drifted autosummary lists.
+- **§5M new**: in-source docstring drift audit (third doc-execution surface). Result: 82 PASS / 1 skipped / 0 fail; expanded `.doctest-modules` from 11 → 21 modules so CI catches future drift.
+- **§5N comprehensive**: cross-API shape-validation consistency sweep beyond Codex's R7-F3 target. Audited `metrics_at_threshold`, `paired_bootstrap_op_point_diff`, `bootstrap_metric_from_predictions`, `metrics.py` scalars, `fit_*_binary` / `fit_*_calibrator`. Tightening commit landed for `metrics_at_threshold` silent threshold semantics (commit `76773dc`); `paired_bootstrap_op_point_diff` `val_y is test_y` guard landed as part of §5E-prep code-side fix (commit `5c8e68d`).
+
+### Round 7 ship status
+
+- **3 substantive Codex findings**: all RESOLVED in v0.48.0 via §5G + §5H + §5I + §5J.
+- **6 Gemini observations**: all RESOLVED in v0.48.0 via §5G + §5K + §5L.
+- **Audit-as-seed extensions** (§5G expanded, §5M new, §5N comprehensive): all RESOLVED in v0.48.0.
+- **Round 7 STOP-GATE status**: CLOSED via v0.48.0 release. Round 8 audit STOP-GATE per Decision Y.2 opens against the v0.48.0 state before `v1.0.0` tag can land.
 
 ---
 

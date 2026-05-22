@@ -253,12 +253,13 @@ by_slice
 │   │   └── "length"
 │   │       ├── "pr_auc"           : float in [0, 1]
 │   │       ├── "roc_auc"          : float in [0, 1]
-│   │       ├── "pr_auc_ci"        : BootstrapCI dict
-│   │       │   ├── "point_estimate" : float
-│   │       │   ├── "ci_95"          : [low, high]   (or "skipped" if n<30)
-│   │       │   ├── "confidence"     : 0.95
-│   │       │   ├── "n_resamples"    : 50
-│   │       │   └── "method"         : "BCa" | "percentile"
+│   │       ├── "pr_auc_ci"        : BootstrapCI dict (v0.48+ schema)
+│   │       │   ├── "point"           : float
+│   │       │   ├── "low"             : float   (or "skipped" if n<30)
+│   │       │   ├── "high"            : float
+│   │       │   ├── "confidence"      : 0.95
+│   │       │   ├── "n_resamples"     : 50
+│   │       │   └── "method"          : "BCa" | "percentile"
 │   │       ├── "ece"              : float (expected calibration error)
 │   │       └── ...                 (other metrics, plus operating_points)
 │   └── "paired_diffs" : {}  (empty unless paired_diffs= explicitly set)
@@ -288,8 +289,10 @@ result = evaluate({"m": _Scorer()}, [EvalSlice(name="dev", df=df)], run_id="r", 
 pr_auc = result.by_slice["dev"]["by_scorer"]["m"]["pr_auc"]
 ci = result.by_slice["dev"]["by_scorer"]["m"]["pr_auc_ci"]
 assert 0.0 <= pr_auc <= 1.0
-# ci is a BootstrapCI dict with point_estimate + ci_95 [low, high]
-assert "ci_95" in ci or ci.get("status") == "skipped"
+# ci is a BootstrapCI dict — v0.48 schema has `point` + `low` + `high`
+# (replaced pre-v0.48 `point_estimate` + `ci_95: [low, high]`). See
+# migration/v0.48.md for the schema change rationale.
+assert "low" in ci or ci.get("status") == "skipped"
 ```
 
 ### Comparing two scorers
