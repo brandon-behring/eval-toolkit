@@ -154,6 +154,9 @@ def sweep(
     original_scores: np.ndarray | None = None
     if scorer is not None and text_list:
         original_scores = np.asarray(scorer.predict_proba(text_list))
+        _validate_scorer_output(
+            original_scores, expected_n=len(text_list), label="original-texts batch"
+        )
 
     for strategy in strategies:
         sid = _strategy_id_for(strategy)
@@ -161,6 +164,11 @@ def sweep(
         transformed_scores: np.ndarray | None = None
         if scorer is not None and transformed_list:
             transformed_scores = np.asarray(scorer.predict_proba(transformed_list))
+            _validate_scorer_output(
+                transformed_scores,
+                expected_n=len(text_list),
+                label=f"transformed-texts batch for strategy {strategy.name!r}",
+            )
         for text_id, (_, transformed) in enumerate(zip(text_list, transformed_list, strict=True)):
             row: dict[str, object] = {
                 "text_id": text_id,
@@ -230,6 +238,44 @@ def _strategy_id_for(strategy: TextTransform) -> str:
     if not kw_pairs:
         return strategy.name
     return f"{strategy.name}/" + ",".join(f"{k}={v!r}" for k, v in kw_pairs)
+
+
+def _validate_scorer_output(scores: np.ndarray, *, expected_n: int, label: str) -> None:
+    """Validate the shape of a batched ``Scorer.predict_proba`` result.
+
+    Decision R7-C (Round 7 audit, Codex R7-F3): three failure modes Codex
+    surfaced via runtime probe — too many 1-D scores (silent truncation,
+    worst class), too few (later ``IndexError``), and matrix-shaped
+    (later ``TypeError`` when ``float(...)`` is applied to a row). All
+    three become a single API-level ``ValueError`` with context.
+
+    Style invariants 1 (no silent failures) + 3 (API-level errors, never
+    low-level exceptions through the boundary). Drives Decision R7-C.
+
+    Parameters
+    ----------
+    scores : np.ndarray
+        The ``np.asarray()``-wrapped result of ``scorer.predict_proba(...)``.
+    expected_n : int
+        The expected length — ``len(texts)`` for the current sweep call.
+    label : str
+        Context for the error message naming the offending batch
+        (e.g., ``"original-texts batch"`` or
+        ``"transformed-texts batch for strategy 'zero_width_space'"``).
+
+    Raises
+    ------
+    ValueError
+        If ``scores.shape != (expected_n,)``.
+    """
+    if scores.shape != (expected_n,):
+        raise ValueError(
+            f"sweep(): scorer.predict_proba({label}) returned shape "
+            f"{scores.shape}; expected ({expected_n},). The Scorer Protocol "
+            f"requires one float P(positive) per input row (see "
+            f"`eval_toolkit.protocols.Scorer`); ensure your adapter returns "
+            f"a 1-D array of length len(texts)."
+        )
 
 
 def _validate_unique_strategy_ids(strategies: Sequence[TextTransform]) -> None:

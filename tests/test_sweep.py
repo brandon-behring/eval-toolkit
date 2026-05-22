@@ -307,3 +307,120 @@ def test_sweep_strategy_id_argument_order_invariant() -> None:
     from eval_toolkit._sweep import _strategy_id_for
 
     assert _strategy_id_for(a) == _strategy_id_for(b)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Decision R7-C / §5J (v0.48): scorer output shape validation.
+#
+# Three failure modes Codex R7-F3 surfaced via runtime probe become a single
+# API-level ValueError with context (style invariants 1 + 3).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class _OverlongScorer:
+    """Returns len(X)+1 scores — silent truncation in pre-§5J behavior."""
+
+    def predict_proba(self, X: list[str]) -> np.ndarray:
+        return np.array([0.5] * (len(X) + 1))
+
+
+class _ShortScorer:
+    """Returns len(X)-1 scores — IndexError in pre-§5J behavior."""
+
+    def predict_proba(self, X: list[str]) -> np.ndarray:
+        return np.array([0.5] * (len(X) - 1))
+
+
+class _MatrixScorer:
+    """Returns (n, 2) matrix — TypeError when float(row) is applied."""
+
+    def predict_proba(self, X: list[str]) -> np.ndarray:
+        return np.array([[0.4, 0.6]] * len(X))
+
+
+def test_sweep_rejects_overlong_scorer_output() -> None:
+    """Pre-§5J: silently accepted, extra score dropped (WORST class).
+
+    Post-§5J: ValueError at sweep boundary with context.
+    """
+    with pytest.raises(ValueError, match="expected"):
+        sweep(
+            [DelimitVariant()],
+            ["a", "b"],
+            scorer=_OverlongScorer(),
+            attack_threshold=0.5,
+        )
+
+
+def test_sweep_rejects_short_scorer_output() -> None:
+    """Pre-§5J: low-level IndexError later.
+
+    Post-§5J: API-level ValueError at boundary.
+    """
+    with pytest.raises(ValueError, match="expected"):
+        sweep(
+            [DelimitVariant()],
+            ["a", "b", "c"],
+            scorer=_ShortScorer(),
+            attack_threshold=0.5,
+        )
+
+
+def test_sweep_rejects_matrix_scorer_output() -> None:
+    """Pre-§5J: low-level TypeError when float() applied to row.
+
+    Post-§5J: API-level ValueError at boundary; message names the shape.
+    """
+    with pytest.raises(ValueError, match="expected"):
+        sweep(
+            [DelimitVariant()],
+            ["a"],
+            scorer=_MatrixScorer(),
+            attack_threshold=0.5,
+        )
+
+
+def test_sweep_scorer_shape_error_names_offending_strategy() -> None:
+    """For the transformed-texts batch, the error names the strategy.
+
+    Helps callers debug per-strategy scorer adapters.
+    """
+
+    # First batch (original-texts) is fine; second batch (transformed-texts)
+    # comes from a flaky strategy — we simulate by returning wrong shape only
+    # on second call.
+    class _FlakyOnTransformed:
+        def __init__(self) -> None:
+            self._calls = 0
+
+        def predict_proba(self, X: list[str]) -> np.ndarray:
+            self._calls += 1
+            if self._calls == 1:  # original-texts batch
+                return np.array([0.5] * len(X))
+            # transformed-texts batch — return wrong shape
+            return np.array([[0.4, 0.6]] * len(X))
+
+    with pytest.raises(ValueError, match="transformed-texts batch for strategy 'delimit'"):
+        sweep(
+            [DelimitVariant()],
+            ["a", "b"],
+            scorer=_FlakyOnTransformed(),
+            attack_threshold=0.5,
+        )
+
+
+def test_sweep_correct_scorer_passes_validation() -> None:
+    """Regression-guard: a well-formed scorer still works after §5J."""
+
+    class _OK:
+        def predict_proba(self, X: list[str]) -> np.ndarray:
+            return np.array([0.5] * len(X))
+
+    df = sweep(
+        [DelimitVariant()],
+        ["a", "b"],
+        scorer=_OK(),
+        attack_threshold=0.5,
+    )
+    assert df.shape[0] == 2
+    assert (df["original_score"] == 0.5).all()
