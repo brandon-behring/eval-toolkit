@@ -405,3 +405,103 @@ def test_empty_strategy_passthrough_on_normal_input(
     baseline_roc = roc_auc(y, s)
     assert roc_auc(y, s, empty_strategy="return_none") == baseline_roc
     assert roc_auc(y, s, empty_strategy="skipped_metric") == baseline_roc
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v0.48 §5A: regression-guards pinning the exact key set of every
+# dict-returning metrics function. Audit at v0.48 confirmed all keys
+# use the abbreviated/snake_case convention (no spelled-out variants
+# like "true_positive" vs "tp"). These tests fail loud if future code
+# adds inconsistent keys.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_metrics_at_threshold_returns_exact_key_set() -> None:
+    """Key set frozen at v0.48 per §5A regression-guard."""
+    from eval_toolkit.metrics import metrics_at_threshold
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 100)
+    s = rng.random(100)
+    result = metrics_at_threshold(y, s, 0.5)
+    assert set(result.keys()) == {
+        "threshold",
+        "f1",
+        "precision",
+        "recall",
+        "accuracy",
+        "fpr",
+        "fnr",
+        "tn",
+        "fp",
+        "fn",
+        "tp",
+    }
+
+
+def test_brier_decomposition_returns_exact_key_set() -> None:
+    from eval_toolkit.metrics import brier_decomposition
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 100)
+    s = rng.random(100)
+    result = brier_decomposition(y, s)
+    assert set(result.keys()) == {"brier", "reliability", "resolution", "uncertainty"}
+
+
+def test_quantile_stratified_pr_auc_returns_exact_key_set() -> None:
+    from eval_toolkit.metrics import quantile_stratified_pr_auc
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 200)
+    s = rng.random(200)
+    stratifier = rng.random(200)
+    result = quantile_stratified_pr_auc(y, s, stratifier)
+    assert set(result.keys()) == {
+        "n",
+        "n_negative",
+        "n_positive",
+        "pr_auc",
+        "q_high",
+        "q_low",
+        "stratifier_high",
+        "stratifier_low",
+    }
+
+
+def test_quantile_stratified_report_returns_exact_key_set() -> None:
+    from eval_toolkit.metrics import quantile_stratified_report
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 200)
+    s = rng.random(200)
+    stratifier = rng.random(200)
+    result = quantile_stratified_report(y, s, stratifier)
+    assert set(result.keys()) == {"full", "gap", "gap_flag", "trimmed"}
+
+
+def test_precision_at_prior_returns_exact_key_set() -> None:
+    from eval_toolkit.metrics import precision_at_prior
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 200)
+    s = rng.random(200)
+    result = precision_at_prior(y, s, threshold=0.5, assumed_prior=0.5)
+    assert set(result.keys()) == {
+        "assumed_prior",
+        "eval_prior",
+        "fpr",
+        "precision_at_assumed_prior",
+        "precision_at_eval_prior",
+        "threshold",
+        "tpr",
+    }
+
+
+def test_score_distribution_summary_returns_exact_key_set() -> None:
+    from eval_toolkit.metrics import score_distribution_summary
+
+    rng = np.random.default_rng(0)
+    s = rng.random(100)
+    result = score_distribution_summary(s)
+    assert set(result.keys()) == {"mean", "median", "n", "q25", "q75", "std"}
