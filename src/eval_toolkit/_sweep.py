@@ -103,7 +103,7 @@ def sweep(
     >>> from eval_toolkit import DelimitVariant, DatamarkVariant, sweep
     >>> df = sweep([DelimitVariant(), DatamarkVariant()], ["hello world"])
     >>> sorted(df.columns.tolist())
-    ['text_id', 'transformed_text', 'variant']
+    ['strategy_id', 'text_id', 'transformed_text', 'variant']
     >>> df[df["variant"] == "delimit"].iloc[0]["transformed_text"]
     '<<hello world>>'
 
