@@ -272,6 +272,38 @@ class Scorecard(Mapping[str, MetricResult]):
         ``n_resamples`` + ``method`` so the schema is lossless against
         :meth:`BootstrapCI.to_dict` — trace provenance no longer drops in
         the DataFrame view.
+
+        Notes
+        -----
+        **Dtype coercion: ``n_resamples`` is ``float64``, not ``Int64``.**
+        ``BootstrapCI.n_resamples`` is an ``int`` at the Python level, but
+        pandas treats a mixed ``int`` + ``NaN`` column as ``float64`` —
+        any row with ``status != "ok"`` or ``bootstrap=False`` carries
+        ``NaN`` in the CI columns, and NaN forces the whole column to
+        floating-point. So ``df["pr_auc"]["n_resamples"].dtype`` is
+        ``float64``, and individual values read back as e.g. ``1000.0``
+        rather than ``1000`` (the trade-off Decision R6-C accepted to
+        keep the schema lossless).
+
+        Consumers expecting strict ``Int64`` semantics (e.g., for joins
+        against an integer-typed table, or for SQL emission where
+        ``float64`` would round-trip as ``DOUBLE``) need to cast
+        explicitly *after* dropping NaN rows:
+
+        ::
+
+            df["pr_auc"]["n_resamples"].dropna().astype("Int64")
+
+        or use pandas' nullable integer extension dtype at construction
+        time::
+
+            df["pr_auc"]["n_resamples"] = df["pr_auc"]["n_resamples"].astype("Int64")
+
+        which preserves NaN as ``pd.NA`` and the rest as integer.
+        ``Scorecard.to_pandas()`` does not perform this coercion by
+        default because it would force a pandas-nullable-dtype dependency
+        on every consumer; the float64 default works under any pandas
+        version.
         """
         try:
             import pandas as pd

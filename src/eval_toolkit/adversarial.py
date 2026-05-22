@@ -468,6 +468,29 @@ class SynonymSubstitution:
         Random seed for determinism. Default ``42``.
     name : str, optional
         Override technique name. Default ``"synonym"``.
+
+    Notes
+    -----
+    The eligible-word set is the module-level ``_SYNONYMS`` dict, a fixed
+    6-entry whitelist hand-curated to preserve semantics:
+
+    - ``ignore`` → ``disregard``, ``overlook``
+    - ``instructions`` → ``directions``, ``guidance``
+    - ``system`` → ``framework``, ``platform``
+    - ``secret`` → ``private``, ``confidential``
+    - ``send`` → ``transmit``, ``forward``
+    - ``all`` → ``every``, ``all of``
+
+    Inputs containing none of those whitelist words are returned unchanged
+    — the transform is a no-op on such inputs. This is intentional: the
+    technique's invariant is "looks like the original," so the substitution
+    deliberately stays small. The trade-off is easy to be surprised by
+    when running ``SynonymSubstitution`` on a corpus that doesn't share
+    the prompt-injection vocabulary the whitelist was built from. If you
+    need broader substitution, the whitelist isn't extension-friendly
+    today — fork the dict at the module level, or treat
+    ``SynonymSubstitution`` as a reference implementation for your own
+    text-transform with a richer table.
     """
 
     ratio: float = 1.0
