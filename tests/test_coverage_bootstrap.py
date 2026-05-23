@@ -149,7 +149,7 @@ def test_paired_mde_returns_estimate(
 ) -> None:
     y, s = informative
     s_b = s + 0.05 * y.astype(float)
-    est = paired_mde(y, s, s_b, pr_auc, n_resamples=50, seed=0)
+    est = paired_mde(y, s, s_b, pr_auc, n_resamples=50, rng=0)
     assert est.mde >= 0
     assert est.n == len(y)
 
@@ -183,7 +183,7 @@ def test_bootstrap_ci_studentized_runs() -> None:
     n = 60  # smaller n so jackknife is fast
     y = rng.binomial(1, 0.4, size=n).astype(int)
     s = np.clip(y * 0.5 + rng.normal(0, 0.3, n), 0, 1)
-    ci = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="studentized", seed=42)
+    ci = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="studentized", rng=42)
     assert ci.method == "studentized"
     assert ci.ci_low <= ci.point_estimate <= ci.ci_high
     assert ci.ci_high - ci.ci_low > 0  # non-degenerate
@@ -197,8 +197,8 @@ def test_bootstrap_ci_studentized_deterministic() -> None:
     n = 60
     y = rng.binomial(1, 0.4, size=n).astype(int)
     s = np.clip(y * 0.5 + rng.normal(0, 0.3, n), 0, 1)
-    ci1 = bootstrap_ci(y, s, pr_auc, n_resamples=80, method="studentized", seed=7)
-    ci2 = bootstrap_ci(y, s, pr_auc, n_resamples=80, method="studentized", seed=7)
+    ci1 = bootstrap_ci(y, s, pr_auc, n_resamples=80, method="studentized", rng=7)
+    ci2 = bootstrap_ci(y, s, pr_auc, n_resamples=80, method="studentized", rng=7)
     assert ci1.ci_low == ci2.ci_low
     assert ci1.ci_high == ci2.ci_high
 
@@ -259,7 +259,7 @@ def test_cross_validate_metric_returns_per_fold_values() -> None:
     n = 200
     y = rng.binomial(1, 0.3, size=n).astype(int)
     s = np.clip(y * 0.6 + rng.normal(0, 0.3, n), 0, 1)
-    folds = cross_validate_metric(y, s, metric=pr_auc, k=5, seed=42)
+    folds = cross_validate_metric(y, s, metric=pr_auc, k=5, rng=42)
     assert folds.shape == (5,)
     valid = folds[~np.isnan(folds)]
     assert (valid >= 0.0).all() and (valid <= 1.0).all()
@@ -274,7 +274,7 @@ def test_cross_validate_metric_pairs_with_cv_clt_ci() -> None:
     n = 300
     y = rng.binomial(1, 0.4, size=n).astype(int)
     s = np.clip(y * 0.5 + rng.normal(0, 0.3, n), 0, 1)
-    folds = cross_validate_metric(y, s, metric=pr_auc, k=5, seed=0)
+    folds = cross_validate_metric(y, s, metric=pr_auc, k=5, rng=0)
     valid = folds[~np.isnan(folds)]
     assert valid.size >= 2  # Need ≥ 2 folds for cv_clt_ci
     ci = cv_clt_ci(valid)

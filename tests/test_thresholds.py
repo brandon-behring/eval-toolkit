@@ -213,7 +213,7 @@ def test_target_fpr_threshold_pinned_on_overlapping_canonical_input() -> None:
     or drop_intermediate handling regresses, this fails.
 
     Data: balanced binary labels (n=500) with discriminative-but-overlapping
-    Gaussian-noise scores at seed=42.
+    Gaussian-noise scores at rng=42.
     """
     rng = np.random.default_rng(42)
     n = 500
@@ -255,7 +255,7 @@ def test_target_fpr_threshold_pinned_on_overlapping_canonical_input() -> None:
         )
 
     # Hard pin: these values reproduce on numpy ≥2.0 + scikit-learn ≥1.5
-    # for the seed=42 / n=500 / Gaussian-noise(0.2) construction above.
+    # for the rng=42 / n=500 / Gaussian-noise(0.2) construction above.
     # If sklearn changes drop_intermediate behavior or the selector's
     # eligibility/tie-break logic, these regenerate (run + copy actuals).
     for target, expected in expected_thresholds.items():

@@ -131,7 +131,7 @@ def _run_mc_coverage(
             n_resamples=200,
             confidence=confidence,
             method=method,
-            seed=base_seed + i,
+            rng=base_seed + i,
         )
         points[i] = ci.point_estimate
         lows[i] = ci.ci_low
@@ -240,7 +240,7 @@ def test_bootstrap_ci_coverage_mc(case: dict[str, object]) -> None:
         n_population=20_000,
         prevalence=float(case["prevalence"]),  # type: ignore[arg-type]
         separation=float(case["separation"]),  # type: ignore[arg-type]
-        seed=42,
+        rng=42,
     )
     coverage, bias = _run_mc_coverage(
         metric=case["metric"],  # type: ignore[arg-type]
@@ -272,7 +272,7 @@ def test_bootstrap_ci_width_scales_with_n() -> None:
     as sample size grows. Doubling n should roughly multiply width by
     ~1/√2 ≈ 0.71.
     """
-    population = _generate_population(n_population=20_000, prevalence=0.5, separation=0.4, seed=42)
+    population = _generate_population(n_population=20_000, prevalence=0.5, separation=0.4, rng=42)
 
     rng = np.random.default_rng(42)
     n_replicates = 200
@@ -288,7 +288,7 @@ def test_bootstrap_ci_width_scales_with_n() -> None:
             if y_sub.sum() == 0 or y_sub.sum() == n_sub:
                 continue
             ci = bootstrap_ci(
-                y_sub, s_sub, metric=pr_auc, n_resamples=200, method="BCa", seed=42 + i
+                y_sub, s_sub, metric=pr_auc, n_resamples=200, method="BCa", rng=42 + i
             )
             widths.append(ci.ci_high - ci.ci_low)
         (widths_n200 if n_sub == 200 else widths_n800).append(float(np.median(widths)))

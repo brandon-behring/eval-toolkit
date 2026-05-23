@@ -119,8 +119,8 @@ def test_evaluate_idempotent_for_same_seed(slice_with_data: EvalSlice) -> None:
     rng = np.random.default_rng(42)
     s = rng.uniform(0, 1, size=len(slice_with_data.df))
     sc = _StubScorer(s)
-    r1 = evaluate({"stub": sc}, [slice_with_data], run_id="x", n_resamples=50, seed=42)
-    r2 = evaluate({"stub": sc}, [slice_with_data], run_id="x", n_resamples=50, seed=42)
+    r1 = evaluate({"stub": sc}, [slice_with_data], run_id="x", n_resamples=50, rng=42)
+    r2 = evaluate({"stub": sc}, [slice_with_data], run_id="x", n_resamples=50, rng=42)
     assert json.dumps(r1.to_dict(), default=str) == json.dumps(r2.to_dict(), default=str)
 
 

@@ -44,6 +44,8 @@ from typing import Any, Literal, Protocol, runtime_checkable
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 
+from eval_toolkit._rng import RNGLike, SeedLike
+
 _logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -62,7 +64,7 @@ class MetaLearner(Protocol):
 
     The contract is sklearn-shaped so stackers compose with the existing
     probe-and-harness machinery. Concrete implementations are expected to be
-    deterministic given a fixed ``random_state`` and to expose ``coef_`` /
+    deterministic given a fixed ``rng`` and to expose ``coef_`` /
     ``intercept_`` for interpretability + ``RunManifest`` logging.
 
     Attributes
@@ -166,7 +168,7 @@ class LogisticStacker:
     max_iter : int, optional
         Maximum iterations. Default ``1000`` (generous; stacking problems are
         small and usually converge in <100).
-    random_state : int or None, optional
+    rng : RNGLike | SeedLike | None, optional
         Seed for the underlying ``LogisticRegression``. Default ``None``.
         Set for deterministic fitting when the solver involves randomness
         (e.g. ``"saga"``).
@@ -248,7 +250,7 @@ class LogisticStacker:
     penalty: Literal["l1", "l2", "elasticnet"] | None = "l2"
     solver: str = "lbfgs"
     max_iter: int = 1000
-    random_state: int | None = None
+    rng: RNGLike | SeedLike | None = None
 
     # Fitted state — populated on fit(); excluded from constructor + repr.
     _model: LogisticRegression | None = field(default=None, init=False, repr=False)
@@ -304,6 +306,16 @@ class LogisticStacker:
         yarr = np.asarray(y).ravel()
         _validate_fit_inputs(sm, yarr)
 
+        # Derive int seed for sklearn — sklearn LogisticRegression's
+        # random_state accepts int | None | RandomState across versions <1.4;
+        # safer to derive an int at the boundary than pin a higher sklearn
+        # minimum.
+        sklearn_seed: int | None
+        if self.rng is None:
+            sklearn_seed = None
+        else:
+            sklearn_seed = int(np.random.default_rng(self.rng).integers(0, 2**31 - 1))
+
         model = LogisticRegression(
             C=self.C,
             fit_intercept=self.fit_intercept,
@@ -311,7 +323,7 @@ class LogisticStacker:
             penalty=self.penalty,
             solver=self.solver,
             max_iter=self.max_iter,
-            random_state=self.random_state,
+            random_state=sklearn_seed,
         )
         model.fit(sm, yarr)
         self._model = model

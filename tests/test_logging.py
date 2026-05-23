@@ -112,7 +112,7 @@ def test_bootstrap_ci_emits_debug(caplog: pytest.LogCaptureFixture) -> None:
     s = np.clip(0.5 + 0.3 * (y - 0.5) + rng.normal(0, 0.2, n), 0, 1)
 
     with caplog.at_level(logging.DEBUG, logger="eval_toolkit.bootstrap"):
-        bootstrap_ci(y, s, metric=pr_auc, n_resamples=50, seed=42)
+        bootstrap_ci(y, s, metric=pr_auc, n_resamples=50, rng=42)
 
     bootstrap_records = [r for r in caplog.records if r.name == "eval_toolkit.bootstrap"]
     assert bootstrap_records, "expected at least one eval_toolkit.bootstrap DEBUG record"

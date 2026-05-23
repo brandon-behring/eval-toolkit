@@ -127,7 +127,7 @@ def test_evaluate_scorer_on_slice_bit_identical_under_replay() -> None:
     result1 = evaluate_scorer_on_slice(
         scorer,
         slice_,
-        seed=42,
+        rng=42,
         n_resamples=200,
         bootstrap_roc_auc=True,
         compute_mce=True,
@@ -136,7 +136,7 @@ def test_evaluate_scorer_on_slice_bit_identical_under_replay() -> None:
     result2 = evaluate_scorer_on_slice(
         scorer,
         slice_,
-        seed=42,
+        rng=42,
         n_resamples=200,
         bootstrap_roc_auc=True,
         compute_mce=True,
@@ -151,15 +151,15 @@ def test_evaluate_scorer_on_slice_different_seed_changes_output() -> None:
 
     Without this control, a constant-output bug would silently pass the
     bit-identity test above. We require at least one numeric leaf to
-    differ between seed=42 and seed=43.
+    differ between rng=42 and rng=43.
     """
     slice_, scorer = _build_fixture(n=200, seed=0)
 
     result_a = evaluate_scorer_on_slice(
-        scorer, slice_, seed=42, n_resamples=200, bootstrap_roc_auc=True
+        scorer, slice_, rng=42, n_resamples=200, bootstrap_roc_auc=True
     )
     result_b = evaluate_scorer_on_slice(
-        scorer, slice_, seed=43, n_resamples=200, bootstrap_roc_auc=True
+        scorer, slice_, rng=43, n_resamples=200, bootstrap_roc_auc=True
     )
 
     leaves_a = dict(_walk_floats(result_a))
@@ -170,7 +170,7 @@ def test_evaluate_scorer_on_slice_different_seed_changes_output() -> None:
         k for k in leaves_a if not np.array_equal(np.asarray(leaves_a[k]), np.asarray(leaves_b[k]))
     ]
     assert differing, (
-        "Expected at least one numeric leaf to differ between seed=42 and seed=43; "
+        "Expected at least one numeric leaf to differ between rng=42 and rng=43; "
         "either the harness ignores its seed parameter (bug) or the slice has zero "
         "bootstrap variance."
     )
@@ -186,13 +186,13 @@ def test_evaluate_scorer_on_slice_replay_idempotent_after_other_calls() -> None:
     """
     slice_, scorer = _build_fixture(n=150, seed=0)
 
-    result_first = evaluate_scorer_on_slice(scorer, slice_, seed=42, n_resamples=100)
+    result_first = evaluate_scorer_on_slice(scorer, slice_, rng=42, n_resamples=100)
     # Inject sibling calls that touch numpy RNG / harness internals
     other_slice, other_scorer = _build_fixture(n=80, seed=999)
-    _ = evaluate_scorer_on_slice(other_scorer, other_slice, seed=7, n_resamples=50)
-    _ = evaluate_scorer_on_slice(other_scorer, other_slice, seed=11, n_resamples=50)
+    _ = evaluate_scorer_on_slice(other_scorer, other_slice, rng=7, n_resamples=50)
+    _ = evaluate_scorer_on_slice(other_scorer, other_slice, rng=11, n_resamples=50)
 
-    result_after = evaluate_scorer_on_slice(scorer, slice_, seed=42, n_resamples=100)
+    result_after = evaluate_scorer_on_slice(scorer, slice_, rng=42, n_resamples=100)
 
     _assert_bit_identical(result_first, result_after)
 

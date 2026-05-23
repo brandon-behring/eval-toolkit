@@ -182,7 +182,7 @@ def test_ece_spec_name_encodes_kwargs() -> None:
 
 def test_scorecard_ok_status_with_bootstrap(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     y, s = well_mixed_data
-    r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True, n_resamples=200, seed=0)
+    r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True, n_resamples=200, rng=0)
     assert r["pr_auc"].status == "ok"
     assert isinstance(r["pr_auc"].value, float)
     assert isinstance(r["pr_auc"].ci, BootstrapCI)
@@ -233,7 +233,7 @@ def test_per_cell_error_isolation(well_mixed_data: tuple[np.ndarray, np.ndarray]
 def test_bootstrap_unavailable_keeps_ok_status(tiny_data: tuple[np.ndarray, np.ndarray]) -> None:
     """When bootstrap_ci can't run (n<10 floor), point is ok but ci=None with reason."""
     y, s = tiny_data
-    r = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=200, seed=0)
+    r = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=200, rng=0)
     # The point estimate is valid; only the CI is unavailable
     assert r["brier"].status == "ok"
     assert r["brier"].value is not None
@@ -287,7 +287,7 @@ def test_to_dict_roundtrip(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> No
     import json
 
     y, s = well_mixed_data
-    r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True, n_resamples=100, seed=0)
+    r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True, n_resamples=100, rng=0)
     d = r.to_dict()
     j = json.dumps(d)
     parsed = json.loads(j)
@@ -320,7 +320,7 @@ def test_to_pandas_one_row(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> No
     """to_pandas returns a 1-row DataFrame with metric × field multi-index."""
     pytest.importorskip("pandas")
     y, s = well_mixed_data
-    r = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, seed=0)
+    r = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, rng=0)
     df = r.to_pandas()
     assert df.shape[0] == 1
     assert ("brier", "value") in df.columns
@@ -339,7 +339,7 @@ def test_to_pandas_includes_n_resamples_and_method(
     """
     pytest.importorskip("pandas")
     y, s = well_mixed_data
-    r = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, seed=0)
+    r = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, rng=0)
     df = r.to_pandas()
     # Both new columns present
     assert ("brier", "n_resamples") in df.columns
@@ -363,7 +363,7 @@ def test_to_pandas_skipped_cells_carry_sentinels(
     import math
 
     y, s = all_zeros_data  # single-class slice → pr_auc skipped
-    r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True, n_resamples=100, seed=0)
+    r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True, n_resamples=100, rng=0)
     df = r.to_pandas()
     assert r["pr_auc"].status == "skipped"
     # Sentinels in the skipped cell's new columns
@@ -451,8 +451,8 @@ def test_raises_on_negative_n_resamples() -> None:
 
 def test_deterministic_under_seed(well_mixed_data: tuple[np.ndarray, np.ndarray]) -> None:
     y, s = well_mixed_data
-    a = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, seed=42)
-    b = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, seed=42)
+    a = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, rng=42)
+    b = scorecard(y, s, metrics=[ms.brier], bootstrap=True, n_resamples=100, rng=42)
     assert a["brier"].ci is not None and b["brier"].ci is not None
     assert a["brier"].ci.ci_low == b["brier"].ci.ci_low
     assert a["brier"].ci.ci_high == b["brier"].ci.ci_high
@@ -563,14 +563,14 @@ def test_scorecard_duplicate_name_message_reports_index(
 def test_scorecard_seed_none_is_deterministic(
     well_mixed_data: tuple[np.ndarray, np.ndarray],
 ) -> None:
-    """Decision R6-A: ``seed=None`` is treated as ``seed=0`` for reproducibility.
+    """Decision R6-A: ``rng=None`` is treated as ``rng=0`` for reproducibility.
 
-    Two calls with ``seed=None`` must produce bit-for-bit identical CIs. The
+    Two calls with ``rng=None`` must produce bit-for-bit identical CIs. The
     R6-A docstring fix codified the deterministic-by-default contract.
     """
     y, s = well_mixed_data
-    r_a = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, seed=None)
-    r_b = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, seed=None)
+    r_a = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, rng=None)
+    r_b = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, rng=None)
     ci_a = r_a["pr_auc"].ci
     ci_b = r_b["pr_auc"].ci
     assert ci_a is not None
@@ -582,10 +582,10 @@ def test_scorecard_seed_none_is_deterministic(
 def test_scorecard_seed_none_matches_explicit_zero(
     well_mixed_data: tuple[np.ndarray, np.ndarray],
 ) -> None:
-    """Decision R6-A: ``seed=None`` must equal ``seed=0`` bit-for-bit."""
+    """Decision R6-A: ``rng=None`` must equal ``rng=0`` bit-for-bit."""
     y, s = well_mixed_data
-    r_none = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, seed=None)
-    r_zero = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, seed=0)
+    r_none = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, rng=None)
+    r_zero = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=200, rng=0)
     ci_none = r_none["pr_auc"].ci
     ci_zero = r_zero["pr_auc"].ci
     assert ci_none is not None
@@ -650,7 +650,7 @@ def test_scorecard_propagates_system_exit_class_from_bootstrap(
             raise MemoryError("simulated OOM during bootstrap")
 
     with pytest.raises(MemoryError):
-        scorecard(y, s, metrics=[_SecondCallRaises()], bootstrap=True, n_resamples=10, seed=0)
+        scorecard(y, s, metrics=[_SecondCallRaises()], bootstrap=True, n_resamples=10, rng=0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

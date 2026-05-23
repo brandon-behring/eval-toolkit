@@ -31,6 +31,7 @@ from scipy.stats import norm as _scipy_norm
 from scipy.stats import rankdata as _scipy_rankdata
 
 from eval_toolkit._parallel import parallel_map
+from eval_toolkit._rng import RNGLike, SeedLike
 
 _logger = logging.getLogger(__name__)
 
@@ -236,7 +237,7 @@ def bootstrap_ci(
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
     method: Literal["BCa", "percentile", "studentized"] = DEFAULT_METHOD,
-    seed: int = DEFAULT_SEED,
+    rng: RNGLike | SeedLike | None = DEFAULT_SEED,
     n_jobs: int = 1,
 ) -> BootstrapCI:
     """Per-condition CI via :func:`scipy.stats.bootstrap`.
@@ -257,8 +258,9 @@ def bootstrap_ci(
         Two-sided confidence level (default 0.95).
     method : {"BCa", "percentile", "studentized"}, optional
         Default "BCa".
-    seed : int, optional
-        RNG seed for reproducibility.
+    rng : RNGLike | SeedLike | None, optional
+        RNG argument per `Scientific Python SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_.
+        Int seed (default ``DEFAULT_SEED=42``), ``Generator``, or ``None`` (entropy).
     n_jobs : int, optional
         Parallel workers (default 1 — sequential). Only effective when
         ``method='studentized'`` (which has the only Python-level outer loop
@@ -284,7 +286,7 @@ def bootstrap_ci(
     >>> rng = np.random.default_rng(42)
     >>> y = rng.integers(0, 2, size=200)
     >>> s = y + rng.normal(0, 0.3, size=200)
-    >>> ci = bootstrap_ci(y, s, metric=pr_auc, n_resamples=200, seed=42)
+    >>> ci = bootstrap_ci(y, s, metric=pr_auc, n_resamples=200, rng=42)
     >>> ci.ci_low <= ci.point_estimate <= ci.ci_high
     True
 
@@ -319,13 +321,13 @@ def bootstrap_ci(
         )
 
     _logger.debug(
-        "bootstrap_ci: metric=%s n=%d n_resamples=%d method=%s confidence=%.3f seed=%d n_jobs=%d",
+        "bootstrap_ci: metric=%s n=%d n_resamples=%d method=%s confidence=%.3f rng=%r n_jobs=%d",
         getattr(metric, "__name__", repr(metric)),
         n,
         n_resamples,
         method,
         confidence,
-        seed,
+        rng,
         n_jobs,
     )
 
@@ -342,11 +344,11 @@ def bootstrap_ci(
             point,
             n_resamples=n_resamples,
             confidence=confidence,
-            seed=seed,
+            rng=rng,
             n_jobs=n_jobs,
         )
     else:
-        rng = np.random.default_rng(seed)
+        rng = np.random.default_rng(rng)
         res = _scipy_bootstrap(
             (y_true_arr, y_score_arr),
             statistic=_statistic,
@@ -423,7 +425,7 @@ def _bootstrap_t_ci(
     *,
     n_resamples: int,
     confidence: float,
-    seed: int,
+    rng: RNGLike | SeedLike | None,
     n_jobs: int = 1,
 ) -> tuple[float, float]:
     r"""Studentized bootstrap-t CI per Algeshiemer 2024 / Davison & Hinkley §5.2.
@@ -441,7 +443,8 @@ def _bootstrap_t_ci(
     Skips degenerate resamples (single-class draws causing the metric to
     raise); raises if > 5% of resamples are degenerate.
     """
-    seed_seqs = np.random.SeedSequence(seed).spawn(n_resamples)
+    rng = np.random.default_rng(rng)
+    seed_seqs = rng.bit_generator.seed_seq.spawn(n_resamples)
     step = functools.partial(_bootstrap_t_step, y_true=y_true, y_score=y_score, metric=metric)
     raw_results = parallel_map(step, seed_seqs, n_jobs=n_jobs, description="bootstrap_t")
     valid_pairs = [r for r, _ in raw_results if r is not None]
@@ -505,7 +508,7 @@ def paired_bootstrap_diff(
     *,
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
-    seed: int = DEFAULT_SEED,
+    rng: RNGLike | SeedLike | None = DEFAULT_SEED,
     n_jobs: int = 1,
 ) -> PairedBootstrapCI:
     """Paired-bootstrap CI on ``metric(B) − metric(A)`` using the same resample indices.
@@ -518,7 +521,7 @@ def paired_bootstrap_diff(
         Scores from two scorers on the same rows.
     metric : callable ``(y_true, y_score) -> float``
         Must be picklable when ``n_jobs != 1`` (lambdas not supported).
-    n_resamples, confidence, seed : standard bootstrap params.
+    n_resamples, confidence, rng : standard bootstrap params (``rng`` per SPEC 7).
     n_jobs : int, optional
         Parallel workers (default 1 — sequential). ``n_jobs > 1`` uses
         joblib loky; ``n_jobs=-1`` uses all cores; ``n_jobs=0`` is rejected.
@@ -547,7 +550,7 @@ def paired_bootstrap_diff(
     >>> y = rng.integers(0, 2, size=200)
     >>> s_a = rng.normal(0, 1, size=200)                 # random scorer
     >>> s_b = y + rng.normal(0, 0.3, size=200)           # signal scorer
-    >>> diff = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=200, seed=42)
+    >>> diff = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=200, rng=42)
     >>> diff.delta > 0  # B beats A
     True
 
@@ -581,7 +584,8 @@ def paired_bootstrap_diff(
         raise ValueError(f"n={n} too small for paired bootstrap; need ≥ 10")
 
     delta_point = float(metric(y_true_arr, b)) - float(metric(y_true_arr, a))
-    seed_seqs = np.random.SeedSequence(seed).spawn(n_resamples)
+    rng = np.random.default_rng(rng)
+    seed_seqs = rng.bit_generator.seed_seq.spawn(n_resamples)
     step = functools.partial(
         _paired_bootstrap_diff_step,
         y_true_arr=y_true_arr,
@@ -654,7 +658,7 @@ def paired_bootstrap_ece_diff(
     ece_fn: Callable[[np.ndarray, np.ndarray, int], float],
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
-    seed: int = DEFAULT_SEED,
+    rng: RNGLike | SeedLike | None = DEFAULT_SEED,
     n_bins: int = 10,
     n_jobs: int = 1,
 ) -> PairedBootstrapCI:
@@ -677,7 +681,7 @@ def paired_bootstrap_ece_diff(
         does not depend on calibration. Typical use:
         ``from eval_toolkit.metrics import expected_calibration_error``,
         then pass ``ece_fn=expected_calibration_error``.
-    n_resamples, confidence, seed : standard bootstrap params.
+    n_resamples, confidence, rng : standard bootstrap params (``rng`` per SPEC 7).
     n_bins : int, optional
         Number of ECE bins (passed through to ``ece_fn``).
     n_jobs : int, optional
@@ -715,7 +719,8 @@ def paired_bootstrap_ece_diff(
         raise ValueError(f"n={n} too small for paired bootstrap; need >= 10")
 
     delta_point = float(ece_fn(y_true_arr, b, n_bins)) - float(ece_fn(y_true_arr, a, n_bins))
-    seed_seqs = np.random.SeedSequence(seed).spawn(n_resamples)
+    rng = np.random.default_rng(rng)
+    seed_seqs = rng.bit_generator.seed_seq.spawn(n_resamples)
     step = functools.partial(
         _paired_bootstrap_ece_diff_step,
         y_true_arr=y_true_arr,
@@ -798,7 +803,7 @@ def paired_bootstrap_op_point_diff(
     *,
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
-    seed: int = DEFAULT_SEED,
+    rng: RNGLike | SeedLike | None = DEFAULT_SEED,
     n_jobs: int = 1,
 ) -> PairedBootstrapCI:
     r"""Two-level paired bootstrap for operating-point lifts.
@@ -826,7 +831,7 @@ def paired_bootstrap_op_point_diff(
         ``lambda y, s: MaxF1Selector().select(y, s).threshold``).
     metric_fn : callable ``(y_true, y_score, threshold) -> float``
         Operating-point metric (e.g., F1, precision) at the given threshold.
-    n_resamples, confidence, seed : standard bootstrap params.
+    n_resamples, confidence, rng : standard bootstrap params (``rng`` per SPEC 7).
     n_jobs : int, optional
         Parallel workers (default 1 — sequential). See
         :ref:`methodology/parallelism`. Both ``threshold_fn`` and
@@ -913,7 +918,8 @@ def paired_bootstrap_op_point_diff(
         metric_fn(test_y_arr, test_a, thr_a_full)
     )
 
-    seed_seqs = np.random.SeedSequence(seed).spawn(n_resamples)
+    rng = np.random.default_rng(rng)
+    seed_seqs = rng.bit_generator.seed_seq.spawn(n_resamples)
     step = functools.partial(
         _paired_bootstrap_op_point_diff_step,
         val_y_arr=val_y_arr,
@@ -1132,7 +1138,7 @@ def paired_mde(
     alpha: float = 0.05,
     power: float = 0.80,
     n_resamples: int = DEFAULT_N_RESAMPLES,
-    seed: int = DEFAULT_SEED,
+    rng: RNGLike | SeedLike | None = DEFAULT_SEED,
     n_jobs: int = 1,
 ) -> MDEEstimate:
     r"""Minimum detectable paired Δ at (α, power).
@@ -1174,7 +1180,7 @@ def paired_mde(
         metric,
         n_resamples=n_resamples,
         confidence=0.95,
-        seed=seed,
+        rng=rng,
         n_jobs=n_jobs,
     )
     est = mde_from_ci(paired, alpha=alpha, power=power)
@@ -1306,7 +1312,7 @@ def block_bootstrap_on_folds(
     *,
     n_resamples: int = DEFAULT_N_RESAMPLES,
     confidence: float = DEFAULT_CONFIDENCE,
-    seed: int = DEFAULT_SEED,
+    rng: RNGLike | SeedLike | None = DEFAULT_SEED,
 ) -> BootstrapCI:
     r"""Block bootstrap on folds: resample K folds with replacement; percentile CI on mean.
 
@@ -1341,8 +1347,9 @@ def block_bootstrap_on_folds(
         the cross-fold sensitivity-check use case (runs in O(seconds)).
     confidence : float, optional
         Two-sided confidence level (default 0.95).
-    seed : int, optional
-        RNG seed for reproducibility.
+    rng : RNGLike | SeedLike | None, optional
+        RNG argument per `Scientific Python SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_.
+        Int seed (default ``DEFAULT_SEED=42``), ``Generator``, or ``None`` (entropy).
 
     Returns
     -------
@@ -1360,7 +1367,7 @@ def block_bootstrap_on_folds(
     --------
     >>> import numpy as np
     >>> folds = np.array([0.83, 0.81, 0.85, 0.79, 0.84])
-    >>> ci = block_bootstrap_on_folds(folds, n_resamples=2000, seed=42)
+    >>> ci = block_bootstrap_on_folds(folds, n_resamples=2000, rng=42)
     >>> ci.method
     'block_bootstrap'
     >>> bool(ci.ci_low <= ci.point_estimate <= ci.ci_high)
@@ -1389,7 +1396,7 @@ def block_bootstrap_on_folds(
     if not 0.0 < confidence < 1.0:
         raise ValueError(f"confidence must be in (0, 1); got {confidence}")
 
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(rng)
     # Vectorized: (n_resamples, K) index draws, gather, mean along axis 1.
     idx = rng.integers(0, K, size=(n_resamples, K))
     resample_means = arr[idx].mean(axis=1)
@@ -1412,7 +1419,7 @@ def cross_validate_metric(
     metric: MetricFn,
     k: int = 5,
     stratified: bool = True,
-    seed: int = DEFAULT_SEED,
+    rng: RNGLike | SeedLike | None = DEFAULT_SEED,
 ) -> np.ndarray:
     r"""K-fold cross-validation of a metric on caller-supplied scores.
 
@@ -1444,8 +1451,8 @@ def cross_validate_metric(
         If ``True`` (default), use ``StratifiedKFold`` so each fold
         preserves the class balance. Recommended for binary
         classification under class imbalance.
-    seed : int, optional
-        Shuffle seed for fold assignment.
+    rng : RNGLike | SeedLike | None, optional
+        RNG per SPEC 7 — derived to int at the sklearn ``KFold/StratifiedKFold`` boundary.
 
     Returns
     -------
@@ -1467,7 +1474,7 @@ def cross_validate_metric(
     >>> n = 200
     >>> y = rng.binomial(1, 0.3, size=n).astype(int)
     >>> s = np.clip(y * 0.6 + rng.normal(0, 0.3, n), 0, 1)
-    >>> folds = cross_validate_metric(y, s, metric=pr_auc, k=5, seed=42)
+    >>> folds = cross_validate_metric(y, s, metric=pr_auc, k=5, rng=42)
     >>> folds.shape
     (5,)
     >>> bool(np.all(0.0 <= folds[~np.isnan(folds)]))
@@ -1491,12 +1498,18 @@ def cross_validate_metric(
     if k > n:
         raise ValueError(f"k={k} exceeds n={n}")
 
+    # Derive an int seed for sklearn — sklearn KFold's random_state accepts
+    # int | None | RandomState (not Generator) across versions <1.4; safer to
+    # derive at the boundary than pin a higher sklearn minimum.
+    rng = np.random.default_rng(rng)
+    sklearn_seed = int(rng.integers(0, 2**31 - 1))
+
     splitter: KFold | StratifiedKFold
     if stratified:
-        splitter = StratifiedKFold(n_splits=k, shuffle=True, random_state=seed)
+        splitter = StratifiedKFold(n_splits=k, shuffle=True, random_state=sklearn_seed)
         fold_iter = splitter.split(np.zeros(n), y_arr)
     else:
-        splitter = KFold(n_splits=k, shuffle=True, random_state=seed)
+        splitter = KFold(n_splits=k, shuffle=True, random_state=sklearn_seed)
         fold_iter = splitter.split(np.zeros(n))
 
     fold_metrics = np.full(k, np.nan, dtype=np.float64)

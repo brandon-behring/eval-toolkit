@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Final, Literal, cast
 import numpy as np
 
 from eval_toolkit._parallel import parallel_map
+from eval_toolkit._rng import RNGLike, SeedLike
 from eval_toolkit.artifacts import (
     error_metric,
     sanitize_for_json,
@@ -335,7 +336,7 @@ def _bootstrap_auc_ci(
     metric_fn: object,
     *,
     n_resamples: int,
-    seed: int,
+    rng: RNGLike | SeedLike | None,
 ) -> dict[str, object]:
     """Bootstrap (low, high) CI on an AUC metric; return BootstrapCI.to_dict() or sentinel.
 
@@ -354,7 +355,7 @@ def _bootstrap_auc_ci(
             metric_fn,  # type: ignore[arg-type]
             n_resamples=n_resamples,
             method="BCa",
-            seed=seed,
+            rng=rng,
         )
         return ci.to_dict()
     except (ValueError, RuntimeError) as exc:
@@ -367,7 +368,7 @@ def _evaluate_scores(
     *,
     strata: np.ndarray | None,
     n_resamples: int,
-    seed: int,
+    rng: RNGLike | SeedLike | None,
     fpr_ladder: list[float] | None,
     compute_mce: bool,
     compute_brier: bool,
@@ -388,11 +389,11 @@ def _evaluate_scores(
     is_single_class = len({int(v) for v in y_true}) == 1
     metrics["is_single_class"] = is_single_class
     metrics["pr_auc_ci"] = _bootstrap_auc_ci(
-        y_true, y_score, pr_auc, n_resamples=n_resamples, seed=seed
+        y_true, y_score, pr_auc, n_resamples=n_resamples, rng=rng
     )
     if bootstrap_roc_auc:
         metrics["roc_auc_ci"] = _bootstrap_auc_ci(
-            y_true, y_score, roc_auc, n_resamples=n_resamples, seed=seed
+            y_true, y_score, roc_auc, n_resamples=n_resamples, rng=rng
         )
     if fpr_ladder is not None:
         tpr_at_fpr: dict[str, object] = {}
@@ -492,7 +493,7 @@ def _compute_paired_diffs(
     paired_diffs: list[tuple[str, str]],
     *,
     n_resamples: int,
-    seed: int,
+    rng: RNGLike | SeedLike | None,
 ) -> dict[str, dict[str, object]]:
     """Per-slice paired bootstrap on ``pr_auc(b) - pr_auc(a)``.
 
@@ -533,7 +534,7 @@ def _compute_paired_diffs(
             scores_by_scorer[b],
             pr_auc,
             n_resamples=n_resamples,
-            seed=seed,
+            rng=rng,
         )
         pdiff_dict = pdiff.to_dict()
         try:
@@ -549,7 +550,7 @@ def evaluate_scorer_on_slice(
     slice_: EvalSlice,
     *,
     n_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
-    seed: int = 42,
+    rng: RNGLike | SeedLike | None = 42,
     on_scorer_error: Literal["raise", "record"] = "raise",
     precomputed_scores: np.ndarray | None = None,
     attack_style: str | None = None,
@@ -571,8 +572,9 @@ def evaluate_scorer_on_slice(
     slice_ : EvalSlice
     n_resamples : int, optional
         Bootstrap resamples for PR-AUC CI. Default 1000.
-    seed : int, optional
-        RNG seed. Default 42.
+    rng : RNGLike | SeedLike | None, optional
+        RNG argument per `Scientific Python SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_.
+        Int seed (default 42), ``Generator``, or ``None`` (entropy).
     on_scorer_error : {"raise", "record"}, optional
         v0.7.0 — when ``"record"``, catch any ``Scorer.predict_proba``
         exception and return a ``{"error", "exc_type", "traceback"}`` dict
@@ -652,7 +654,7 @@ def evaluate_scorer_on_slice(
         y_score,
         strata=slice_.strata,
         n_resamples=n_resamples,
-        seed=seed,
+        rng=rng,
         fpr_ladder=fpr_ladder,
         compute_mce=compute_mce,
         compute_brier=compute_brier,
@@ -666,7 +668,7 @@ def evaluate_scorer_on_slice(
             y_score_calibrated,
             strata=slice_.strata,
             n_resamples=n_resamples,
-            seed=seed,
+            rng=rng,
             fpr_ladder=fpr_ladder,
             compute_mce=compute_mce,
             compute_brier=compute_brier,
@@ -741,12 +743,12 @@ def _score_one_pair(item: _ScoreOnePairItem) -> _ScoreOnePairResult:
     caller can reassemble ``by_slice`` + ``score_cache`` in the original
     iteration order.
     """
-    slice_, sname, scorer, n_resamples, seed, on_scorer_error = item
+    slice_, sname, scorer, n_resamples, rng, on_scorer_error = item
     result = evaluate_scorer_on_slice(
         scorer,
         slice_,
         n_resamples=n_resamples,
-        seed=seed,
+        rng=rng,
         on_scorer_error=on_scorer_error,
     )
     scores = np.asarray(result["scores"], dtype=np.float64)
@@ -758,7 +760,7 @@ def _score_all_slices(
     slices: Sequence[EvalSlice],
     *,
     n_resamples: int,
-    seed: int,
+    rng: RNGLike | SeedLike | None,
     paired_diffs: list[tuple[str, str]] | None,
     on_scorer_error: Literal["raise", "record"],
     n_jobs: int = 1,
@@ -796,7 +798,7 @@ def _score_all_slices(
                 skipped[(slice_.name, sname)] = _skipped_scorer_result(slice_, reason)
                 _logger.info("    skipped %s: %s", sname, reason)
                 continue
-            work_units.append((slice_, sname, scorer, n_resamples, seed, on_scorer_error))
+            work_units.append((slice_, sname, scorer, n_resamples, rng, on_scorer_error))
 
     # Parallel scoring. parallel_map at n_jobs=1 is a pure-Python for-loop
     # (Principle #4) — bit-identical to the pre-v0.36 sequential code.
@@ -853,7 +855,7 @@ def _score_all_slices(
                 scorers,
                 paired_diffs,
                 n_resamples=n_resamples,
-                seed=seed,
+                rng=rng,
             )
             if paired_diffs
             else {}
@@ -877,7 +879,7 @@ def evaluate(
     git_sha: str | None = None,
     n_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
     paired_diffs: list[tuple[str, str]] | None = None,
-    seed: int = 42,
+    rng: RNGLike | SeedLike | None = 42,
     extra_config: Mapping[str, object] | None = None,
     leakage_checks: Sequence[LeakageCheck] = (),
     on_leakage: Literal["raise", "record", "skip"] = "raise",
@@ -903,8 +905,9 @@ def evaluate(
     paired_diffs : list of (str, str) tuples, optional
         Pairs ``(a, b)`` for which to compute paired bootstrap on
         ``pr_auc(b) - pr_auc(a)`` per slice.
-    seed : int, optional
-        RNG seed. Default 42.
+    rng : RNGLike | SeedLike | None, optional
+        RNG argument per `Scientific Python SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_.
+        Int seed (default 42), ``Generator``, or ``None`` (entropy).
     extra_config : Mapping or None, optional
         Additional config keys to record in the result.
     leakage_checks : sequence of LeakageCheck, optional
@@ -957,9 +960,11 @@ def evaluate(
     if n_jobs != 1:
         _assert_scorers_picklable(scorers)
 
+    # JSON-clean serialization of user's rng input: int/None as-is, Generator as repr.
+    rng_for_config: object = rng if isinstance(rng, (int, type(None))) else repr(rng)
     config: dict[str, object] = {
         "n_resamples": n_resamples,
-        "seed": seed,
+        "rng": rng_for_config,
         "scorers": list(scorers.keys()),
         "slices": [s.name for s in slices],
         "paired_diffs": paired_diffs or [],
@@ -976,7 +981,7 @@ def evaluate(
         scorers,
         slices,
         n_resamples=n_resamples,
-        seed=seed,
+        rng=rng,
         paired_diffs=paired_diffs,
         on_scorer_error=on_scorer_error,
         n_jobs=n_jobs,
@@ -1370,7 +1375,7 @@ def evaluate_folded(
                 git_sha=git_sha,
                 n_resamples=n_resamples,
                 paired_diffs=paired_diffs,
-                seed=seed,
+                rng=seed,  # for-loop iterator is `seed` (Sequence[int]); pass as SeedLike
                 leakage_checks=leakage_checks,
                 on_leakage=on_leakage,
                 on_scorer_error=on_scorer_error,

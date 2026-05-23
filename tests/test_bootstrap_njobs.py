@@ -51,8 +51,8 @@ def _make_inputs(n: int = 200, seed: int = 42) -> tuple[np.ndarray, np.ndarray, 
 def test_paired_bootstrap_diff_n_jobs_reproducibility() -> None:
     """Same seed produces identical CI regardless of n_jobs."""
     y, s_a, s_b = _make_inputs()
-    r1 = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=200, seed=42, n_jobs=1)
-    r2 = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=200, seed=42, n_jobs=2)
+    r1 = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=200, rng=42, n_jobs=1)
+    r2 = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=200, rng=42, n_jobs=2)
     assert (r1.delta, r1.ci_low, r1.ci_high) == (r2.delta, r2.ci_low, r2.ci_high)
 
 
@@ -61,7 +61,7 @@ def test_paired_bootstrap_diff_n_jobs_reproducibility() -> None:
 def test_paired_bootstrap_diff_n_jobs_minus_one_runs() -> None:
     """n_jobs=-1 (all cores) completes; no speedup assertion."""
     y, s_a, s_b = _make_inputs()
-    r = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=100, seed=42, n_jobs=-1)
+    r = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=100, rng=42, n_jobs=-1)
     assert r.ci_low <= r.ci_high
 
 
@@ -79,8 +79,8 @@ def test_bootstrap_ci_studentized_n_jobs_reproducibility() -> None:
     y = np.concatenate([np.zeros(n // 2, dtype=int), np.ones(n // 2, dtype=int)])
     rng.shuffle(y)
     s = y + rng.normal(0, 0.3, size=n)
-    r1 = bootstrap_ci(y, s, pr_auc, n_resamples=100, seed=42, method="studentized", n_jobs=1)
-    r2 = bootstrap_ci(y, s, pr_auc, n_resamples=100, seed=42, method="studentized", n_jobs=2)
+    r1 = bootstrap_ci(y, s, pr_auc, n_resamples=100, rng=42, method="studentized", n_jobs=1)
+    r2 = bootstrap_ci(y, s, pr_auc, n_resamples=100, rng=42, method="studentized", n_jobs=2)
     assert (r1.ci_low, r1.ci_high) == (r2.ci_low, r2.ci_high)
 
 
@@ -90,7 +90,7 @@ def test_bootstrap_ci_rejects_n_jobs_with_non_studentized() -> None:
     y, _, s = _make_inputs()
     for method in ("BCa", "percentile"):
         with pytest.raises(ValueError, match=r"n_jobs.*studentized"):
-            bootstrap_ci(y, s, pr_auc, n_resamples=50, seed=42, method=method, n_jobs=2)  # type: ignore[arg-type]
+            bootstrap_ci(y, s, pr_auc, n_resamples=50, rng=42, method=method, n_jobs=2)  # type: ignore[arg-type]
 
 
 @pytest.mark.unit
@@ -102,10 +102,10 @@ def test_paired_bootstrap_ece_diff_n_jobs_reproducibility() -> None:
     s_a_cal = 1.0 / (1.0 + np.exp(-s_a))
     s_b_cal = 1.0 / (1.0 + np.exp(-s_b))
     r1 = paired_bootstrap_ece_diff(
-        y, s_a_cal, s_b_cal, ece_fn=expected_calibration_error, n_resamples=100, seed=42, n_jobs=1
+        y, s_a_cal, s_b_cal, ece_fn=expected_calibration_error, n_resamples=100, rng=42, n_jobs=1
     )
     r2 = paired_bootstrap_ece_diff(
-        y, s_a_cal, s_b_cal, ece_fn=expected_calibration_error, n_resamples=100, seed=42, n_jobs=2
+        y, s_a_cal, s_b_cal, ece_fn=expected_calibration_error, n_resamples=100, rng=42, n_jobs=2
     )
     assert (r1.delta, r1.ci_low, r1.ci_high) == (r2.delta, r2.ci_low, r2.ci_high)
 
@@ -132,7 +132,7 @@ def test_paired_bootstrap_op_point_diff_n_jobs_reproducibility() -> None:
         threshold_fn=_max_f1_threshold,
         metric_fn=_f1_at_threshold,
         n_resamples=100,
-        seed=42,
+        rng=42,
         n_jobs=1,
     )
     r2 = paired_bootstrap_op_point_diff(
@@ -145,7 +145,7 @@ def test_paired_bootstrap_op_point_diff_n_jobs_reproducibility() -> None:
         threshold_fn=_max_f1_threshold,
         metric_fn=_f1_at_threshold,
         n_resamples=100,
-        seed=42,
+        rng=42,
         n_jobs=2,
     )
     assert (r1.delta, r1.ci_low, r1.ci_high) == (r2.delta, r2.ci_low, r2.ci_high)
@@ -156,8 +156,8 @@ def test_paired_bootstrap_op_point_diff_n_jobs_reproducibility() -> None:
 def test_paired_mde_n_jobs_reproducibility() -> None:
     """paired_mde pass-through to paired_bootstrap_diff reproduces across n_jobs."""
     y, s_a, s_b = _make_inputs()
-    r1 = paired_mde(y, s_a, s_b, pr_auc, n_resamples=200, seed=42, n_jobs=1)
-    r2 = paired_mde(y, s_a, s_b, pr_auc, n_resamples=200, seed=42, n_jobs=2)
+    r1 = paired_mde(y, s_a, s_b, pr_auc, n_resamples=200, rng=42, n_jobs=1)
+    r2 = paired_mde(y, s_a, s_b, pr_auc, n_resamples=200, rng=42, n_jobs=2)
     assert (r1.mde, r1.sigma_delta, r1.delta_observed) == (
         r2.mde,
         r2.sigma_delta,

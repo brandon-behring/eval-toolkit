@@ -131,7 +131,7 @@ def test_bootstrap_ci_matches_scipy_bca() -> None:
     y = rng.binomial(1, 0.3, size=n).astype(int)
     s = np.clip(y * 0.6 + rng.normal(0, 0.3, n), 0, 1)
 
-    ours = bootstrap_ci(y, s, pr_auc, n_resamples=300, method="BCa", seed=42)
+    ours = bootstrap_ci(y, s, pr_auc, n_resamples=300, method="BCa", rng=42)
 
     def _stat(yt: np.ndarray, ys: np.ndarray) -> float:
         return float(pr_auc(yt, ys))
@@ -164,7 +164,7 @@ def test_bootstrap_ci_matches_scipy_percentile() -> None:
     y = rng.binomial(1, 0.4, size=n).astype(int)
     s = np.clip(y * 0.5 + rng.normal(0, 0.2, n), 0, 1)
 
-    ours = bootstrap_ci(y, s, pr_auc, n_resamples=200, method="percentile", seed=7)
+    ours = bootstrap_ci(y, s, pr_auc, n_resamples=200, method="percentile", rng=7)
 
     def _stat(yt: np.ndarray, ys: np.ndarray) -> float:
         return float(pr_auc(yt, ys))

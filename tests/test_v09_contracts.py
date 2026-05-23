@@ -109,7 +109,7 @@ def test_v09_generic_contract_roundtrip(tmp_path: Path) -> None:
         candidate_scores,
         bootstrap_selected=True,
         n_resamples=30,
-        seed=11,
+        rng=11,
     )
     threshold_policy = ThresholdPolicyMetadata(
         calibration_slice="calibration",
@@ -172,12 +172,12 @@ def test_v09_generic_contract_roundtrip(tmp_path: Path) -> None:
         baseline_ref.to_dict(),
         candidate_ref.to_dict(),
         n_resamples=40,
-        seed=13,
+        rng=13,
     )
     bootstrapped = bootstrap_metric_from_predictions(
         candidate_ref.to_dict(),
         n_resamples=40,
-        seed=13,
+        rng=13,
     )
     assert paired["delta"] >= 0
     assert bootstrapped["n_resamples"] == 40

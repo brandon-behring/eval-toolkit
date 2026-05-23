@@ -32,7 +32,7 @@ from eval_toolkit.harness import EvalSlice, _compute_paired_diffs, _resolve_y_sc
 
 
 class _UniformScorer:
-    """Deterministic scorer for tests — returns shuffled uniforms keyed on seed=42."""
+    """Deterministic scorer for tests — returns shuffled uniforms keyed on rng=42."""
 
     def predict_proba(self, X: list[str]) -> np.ndarray:
         rng = np.random.default_rng(42)
@@ -119,7 +119,7 @@ def test_compute_paired_diffs_skip_reasons(
         scorers,
         [("a", "b")],
         n_resamples=10,
-        seed=0,
+        rng=0,
     )
     assert "b_minus_a" in diffs, f"case={case}: missing entry"
     assert diffs["b_minus_a"] == {"skipped": expected_reason}, f"case={case}: wrong reason"
@@ -140,7 +140,7 @@ def test_compute_paired_diffs_skip_small_n() -> None:
         scorers,
         [("a", "b")],
         n_resamples=10,
-        seed=0,
+        rng=0,
     )
     assert diffs["b_minus_a"] == {"skipped": "n=10 < 30"}
 

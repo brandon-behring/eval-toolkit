@@ -116,7 +116,7 @@ def test_bca_transformation_respecting_coverage_on_skewed_statistic() -> None:
             n_resamples=N_RESAMPLES_BCA,
             confidence=NOMINAL_CONFIDENCE,
             method="BCa",
-            seed=int(seed),
+            rng=int(seed),
         )
         if ci.ci_low <= TRUE_BETA_MEAN <= ci.ci_high:
             inside += 1
@@ -159,7 +159,7 @@ def test_bca_outperforms_percentile_on_skewed_distribution_by_coverage_proximity
             n_resamples=N_RESAMPLES_BCA,
             confidence=NOMINAL_CONFIDENCE,
             method="BCa",
-            seed=int(seed),
+            rng=int(seed),
         )
         ci_pct = bootstrap_ci(
             dummy_y,
@@ -168,7 +168,7 @@ def test_bca_outperforms_percentile_on_skewed_distribution_by_coverage_proximity
             n_resamples=N_RESAMPLES_BCA,
             confidence=NOMINAL_CONFIDENCE,
             method="percentile",
-            seed=int(seed),
+            rng=int(seed),
         )
         if ci_bca.ci_low <= TRUE_BETA_MEAN <= ci_bca.ci_high:
             inside_bca += 1

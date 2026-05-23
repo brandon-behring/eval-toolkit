@@ -92,7 +92,7 @@ def test_paired_bootstrap_diff_raises_on_too_many_degenerate_resamples() -> None
     a = rng.uniform(0, 1, size=n)
     b = rng.uniform(0, 1, size=n)
     with pytest.raises(ValueError, match="raised the metric function|no usable resamples"):
-        paired_bootstrap_diff(y, a, b, _strict_single_class_metric, n_resamples=200, seed=42)
+        paired_bootstrap_diff(y, a, b, _strict_single_class_metric, n_resamples=200, rng=42)
 
 
 def test_paired_bootstrap_diff_shape_mismatch_raises() -> None:
@@ -148,7 +148,7 @@ def test_paired_bootstrap_op_point_diff_rejects_identical_val_test_arrays() -> N
             threshold_fn=threshold_fn,
             metric_fn=f1_at,
             n_resamples=50,
-            seed=42,
+            rng=42,
         )
 
     # Disjoint slices succeed — the guard is identity-only, not a content check.
@@ -163,7 +163,7 @@ def test_paired_bootstrap_op_point_diff_rejects_identical_val_test_arrays() -> N
         threshold_fn=threshold_fn,
         metric_fn=f1_at,
         n_resamples=50,
-        seed=42,
+        rng=42,
     )
     assert hasattr(out, "delta")
 

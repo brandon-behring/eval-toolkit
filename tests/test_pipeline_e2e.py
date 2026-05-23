@@ -95,7 +95,7 @@ def test_e2e_dataframeloader_to_schema_validated_json(tmp_path: Path) -> None:
         slices=[test_slice],
         run_id="e2e-dataframeloader",
         n_resamples=50,
-        seed=42,
+        rng=42,
     )
 
     run_dir = tmp_path / "e2e_run"
@@ -145,7 +145,7 @@ def test_e2e_singleslice_loader_to_schema_validated_json(tmp_path: Path) -> None
         slices=[all_slice],
         run_id="e2e-singleslice",
         n_resamples=50,
-        seed=42,
+        rng=42,
     )
 
     run_dir = tmp_path / "e2e_single"
@@ -196,7 +196,7 @@ def test_e2e_parquet_glob_loader_to_schema_validated_json(tmp_path: Path) -> Non
     test_slice = splits["test"]
     # Both shards concatenated: 50 + 50 = 100 rows
     assert len(test_slice.df) == 100
-    # Sanity: both classes present (rng with seed=42 + n=100 ≈ balanced)
+    # Sanity: both classes present (rng with rng=42 + n=100 ≈ balanced)
     assert 0 in test_slice.y_true and 1 in test_slice.y_true
 
     n = len(test_slice.df)
@@ -208,7 +208,7 @@ def test_e2e_parquet_glob_loader_to_schema_validated_json(tmp_path: Path) -> Non
         slices=[test_slice],
         run_id="e2e-parquet",
         n_resamples=50,
-        seed=42,
+        rng=42,
     )
 
     run_dir = tmp_path / "e2e_parquet_run"
@@ -246,7 +246,7 @@ def test_e2e_paired_diffs_preserved_through_schema(tmp_path: Path) -> None:
         run_id="e2e-paired",
         n_resamples=50,
         paired_diffs=[("a", "b")],
-        seed=42,
+        rng=42,
     )
 
     run_dir = tmp_path / "e2e_paired"

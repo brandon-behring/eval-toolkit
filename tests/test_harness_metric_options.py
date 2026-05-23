@@ -139,7 +139,7 @@ def test_bootstrap_roc_auc_emits_ci_dict(signal_slice: EvalSlice) -> None:
         precomputed_scores=scores,
         bootstrap_roc_auc=True,
         n_resamples=100,
-        seed=1,
+        rng=1,
     )
     assert "pr_auc_ci" in result
     assert "roc_auc_ci" in result
@@ -223,7 +223,7 @@ def test_evaluate_scorer_on_slice_full_kwarg_cross_product(signal_slice: EvalSli
         calibrator=calibrator,
         bootstrap_roc_auc=True,
         n_resamples=100,
-        seed=42,
+        rng=42,
     )
     # Pre-v0.22 keys
     for key in ("n", "n_positive", "pr_auc", "roc_auc", "pr_auc_ci", "scores"):

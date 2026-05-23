@@ -1,5 +1,5 @@
 {
-  "pr_auc_balanced_n200_BCa_seed42": {
+  "pr_auc_balanced_n200_BCa_rng42": {
     "ci_high": 0.911879605,
     "ci_low": 0.786756306,
     "confidence": 0.95,
@@ -7,7 +7,7 @@
     "n_resamples": 500,
     "point_estimate": 0.857436357
   },
-  "pr_auc_balanced_n200_percentile_seed42": {
+  "pr_auc_balanced_n200_percentile_rng42": {
     "ci_high": 0.920789971,
     "ci_low": 0.796620442,
     "confidence": 0.95,
@@ -15,7 +15,7 @@
     "n_resamples": 500,
     "point_estimate": 0.857436357
   },
-  "pr_auc_imbalanced_p05_n200_BCa_seed42": {
+  "pr_auc_imbalanced_p05_n200_BCa_rng42": {
     "ci_high": 0.585177068,
     "ci_low": 0.104087605,
     "confidence": 0.95,
@@ -23,7 +23,7 @@
     "n_resamples": 500,
     "point_estimate": 0.277566582
   },
-  "pr_auc_n10_percentile_seed42": {
+  "pr_auc_n10_percentile_rng42": {
     "ci_high": 1.0,
     "ci_low": 0.530416667,
     "confidence": 0.95,
@@ -31,7 +31,7 @@
     "n_resamples": 500,
     "point_estimate": 0.858333333
   },
-  "roc_auc_balanced_n200_BCa_seed42": {
+  "roc_auc_balanced_n200_BCa_rng42": {
     "ci_high": 0.911376276,
     "ci_low": 0.811418319,
     "confidence": 0.95,
@@ -39,7 +39,7 @@
     "n_resamples": 500,
     "point_estimate": 0.8632
   },
-  "roc_auc_tied_n40_BCa_seed42": {
+  "roc_auc_tied_n40_BCa_rng42": {
     "ci_high": 0.9725,
     "ci_low": 0.797211394,
     "confidence": 0.95,

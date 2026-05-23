@@ -78,8 +78,8 @@ def _strip_volatile(result_dict: dict) -> dict:
 def test_evaluate_n_jobs_1_vs_2_reproducibility() -> None:
     """n_jobs=1 and n_jobs=2 produce bit-identical RunResults on same seed."""
     scorers, slices = _build_two_slice_fixture()
-    seq = evaluate(scorers, slices, run_id="seq", n_resamples=50, seed=7, n_jobs=1)
-    par = evaluate(scorers, slices, run_id="par", n_resamples=50, seed=7, n_jobs=2)
+    seq = evaluate(scorers, slices, run_id="seq", n_resamples=50, rng=7, n_jobs=1)
+    par = evaluate(scorers, slices, run_id="par", n_resamples=50, rng=7, n_jobs=2)
 
     # run_id is the only field that legitimately differs; strip it for compare.
     seq_d = _strip_volatile(seq.to_dict())
@@ -102,7 +102,7 @@ def test_evaluate_n_jobs_with_paired_diffs_reproducibility() -> None:
         slices,
         run_id="seq",
         n_resamples=50,
-        seed=11,
+        rng=11,
         paired_diffs=pairs,
         n_jobs=1,
     )
@@ -111,7 +111,7 @@ def test_evaluate_n_jobs_with_paired_diffs_reproducibility() -> None:
         slices,
         run_id="par",
         n_resamples=50,
-        seed=11,
+        rng=11,
         paired_diffs=pairs,
         n_jobs=2,
     )
@@ -142,7 +142,7 @@ def test_evaluate_n_jobs_with_operating_points_reproducibility() -> None:
         slices,
         run_id="seq",
         n_resamples=50,
-        seed=13,
+        rng=13,
         operating_point_specs=(spec,),
         n_jobs=1,
     )
@@ -151,7 +151,7 @@ def test_evaluate_n_jobs_with_operating_points_reproducibility() -> None:
         slices,
         run_id="par",
         n_resamples=50,
-        seed=13,
+        rng=13,
         operating_point_specs=(spec,),
         n_jobs=2,
     )
@@ -202,7 +202,7 @@ def test_evaluate_folded_n_jobs_reproducibility() -> None:
     seq_d.pop("run_id", None)
     par_d.pop("run_id", None)
     # by_fold contains nested RunResults whose run_ids are deterministic
-    # (seed=17/fold=0 etc.), so equality should hold.
+    # (rng=17/fold=0 etc.), so equality should hold.
     assert seq_d == par_d
 
 
@@ -236,7 +236,7 @@ def test_evaluate_rejects_non_picklable_scorer() -> None:
             slices,
             run_id="should_fail",
             n_resamples=10,
-            seed=0,
+            rng=0,
             n_jobs=2,
         )
 
@@ -246,7 +246,7 @@ def test_evaluate_n_jobs_zero_rejected() -> None:
     """n_jobs=0 raises ValueError per parallel_map contract (typo guard)."""
     scorers, slices = _build_two_slice_fixture(n=30)
     with pytest.raises(ValueError, match="n_jobs=0"):
-        evaluate(scorers, slices, run_id="zero", n_resamples=10, seed=0, n_jobs=0)
+        evaluate(scorers, slices, run_id="zero", n_resamples=10, rng=0, n_jobs=0)
 
 
 @pytest.mark.unit
@@ -258,7 +258,7 @@ def test_evaluate_n_jobs_minus_one_smoke() -> None:
         slices,
         run_id="all_cores",
         n_resamples=20,
-        seed=0,
+        rng=0,
         n_jobs=-1,
     )
     # Just confirm we got a valid RunResult shape; correctness covered above.

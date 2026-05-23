@@ -119,8 +119,8 @@ Locked at v1.0 — these names mean these things, everywhere:
 | `n_jobs` | Parallelism (joblib convention; sklearn-aligned) |
 | `ax` | Matplotlib axis (matplotlib convention) |
 | `metric` | Callable `(y_true, y_score) -> float` |
-| `rng` | RNG argument per SPEC 7 (target convention; adopted in v0.50.0) |
-| `seed` | _legacy name_ — used in v0.48 and earlier; replaced by `rng` in v0.50.0 except in `seeds.set_global_seeds(seed: int)` (global-state setter; SPEC 7 doesn't apply) and adversarial dataclass fields (use Python `random.Random(seed)`; not NumPy-RNG). |
+| `rng` | RNG argument per SPEC 7 — **canonical** convention (adopted v0.50.0). Accepts `int \| np.random.Generator \| BitGenerator \| SeedSequence \| None`. |
+| `seed` | _legacy name_ used through v0.49 — replaced by `rng` at v0.50.0 across ~22 Tier-1 sites. EXCEPTIONS where `seed` is retained: `seeds.set_global_seeds(seed: int)` (global-state setter; SPEC 7 doesn't apply), adversarial dataclass fields (use Python `random.Random(seed)`; not NumPy-RNG), Splitter dataclass class-fields (configuration storage, not user-facing RNG parameter), `loaders.py` YAML config key. |
 
 **Future functions MUST use these names.** A PR that introduces
 `labels=` (instead of `y_true=`), `scores=` (instead of `y_score=`),

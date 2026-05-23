@@ -80,7 +80,7 @@ def perfect_detector_data() -> tuple[np.ndarray, np.ndarray]:
 def test_logistic_stacker_satisfies_meta_learner_protocol(three_detector_data) -> None:
     """LogisticStacker structurally satisfies MetaLearner Protocol after fit."""
     scores, y = three_detector_data
-    stacker = LogisticStacker(random_state=0).fit(scores, y)
+    stacker = LogisticStacker(rng=0).fit(scores, y)
     assert isinstance(stacker, MetaLearner)
 
 
@@ -113,7 +113,7 @@ def test_meta_learner_protocol_is_runtime_checkable() -> None:
 
 def test_coef_shape_matches_n_detectors(three_detector_data) -> None:
     scores, y = three_detector_data
-    stacker = LogisticStacker(random_state=0).fit(scores, y)
+    stacker = LogisticStacker(rng=0).fit(scores, y)
     assert stacker.coef_.shape == (3,)
     assert stacker.intercept_.shape == (1,)
     assert stacker.classes_.tolist() == [0, 1]
@@ -121,7 +121,7 @@ def test_coef_shape_matches_n_detectors(three_detector_data) -> None:
 
 def test_predict_proba_shape(three_detector_data) -> None:
     scores, y = three_detector_data
-    stacker = LogisticStacker(random_state=0).fit(scores, y)
+    stacker = LogisticStacker(rng=0).fit(scores, y)
     proba = stacker.predict_proba(scores)
     assert proba.shape == (500, 2)
     assert np.allclose(proba.sum(axis=1), 1.0)
@@ -129,7 +129,7 @@ def test_predict_proba_shape(three_detector_data) -> None:
 
 def test_predict_shape(three_detector_data) -> None:
     scores, y = three_detector_data
-    stacker = LogisticStacker(random_state=0).fit(scores, y)
+    stacker = LogisticStacker(rng=0).fit(scores, y)
     preds = stacker.predict(scores)
     assert preds.shape == (500,)
     assert set(preds.tolist()).issubset({0, 1})
@@ -138,7 +138,7 @@ def test_predict_shape(three_detector_data) -> None:
 def test_predict_proba_works_on_subset(three_detector_data) -> None:
     """predict_proba on a different-sized score matrix (same n_detectors) works."""
     scores, y = three_detector_data
-    stacker = LogisticStacker(random_state=0).fit(scores, y)
+    stacker = LogisticStacker(rng=0).fit(scores, y)
     proba = stacker.predict_proba(scores[:50])
     assert proba.shape == (50, 2)
 
@@ -151,8 +151,8 @@ def test_predict_proba_works_on_subset(three_detector_data) -> None:
 def test_regularization_shrinks_weights(three_detector_data) -> None:
     """Smaller C → stronger L2 regularization → smaller-magnitude coef_."""
     scores, y = three_detector_data
-    weak = LogisticStacker(C=10.0, random_state=0).fit(scores, y)
-    strong = LogisticStacker(C=0.01, random_state=0).fit(scores, y)
+    weak = LogisticStacker(C=10.0, rng=0).fit(scores, y)
+    strong = LogisticStacker(C=0.01, rng=0).fit(scores, y)
     weak_norm = float(np.linalg.norm(weak.coef_))
     strong_norm = float(np.linalg.norm(strong.coef_))
     assert strong_norm < weak_norm, (
@@ -164,9 +164,7 @@ def test_regularization_shrinks_weights(three_detector_data) -> None:
 def test_l1_penalty_can_drive_weights_to_zero(perfect_detector_data) -> None:
     """L1 penalty + small C should zero out the noise column."""
     scores, y = perfect_detector_data
-    stacker = LogisticStacker(C=0.1, penalty="l1", solver="liblinear", random_state=0).fit(
-        scores, y
-    )
+    stacker = LogisticStacker(C=0.1, penalty="l1", solver="liblinear", rng=0).fit(scores, y)
     # The noisy column (index 1) should have substantially smaller coef than the signal column (0).
     assert abs(stacker.coef_[0]) > abs(stacker.coef_[1]), (
         f"signal column |coef|={abs(stacker.coef_[0]):.3f} should exceed "
@@ -177,7 +175,7 @@ def test_l1_penalty_can_drive_weights_to_zero(perfect_detector_data) -> None:
 def test_signal_ordering(three_detector_data) -> None:
     """Detector 0 (highest signal) should get the largest weight."""
     scores, y = three_detector_data
-    stacker = LogisticStacker(C=1.0, random_state=0).fit(scores, y)
+    stacker = LogisticStacker(C=1.0, rng=0).fit(scores, y)
     # Detector 0 (signal=0.7) should outrank detectors 1 and 2.
     assert stacker.coef_[0] > stacker.coef_[1]
     assert stacker.coef_[0] > stacker.coef_[2]
@@ -191,7 +189,7 @@ def test_signal_ordering(three_detector_data) -> None:
 def test_calibration_chaining_with_fit_platt_binary(three_detector_data) -> None:
     """Stacker output → fit_platt_binary returns a callable that produces (n,) probabilities."""
     scores, y = three_detector_data
-    stacker = LogisticStacker(random_state=0).fit(scores, y)
+    stacker = LogisticStacker(rng=0).fit(scores, y)
     stacker_proba = stacker.predict_proba(scores)[:, 1]
 
     (a, b), apply = fit_platt_binary(y, stacker_proba)
@@ -207,7 +205,7 @@ def test_calibration_chaining_with_fit_platt_binary(three_detector_data) -> None
 def test_calibration_chaining_with_fit_isotonic_binary(three_detector_data) -> None:
     """Stacker output → fit_isotonic_binary (non-parametric — params is None)."""
     scores, y = three_detector_data
-    stacker = LogisticStacker(random_state=0).fit(scores, y)
+    stacker = LogisticStacker(rng=0).fit(scores, y)
     stacker_proba = stacker.predict_proba(scores)[:, 1]
 
     params, apply = fit_isotonic_binary(y, stacker_proba)
@@ -222,10 +220,10 @@ def test_stacker_output_bootstrap_ci(three_detector_data) -> None:
     from eval_toolkit.metrics import pr_auc
 
     scores, y = three_detector_data
-    stacker = LogisticStacker(random_state=0).fit(scores, y)
+    stacker = LogisticStacker(rng=0).fit(scores, y)
     proba = stacker.predict_proba(scores)[:, 1]
 
-    ci = bootstrap_ci(y, proba, pr_auc, n_resamples=200, seed=0)
+    ci = bootstrap_ci(y, proba, pr_auc, n_resamples=200, rng=0)
     assert isinstance(ci, BootstrapCI)
     assert ci.ci_low <= ci.point_estimate <= ci.ci_high or ci.method == "BCa"
     assert ci.ci_low < ci.ci_high
@@ -292,7 +290,7 @@ def test_coef_property_raises_when_not_fit() -> None:
 
 def test_predict_proba_raises_on_wrong_n_detectors(three_detector_data) -> None:
     scores, y = three_detector_data
-    stacker = LogisticStacker(random_state=0).fit(scores, y)
+    stacker = LogisticStacker(rng=0).fit(scores, y)
     # Wrong number of detector columns
     wrong = scores[:, :2]
     with pytest.raises(ValueError, match="wrong number of detectors"):
@@ -307,8 +305,8 @@ def test_predict_proba_raises_on_wrong_n_detectors(three_detector_data) -> None:
 def test_fit_is_deterministic_under_seed(three_detector_data) -> None:
     """Two stackers with same random_state on same data produce identical coef_."""
     scores, y = three_detector_data
-    a = LogisticStacker(random_state=0).fit(scores, y)
-    b = LogisticStacker(random_state=0).fit(scores, y)
+    a = LogisticStacker(rng=0).fit(scores, y)
+    b = LogisticStacker(rng=0).fit(scores, y)
     np.testing.assert_array_equal(a.coef_, b.coef_)
     np.testing.assert_array_equal(a.intercept_, b.intercept_)
 
@@ -341,7 +339,7 @@ def test_property_stronger_signal_yields_better_separation(
         rng = np.random.default_rng(seed)
         y = rng.binomial(1, 0.4, size=n).astype(int)
         scores = (y * signal + rng.normal(0, 0.15, n)).reshape(-1, 1)
-        stacker = LogisticStacker(random_state=seed).fit(scores, y)
+        stacker = LogisticStacker(rng=seed).fit(scores, y)
         proba = stacker.predict_proba(scores)[:, 1]
 
         mean_pos = float(proba[y == 1].mean()) if (y == 1).any() else 0.0

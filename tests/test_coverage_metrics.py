@@ -390,7 +390,7 @@ def test_ece_debiased_smaller_than_plug_in_on_calibrated() -> None:
     s = rng.uniform(0, 1, size=n)
     y = (rng.uniform(0, 1, size=n) < s).astype(int)
     plug_in = expected_calibration_error_equal_mass(y, s)
-    debiased = expected_calibration_error_debiased(y, s, n_sweep=100, seed=0)
+    debiased = expected_calibration_error_debiased(y, s, n_sweep=100, rng=0)
     assert debiased <= plug_in + 1e-9
 
 

@@ -196,7 +196,7 @@ def _calibrated_small_n(rng: np.random.Generator, n: int = 50) -> tuple[np.ndarr
 
 def _bootstrap_ci_lower(values: np.ndarray, alpha: float = 0.05, n_boot: int = 1000) -> float:
     """Percentile-bootstrap lower bound on the mean."""
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(rng=0)
     boots = np.empty(n_boot, dtype=float)
     n = len(values)
     for i in range(n_boot):
@@ -209,7 +209,7 @@ def _bootstrap_ci(
     values: np.ndarray, alpha: float = 0.05, n_boot: int = 1000
 ) -> tuple[float, float]:
     """Two-sided percentile-bootstrap CI on the mean."""
-    rng = np.random.default_rng(seed=0)
+    rng = np.random.default_rng(rng=0)
     boots = np.empty(n_boot, dtype=float)
     n = len(values)
     for i in range(n_boot):

@@ -25,6 +25,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+from eval_toolkit._rng import RNGLike, SeedLike
 from eval_toolkit.artifacts import skipped_metric
 
 EmptyStrategy = Literal["raise", "return_none", "skipped_metric"]
@@ -1065,7 +1066,7 @@ def expected_calibration_error_debiased(
     n_bins: int = 10,
     *,
     n_sweep: int = 200,
-    seed: int = 42,
+    rng: RNGLike | SeedLike | None = 42,
 ) -> float:
     r"""Bias-corrected L1 ECE via simulated-H0 Monte-Carlo (Roelofs 2022 spirit).
 
@@ -1103,8 +1104,9 @@ def expected_calibration_error_debiased(
     n_sweep : int, optional
         Number of simulated-H0 resamples for the bias estimate. Default
         ``200``. Larger → tighter bias estimate, more compute.
-    seed : int, optional
-        RNG seed for the simulated H0 resamples.
+    rng : RNGLike | SeedLike | None, optional
+        RNG argument per `Scientific Python SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_
+        for the simulated H0 resamples (default int seed = 42).
 
     Returns
     -------
@@ -1127,7 +1129,7 @@ def expected_calibration_error_debiased(
     >>> s = rng.uniform(0, 1, size=n)
     >>> y = (rng.uniform(0, 1, size=n) < s).astype(int)
     >>> plug_in = expected_calibration_error_equal_mass(y, s)
-    >>> debiased = expected_calibration_error_debiased(y, s, n_sweep=100, seed=0)
+    >>> debiased = expected_calibration_error_debiased(y, s, n_sweep=100, rng=0)
     >>> debiased <= plug_in + 1e-9
     True
 
@@ -1166,7 +1168,7 @@ def expected_calibration_error_debiased(
     # Simulated-H0 bias estimate: under H0 (scores ARE true probabilities),
     # the expected plug-in ECE on Bernoulli(s) labels gives the bias floor.
     s_arr = np.asarray(y_score, dtype=float)
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(rng)
     bias_estimates = np.empty(n_sweep, dtype=np.float64)
     for i in range(n_sweep):
         y_synth = (rng.uniform(0, 1, size=n) < s_arr).astype(int)

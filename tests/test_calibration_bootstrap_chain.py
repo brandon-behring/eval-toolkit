@@ -105,7 +105,7 @@ def test_calibrated_ece_point_below_uncalibrated_in_majority_of_seeds() -> None:
             n_resamples=N_RESAMPLES,
             confidence=0.95,
             method="percentile",
-            seed=int(seed),
+            rng=int(seed),
         )
 
         # Fit Platt on the calibration split, apply to eval scores
@@ -118,7 +118,7 @@ def test_calibrated_ece_point_below_uncalibrated_in_majority_of_seeds() -> None:
             n_resamples=N_RESAMPLES,
             confidence=0.95,
             method="percentile",
-            seed=int(seed),
+            rng=int(seed),
         )
 
         valid_seeds += 1

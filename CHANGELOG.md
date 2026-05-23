@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.50.0] — 2026-05-23 — SPEC 7 `rng` parameter adoption
+
+The SPEC 7 follow-up to v0.49.0. The `_rng.py` scaffold shipped at
+v0.49.0 (SeedLike + RNGLike type aliases per
+[Scientific Python SPEC 7](https://scientific-python.org/specs/spec-0007/))
+is now wired into every Tier-1 public function that consumes a NumPy RNG.
+
+### BREAKING
+
+**22 Tier-1 function signatures**: `seed: int = X` / `random_state: int | None` → `rng: RNGLike | SeedLike | None = X`. Pre-v1.0 SemVer-minor BREAKING (v0.34.0 precedent). Defaults preserved (still deterministic-by-default).
+
+Affected functions:
+
+- `bootstrap.py` (7 public + 1 private): `bootstrap_ci`, `paired_bootstrap_diff`, `paired_bootstrap_ece_diff`, `paired_bootstrap_op_point_diff`, `paired_mde`, `block_bootstrap_on_folds`, `cross_validate_metric`, `_bootstrap_t_ci`.
+- `metrics.py:1063`: `expected_calibration_error_debiased`.
+- `thresholds.py`: `selected_operating_point` + `_bootstrap_threshold_metric_cis`.
+- `analysis.py`: `bootstrap_metric_from_predictions`, `paired_diff_from_prediction_refs`.
+- `harness.py` (6 sites): `evaluate`, `evaluate_scorer_on_slice`, `_bootstrap_auc_ci`, `_evaluate_scores`, `_compute_paired_diffs`, `_score_all_slices`.
+- `scorecards.py`: `scorecard`, `_evaluate_spec`.
+- `stacking.py`: `LogisticStacker.random_state` → `LogisticStacker.rng` class-field rename (sklearn pass-through derives int at the boundary).
+
+**Body refactors**:
+
+- 4 SeedSequence.spawn() sites converted from `np.random.SeedSequence(seed).spawn(n)` to `rng.bit_generator.seed_seq.spawn(n)` (Option A — preserves existing worker SeedSequence signatures).
+- 2 sklearn-bridge sites in `cross_validate_metric` derive int from rng before passing to `StratifiedKFold`/`KFold(random_state=...)` (defensive across sklearn versions <1.4).
+- `LogisticStacker.fit` derives sklearn int from `self.rng` at the boundary.
+
+**Config schema** (Tier-2 additive): `evaluate()` config dict key `"seed"` → `"rng"`. Generator-typed input serializes as `repr(rng)`; int/None serialize as-is (backward-compatible for prior int-seed usage).
+
+### Added
+
+- **Docstrings**: NumPy-style parameter doc for every renamed function now references `rng : RNGLike | SeedLike | None` with explicit link to SPEC 7.
+- **STYLE.md §3a** + **ADR 0004 D4**: `rng` row flipped from "target convention; adopted in v0.50.0" → "**canonical** convention (adopted v0.50.0)".
+
+### Changed
+
+- **Test sweep** (~230+ test sites): `seed=X` → `rng=X` in test kwarg calls, EXCEPT in test files that test legitimate `seed`-as-int contexts (`test_adversarial.py` for Python `random.Random`, `test_seeds.py` for `set_global_seeds`, `test_splits*.py` for Splitter dataclass fields, `test_text_dedup*.py` for MinHashLSHStrategy class field).
+- **CHANGELOG header**: this release.
+
+### Exceptions to SPEC 7 (KEPT `seed:` — documented in STYLE.md §3a + ADR 0004 D4)
+
+- `seeds.set_global_seeds(seed: int)` — global-state setter, not per-function RNG.
+- `adversarial.py` dataclass fields + functional wrappers — use Python stdlib `random.Random(seed)`, not NumPy.
+- `splits.py` Splitter dataclass class-fields (`HoldoutSplitter.seed`, `StratifiedKFoldSplitter.seed`, etc.) — configuration storage, not user-facing RNG parameter.
+- `loaders.py:903` YAML config schema key — declarative; renaming would break consumer YAMLs.
+
+### Migration
+
+- Consumer (`prompt-injection-detection-submission`) lockstep: bump dep pin `>=0.49.0` → `>=0.50.0`; rename `seed=` → `rng=` on eval-toolkit-bound call sites (estimated 5-8 sites).
+- Bit-for-bit reproducibility preserved when migrating `seed=42` → `rng=42` (int seed is SeedLike; `np.random.default_rng(42)` is the canonical normalization).
+
+### Notes
+
+- Ships in parallel with Round 8 audit STOP-GATE (Decision Y.2); R8 briefing at commit `6f6839a`, awaiting Codex+Gemini reports.
+- Memory pattern captured at v0.49.0: pre-flight grep MUST cover `README.md`, `.doctest-modules`, and any config files (per `feedback_sybil_runs_readme.md`). Applied to v0.50.0 pre-flight.
+
 ## [0.49.0] — 2026-05-23 — Global naming-standards sweep + final cleanup before v1.0
 
 Final pre-v1.0 minor consolidating the naming-convention standardization

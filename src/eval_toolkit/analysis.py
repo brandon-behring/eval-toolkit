@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 
+from eval_toolkit._rng import RNGLike, SeedLike
 from eval_toolkit.bootstrap import bootstrap_ci, paired_bootstrap_diff
 from eval_toolkit.metrics import pr_auc
 from eval_toolkit.protocols import PredictionReader
@@ -121,7 +122,7 @@ def bootstrap_metric_from_predictions(
     *,
     reader: PredictionReader | None = None,
     n_resamples: int = 1000,
-    seed: int = 42,
+    rng: RNGLike | SeedLike | None = 42,
 ) -> dict[str, object]:
     """Compute a PR-AUC bootstrap CI from one prediction ref."""
     arrays = load_prediction_arrays(ref, reader=reader)
@@ -130,7 +131,7 @@ def bootstrap_metric_from_predictions(
         arrays.scores,
         pr_auc,
         n_resamples=n_resamples,
-        seed=seed,
+        rng=rng,
     ).to_dict()
 
 
@@ -141,7 +142,7 @@ def paired_diff_from_prediction_refs(
     baseline_reader: PredictionReader | None = None,
     candidate_reader: PredictionReader | None = None,
     n_resamples: int = 1000,
-    seed: int = 42,
+    rng: RNGLike | SeedLike | None = 42,
 ) -> dict[str, object]:
     """Compute paired PR-AUC delta from two prediction refs.
 
@@ -172,7 +173,7 @@ def paired_diff_from_prediction_refs(
         candidate.scores,
         pr_auc,
         n_resamples=n_resamples,
-        seed=seed,
+        rng=rng,
     ).to_dict()
 
 

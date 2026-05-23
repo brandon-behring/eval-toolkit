@@ -179,7 +179,7 @@ def test_bootstrap_metric_from_predictions_returns_ci(tmp_path: Path) -> None:
         for i, (lab, s) in enumerate(zip(labels, scores, strict=True))
     ]
     _write_csv(path, rows)
-    out = bootstrap_metric_from_predictions(_csv_ref(path), n_resamples=20, seed=7)
+    out = bootstrap_metric_from_predictions(_csv_ref(path), n_resamples=20, rng=7)
     assert out["n_resamples"] == 20
     # v0.48 §5B: schema rewritten from {ci_95: [l, h]} to {low: l, high: h}
     assert out["low"] <= out["point"] <= out["high"]
@@ -198,7 +198,7 @@ def test_paired_diff_rejects_shape_mismatch(tmp_path: Path) -> None:
         ],
     )
     with pytest.raises(ValueError, match="same number of rows"):
-        paired_diff_from_prediction_refs(_csv_ref(p1), _csv_ref(p2), n_resamples=5, seed=1)
+        paired_diff_from_prediction_refs(_csv_ref(p1), _csv_ref(p2), n_resamples=5, rng=1)
 
 
 @pytest.mark.unit
@@ -208,7 +208,7 @@ def test_paired_diff_rejects_label_mismatch(tmp_path: Path) -> None:
     _write_csv(p1, [{"label": 0, "score": 0.1, "row_id": "r0", "content_hash": "h0"}])
     _write_csv(p2, [{"label": 1, "score": 0.1, "row_id": "r0", "content_hash": "h0"}])
     with pytest.raises(ValueError, match="identical labels"):
-        paired_diff_from_prediction_refs(_csv_ref(p1), _csv_ref(p2), n_resamples=5, seed=1)
+        paired_diff_from_prediction_refs(_csv_ref(p1), _csv_ref(p2), n_resamples=5, rng=1)
 
 
 @pytest.mark.unit
@@ -218,7 +218,7 @@ def test_paired_diff_rejects_row_id_mismatch(tmp_path: Path) -> None:
     _write_csv(p1, [{"label": 0, "score": 0.1, "row_id": "r0", "content_hash": "h0"}])
     _write_csv(p2, [{"label": 0, "score": 0.2, "row_id": "rZ", "content_hash": "h0"}])
     with pytest.raises(ValueError, match="identical row_ids"):
-        paired_diff_from_prediction_refs(_csv_ref(p1), _csv_ref(p2), n_resamples=5, seed=1)
+        paired_diff_from_prediction_refs(_csv_ref(p1), _csv_ref(p2), n_resamples=5, rng=1)
 
 
 @pytest.mark.unit
@@ -239,7 +239,7 @@ def test_paired_diff_rejects_content_hash_mismatch(tmp_path: Path) -> None:
         "columns": {"label": "label", "score": "score", "content_hash": "content_hash"},
     }
     with pytest.raises(ValueError, match="identical content_hashes"):
-        paired_diff_from_prediction_refs(ref1, ref2, n_resamples=5, seed=1)
+        paired_diff_from_prediction_refs(ref1, ref2, n_resamples=5, rng=1)
 
 
 @pytest.mark.unit

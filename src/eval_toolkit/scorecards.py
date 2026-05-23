@@ -61,6 +61,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
+from eval_toolkit._rng import RNGLike, SeedLike
 from eval_toolkit.artifacts import MetricStatus
 from eval_toolkit.bootstrap import BootstrapCI, bootstrap_ci
 from eval_toolkit.metrics import is_metric_defined_for_slice
@@ -354,7 +355,7 @@ def scorecard(
     bootstrap: bool = True,
     n_resamples: int = 1000,
     confidence: float = 0.95,
-    seed: int | None = None,
+    rng: RNGLike | SeedLike | None = None,
 ) -> Scorecard:
     """Compute multiple metrics on a single slice; return a :class:`Scorecard`.
 
@@ -384,12 +385,14 @@ def scorecard(
         :func:`~eval_toolkit.bootstrap.bootstrap_ci`.
     confidence : float, optional
         Two-sided CI level ∈ ``(0, 1)``. Default ``0.95``.
-    seed : int or None, optional
-        Bootstrap RNG seed. Default ``None``, which is treated as ``seed=0``
-        for reproducibility — eval-toolkit's evaluation pipelines are
-        deterministic by default. Pass an explicit integer to control the
-        bootstrap RNG; pass a value derived from
-        ``np.random.SeedSequence().entropy`` for non-deterministic sampling.
+    rng : RNGLike | SeedLike | None, optional
+        Bootstrap RNG argument per `Scientific Python SPEC 7
+        <https://scientific-python.org/specs/spec-0007/>`_. Default ``None``,
+        which is treated as ``rng=0`` for reproducibility — eval-toolkit's
+        evaluation pipelines are deterministic by default. Pass an explicit
+        integer, ``np.random.Generator``, or ``np.random.SeedSequence``;
+        pass a value derived from ``np.random.SeedSequence().entropy`` for
+        non-deterministic sampling.
         Decision R6-A (Round 6 audit) locked the deterministic-by-default
         contract; the prior docstring framing was incorrect.
 
@@ -414,7 +417,7 @@ def scorecard(
     >>> y = rng.integers(0, 2, 500)
     >>> s = rng.random(500)
     >>> r = scorecard(y, s, metrics=[ms.pr_auc, ms.brier], bootstrap=True,
-    ...               n_resamples=200, seed=0)
+    ...               n_resamples=200, rng=0)
     >>> r["pr_auc"].status
     'ok'
     >>> r["pr_auc"].ci is not None
@@ -474,7 +477,7 @@ def scorecard(
             bootstrap=bootstrap,
             n_resamples=n_resamples,
             confidence=confidence,
-            seed=seed,
+            rng=rng,
         )
 
     return Scorecard(results)
@@ -489,7 +492,7 @@ def _evaluate_spec(
     bootstrap: bool,
     n_resamples: int,
     confidence: float,
-    seed: int | None,
+    rng: RNGLike | SeedLike | None,
 ) -> MetricResult:
     """Compute one spec's MetricResult, isolating per-spec failures."""
     if not is_metric_defined_for_slice(spec.name, is_single_class=is_single_class):
@@ -523,7 +526,7 @@ def _evaluate_spec(
             lambda y_t, y_s: spec.compute(y_t, y_s),
             n_resamples=n_resamples,
             confidence=confidence,
-            seed=seed if seed is not None else 0,
+            rng=rng if rng is not None else 0,
         )
     except (MemoryError, RecursionError, KeyboardInterrupt, SystemExit):
         # Same R6-F5 invariant for the bootstrap path.

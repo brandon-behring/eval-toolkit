@@ -45,7 +45,7 @@ def test_bootstrap_ci_contains_point_estimate(
     informative_signal: tuple[np.ndarray, np.ndarray],
 ) -> None:
     y_true, y_score = informative_signal
-    ci = bootstrap_ci(y_true, y_score, pr_auc, n_resamples=200, method="BCa", seed=42)
+    ci = bootstrap_ci(y_true, y_score, pr_auc, n_resamples=200, method="BCa", rng=42)
     assert isinstance(ci, BootstrapCI)
     assert ci.ci_low <= ci.point_estimate <= ci.ci_high
 
@@ -59,8 +59,8 @@ def test_bootstrap_ci_width_shrinks_with_n() -> None:
     big_s = np.clip(big_s, 0, 1)
     small_y = big_y[:60]
     small_s = big_s[:60]
-    ci_big = bootstrap_ci(big_y, big_s, pr_auc, n_resamples=200, seed=42)
-    ci_small = bootstrap_ci(small_y, small_s, pr_auc, n_resamples=200, seed=42)
+    ci_big = bootstrap_ci(big_y, big_s, pr_auc, n_resamples=200, rng=42)
+    ci_small = bootstrap_ci(small_y, small_s, pr_auc, n_resamples=200, rng=42)
     assert (ci_big.ci_high - ci_big.ci_low) < (ci_small.ci_high - ci_small.ci_low)
 
 
@@ -72,7 +72,7 @@ def test_paired_bootstrap_diff_detects_real_lift() -> None:
     score_a = rng.uniform(0, 1, size=400)
     score_b = score_a + 0.4 * y_true
     score_b = np.clip(score_b, 0, 1)
-    diff = paired_bootstrap_diff(y_true, score_a, score_b, pr_auc, n_resamples=300, seed=42)
+    diff = paired_bootstrap_diff(y_true, score_a, score_b, pr_auc, n_resamples=300, rng=42)
     assert isinstance(diff, PairedBootstrapCI)
     assert diff.delta > 0
     assert not diff.overlaps_zero
@@ -85,7 +85,7 @@ def test_paired_bootstrap_diff_overlaps_zero_when_no_lift() -> None:
     y_true = rng.binomial(1, 0.3, size=400).astype(int)
     score = y_true + rng.normal(0, 0.3, size=400)
     score = np.clip(score, 0, 1)
-    diff = paired_bootstrap_diff(y_true, score, score, pr_auc, n_resamples=300, seed=42)
+    diff = paired_bootstrap_diff(y_true, score, score, pr_auc, n_resamples=300, rng=42)
     assert diff.delta == pytest.approx(0.0, abs=1e-12)
 
 
@@ -103,13 +103,13 @@ def test_paired_bootstrap_handles_shape_mismatch() -> None:
 @pytest.mark.unit
 def test_bootstrap_too_small_n_rejected() -> None:
     with pytest.raises(ValueError, match="too small"):
-        bootstrap_ci(np.array([0, 1, 0]), np.array([0.1, 0.9, 0.5]), pr_auc, seed=42)
+        bootstrap_ci(np.array([0, 1, 0]), np.array([0.1, 0.9, 0.5]), pr_auc, rng=42)
 
 
 @pytest.mark.unit
 def test_percentile_method_works(informative_signal: tuple[np.ndarray, np.ndarray]) -> None:
     y_true, y_score = informative_signal
-    ci = bootstrap_ci(y_true, y_score, pr_auc, n_resamples=200, method="percentile", seed=42)
+    ci = bootstrap_ci(y_true, y_score, pr_auc, n_resamples=200, method="percentile", rng=42)
     assert ci.method == "percentile"
     assert ci.ci_low <= ci.point_estimate <= ci.ci_high
 
@@ -121,7 +121,7 @@ def test_paired_bootstrap_overlaps_zero_field() -> None:
     score_a = rng.uniform(0, 1, size=200)
     score_b = score_a + rng.normal(0, 0.05, size=200)
     score_b = np.clip(score_b, 0, 1)
-    diff = paired_bootstrap_diff(y_true, score_a, score_b, pr_auc, n_resamples=200, seed=42)
+    diff = paired_bootstrap_diff(y_true, score_a, score_b, pr_auc, n_resamples=200, rng=42)
     expected = bool(diff.ci_low < 0 < diff.ci_high)
     assert diff.overlaps_zero == expected
 
@@ -130,7 +130,7 @@ def test_paired_bootstrap_overlaps_zero_field() -> None:
 def test_bootstrap_ci_to_dict_schema(informative_signal: tuple[np.ndarray, np.ndarray]) -> None:
     """v0.48 §5B: schema renamed from {ci_95: [l,h]} to {low: l, high: h}."""
     y_true, y_score = informative_signal
-    ci = bootstrap_ci(y_true, y_score, pr_auc, n_resamples=200, seed=42)
+    ci = bootstrap_ci(y_true, y_score, pr_auc, n_resamples=200, rng=42)
     d = ci.to_dict()
     assert set(d.keys()) == {"point", "low", "high", "confidence", "n_resamples", "method"}
     # Bounds are scalar floats now (not a list)
@@ -145,7 +145,7 @@ def test_paired_bootstrap_diff_to_dict_schema() -> None:
     rng = np.random.default_rng(7)
     y = rng.binomial(1, 0.3, size=200).astype(int)
     s = y + rng.normal(0, 0.3, size=200)
-    diff = paired_bootstrap_diff(y, s, s, pr_auc, n_resamples=100, seed=42)
+    diff = paired_bootstrap_diff(y, s, s, pr_auc, n_resamples=100, rng=42)
     d = diff.to_dict()
     assert set(d.keys()) == {"delta", "low", "high", "overlaps_zero", "confidence", "n_resamples"}
     assert isinstance(d["low"], float)
@@ -164,7 +164,7 @@ def test_bootstrap_ci_to_dict_self_describing_at_non_default_confidence() -> Non
     rng = np.random.default_rng(7)
     y = rng.binomial(1, 0.3, size=200).astype(int)
     s = y + rng.normal(0, 0.3, size=200)
-    ci = bootstrap_ci(y, s, pr_auc, n_resamples=200, seed=42, confidence=0.90)
+    ci = bootstrap_ci(y, s, pr_auc, n_resamples=200, rng=42, confidence=0.90)
     d = ci.to_dict()
     # The schema does NOT carry a misleading "ci_95" key at confidence=0.90
     assert "ci_95" not in d
@@ -202,7 +202,7 @@ def test_paired_bootstrap_op_point_diff_runs(
         threshold_fn=threshold_fn,
         metric_fn=metric_fn,
         n_resamples=100,
-        seed=42,
+        rng=42,
     )
     # Same scorer paired with itself: delta should be 0.
     assert diff.delta == pytest.approx(0.0, abs=1e-12)
@@ -221,7 +221,7 @@ def test_paired_bootstrap_ece_diff_di_contract(
         y_score,
         ece_fn=expected_calibration_error,
         n_resamples=100,
-        seed=42,
+        rng=42,
     )
     assert isinstance(diff, PairedBootstrapCI)
     # Same scorer: delta should be 0.
@@ -246,7 +246,7 @@ def test_paired_bootstrap_ece_diff_with_custom_ece_fn(
         y_score,
         ece_fn=my_ece,
         n_resamples=50,
-        seed=42,
+        rng=42,
     )
     assert call_count[0] > 0
     assert isinstance(diff, PairedBootstrapCI)
@@ -261,7 +261,7 @@ def test_paired_mde_runs() -> None:
     score_a = rng.uniform(0, 1, size=n)
     score_b = score_a + 0.3 * y_true  # B is genuinely better
     score_b = np.clip(score_b, 0, 1)
-    est = paired_mde(y_true, score_a, score_b, pr_auc, n_resamples=200, seed=42)
+    est = paired_mde(y_true, score_a, score_b, pr_auc, n_resamples=200, rng=42)
     assert isinstance(est, MDEEstimate)
     assert est.alpha == 0.05
     assert est.power == 0.80
@@ -364,7 +364,7 @@ def test_paired_bootstrap_overlaps_zero_inclusive_on_degenerate_ci() -> None:
     n = 50
     y = np.array([0] * 5 + [1] * (n - 5), dtype=int)
     s_const = np.zeros(n, dtype=float)
-    diff = paired_bootstrap_diff(y, s_const, s_const, pr_auc, n_resamples=100, seed=0)
+    diff = paired_bootstrap_diff(y, s_const, s_const, pr_auc, n_resamples=100, rng=0)
     assert diff.delta == 0.0
     assert diff.ci_low == 0.0
     assert diff.ci_high == 0.0
@@ -488,7 +488,7 @@ def test_bootstrap_ci_minimal_n_resamples_does_not_crash() -> None:
     s = np.linspace(0.0, 1.0, 20)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
-        ci = bootstrap_ci(y, s, pr_auc, n_resamples=2, method="percentile", seed=0)
+        ci = bootstrap_ci(y, s, pr_auc, n_resamples=2, method="percentile", rng=0)
     assert ci.ci_low <= ci.point_estimate <= ci.ci_high
 
 
@@ -504,7 +504,7 @@ def test_bootstrap_ci_rejects_n_resamples_zero() -> None:
     y = np.array([0] * 5 + [1] * 5, dtype=int)
     s = np.linspace(0.0, 1.0, 10)
     with pytest.raises(ValueError):
-        bootstrap_ci(y, s, pr_auc, n_resamples=0, method="percentile", seed=0)
+        bootstrap_ci(y, s, pr_auc, n_resamples=0, method="percentile", rng=0)
 
 
 # --- v0.20.0: DeLong correlated-ROC variance (C12) ---

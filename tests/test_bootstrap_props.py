@@ -33,7 +33,7 @@ _score_array = score_array
 @settings(deadline=None, max_examples=15, suppress_health_check=[HealthCheck.filter_too_much])
 def test_bootstrap_point_estimate_fidelity(y: np.ndarray, s: np.ndarray, seed: int) -> None:
     """ci.point_estimate equals the metric value on the original sample."""
-    ci = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="percentile", seed=seed)
+    ci = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="percentile", rng=seed)
     direct = pr_auc(y, s)
     assert ci.point_estimate == pytest.approx(direct, abs=1e-12)
 
@@ -47,8 +47,8 @@ def test_bootstrap_point_estimate_fidelity(y: np.ndarray, s: np.ndarray, seed: i
 @settings(deadline=None, max_examples=10, suppress_health_check=[HealthCheck.filter_too_much])
 def test_bootstrap_determinism(y: np.ndarray, s: np.ndarray, seed: int) -> None:
     """Same seed → identical CI."""
-    ci1 = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="percentile", seed=seed)
-    ci2 = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="percentile", seed=seed)
+    ci1 = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="percentile", rng=seed)
+    ci2 = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="percentile", rng=seed)
     assert ci1.ci_low == ci2.ci_low
     assert ci1.ci_high == ci2.ci_high
     assert ci1.point_estimate == ci2.point_estimate
@@ -67,8 +67,8 @@ def test_paired_bootstrap_diff_anti_symmetry(
     y: np.ndarray, s_a: np.ndarray, s_b: np.ndarray, seed: int
 ) -> None:
     """paired_diff(A, B) and paired_diff(B, A) give negated delta."""
-    diff_ab = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=100, seed=seed)
-    diff_ba = paired_bootstrap_diff(y, s_b, s_a, pr_auc, n_resamples=100, seed=seed)
+    diff_ab = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=100, rng=seed)
+    diff_ba = paired_bootstrap_diff(y, s_b, s_a, pr_auc, n_resamples=100, rng=seed)
     assert diff_ab.delta == pytest.approx(-diff_ba.delta, abs=1e-12)
 
 
@@ -83,7 +83,7 @@ def test_paired_diff_zero_delta_for_identical_scorers(
     y: np.ndarray, s: np.ndarray, seed: int
 ) -> None:
     """Same scorer: delta is exactly zero."""
-    diff = paired_bootstrap_diff(y, s, s, pr_auc, n_resamples=50, seed=seed)
+    diff = paired_bootstrap_diff(y, s, s, pr_auc, n_resamples=50, rng=seed)
     assert diff.delta == pytest.approx(0.0, abs=1e-12)
 
 
@@ -99,7 +99,7 @@ def test_overlaps_zero_correctness(
     y: np.ndarray, s_a: np.ndarray, s_b: np.ndarray, seed: int
 ) -> None:
     """overlaps_zero == (ci_low ≤ 0 ≤ ci_high)."""
-    diff = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=100, seed=seed)
+    diff = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=100, rng=seed)
     expected = bool(diff.ci_low <= 0 <= diff.ci_high)
     assert diff.overlaps_zero == expected
 
@@ -112,7 +112,7 @@ def test_overlaps_zero_correctness(
 @settings(deadline=None, max_examples=10, suppress_health_check=[HealthCheck.filter_too_much])
 def test_bootstrap_ci_contains_point_estimate(y: np.ndarray, s: np.ndarray) -> None:
     """ci_low ≤ point_estimate ≤ ci_high."""
-    ci = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="percentile", seed=42)
+    ci = bootstrap_ci(y, s, pr_auc, n_resamples=100, method="percentile", rng=42)
     assert ci.ci_low <= ci.point_estimate <= ci.ci_high
 
 
@@ -135,8 +135,8 @@ def test_paired_mde_decreases_with_n(seed: int) -> None:
     s_b_big = s_a_big + 0.2 * y_big
     s_b_big = np.clip(s_b_big, 0, 1)
 
-    mde_small = paired_mde(y_small, s_a_small, s_b_small, pr_auc, n_resamples=100, seed=seed)
-    mde_big = paired_mde(y_big, s_a_big, s_b_big, pr_auc, n_resamples=100, seed=seed)
+    mde_small = paired_mde(y_small, s_a_small, s_b_small, pr_auc, n_resamples=100, rng=seed)
+    mde_big = paired_mde(y_big, s_a_big, s_b_big, pr_auc, n_resamples=100, rng=seed)
     # n=400 should give a smaller MDE than n=100, with some noise tolerance.
     assert mde_big.mde < mde_small.mde * 1.2  # 20% noise allowance
 
@@ -149,5 +149,5 @@ def test_paired_mde_decreases_with_n(seed: int) -> None:
 @settings(deadline=None, max_examples=10, suppress_health_check=[HealthCheck.filter_too_much])
 def test_paired_diff_with_roc_auc_metric(y: np.ndarray, s: np.ndarray) -> None:
     """paired_bootstrap_diff is metric-agnostic — works for ROC-AUC too."""
-    diff = paired_bootstrap_diff(y, s, s, roc_auc, n_resamples=50, seed=42)
+    diff = paired_bootstrap_diff(y, s, s, roc_auc, n_resamples=50, rng=42)
     assert diff.delta == pytest.approx(0.0, abs=1e-12)

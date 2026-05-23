@@ -128,7 +128,7 @@ def test_multi_slice_fault_injection_healthy_scorer_unaffected_by_failing_scorer
         run_id="fault-injection-mixed",
         n_resamples=20,
         on_scorer_error="record",
-        seed=42,
+        rng=42,
     )
 
     # Run a control without any failing scorer
@@ -137,7 +137,7 @@ def test_multi_slice_fault_injection_healthy_scorer_unaffected_by_failing_scorer
         slices=[slice_a, slice_b, slice_c],
         run_id="control",
         n_resamples=20,
-        seed=42,
+        rng=42,
     )
 
     # The healthy scorer's per-slice block must be byte-identical between

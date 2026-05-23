@@ -9,12 +9,12 @@ factor fails immediately.
 
 Cases (one per known stress point in the BCa+percentile math):
 
-1. ``pr_auc_balanced_n200_BCa_seed42``           — typical balanced baseline
-2. ``roc_auc_balanced_n200_BCa_seed42``          — different metric, same shape
-3. ``pr_auc_balanced_n200_percentile_seed42``    — non-BCa code path
-4. ``pr_auc_imbalanced_p05_n200_BCa_seed42``     — BCa skew correction (a-hat) path
-5. ``pr_auc_n10_percentile_seed42``              — smallest valid n; quantile edge
-6. ``roc_auc_tied_n40_BCa_seed42``               — rank-resolution under ties
+1. ``pr_auc_balanced_n200_BCa_rng42``           — typical balanced baseline
+2. ``roc_auc_balanced_n200_BCa_rng42``          — different metric, same shape
+3. ``pr_auc_balanced_n200_percentile_rng42``    — non-BCa code path
+4. ``pr_auc_imbalanced_p05_n200_BCa_rng42``     — BCa skew correction (a-hat) path
+5. ``pr_auc_n10_percentile_rng42``              — smallest valid n; quantile edge
+6. ``roc_auc_tied_n40_BCa_rng42``               — rank-resolution under ties
 
 Regenerating
 ------------
@@ -120,40 +120,40 @@ METRICS: dict[str, Callable[..., float]] = {
 
 CASES: list[dict[str, object]] = [
     {
-        "id": "pr_auc_balanced_n200_BCa_seed42",
+        "id": "pr_auc_balanced_n200_BCa_rng42",
         "data": "balanced_n200",
         "metric": "pr_auc",
-        "kwargs": {"n_resamples": 500, "method": "BCa", "seed": 42, "confidence": 0.95},
+        "kwargs": {"n_resamples": 500, "method": "BCa", "rng": 42, "confidence": 0.95},
     },
     {
-        "id": "roc_auc_balanced_n200_BCa_seed42",
+        "id": "roc_auc_balanced_n200_BCa_rng42",
         "data": "balanced_n200",
         "metric": "roc_auc",
-        "kwargs": {"n_resamples": 500, "method": "BCa", "seed": 42, "confidence": 0.95},
+        "kwargs": {"n_resamples": 500, "method": "BCa", "rng": 42, "confidence": 0.95},
     },
     {
-        "id": "pr_auc_balanced_n200_percentile_seed42",
+        "id": "pr_auc_balanced_n200_percentile_rng42",
         "data": "balanced_n200",
         "metric": "pr_auc",
-        "kwargs": {"n_resamples": 500, "method": "percentile", "seed": 42, "confidence": 0.95},
+        "kwargs": {"n_resamples": 500, "method": "percentile", "rng": 42, "confidence": 0.95},
     },
     {
-        "id": "pr_auc_imbalanced_p05_n200_BCa_seed42",
+        "id": "pr_auc_imbalanced_p05_n200_BCa_rng42",
         "data": "imbalanced_p05_n200",
         "metric": "pr_auc",
-        "kwargs": {"n_resamples": 500, "method": "BCa", "seed": 42, "confidence": 0.95},
+        "kwargs": {"n_resamples": 500, "method": "BCa", "rng": 42, "confidence": 0.95},
     },
     {
-        "id": "pr_auc_n10_percentile_seed42",
+        "id": "pr_auc_n10_percentile_rng42",
         "data": "small_n10",
         "metric": "pr_auc",
-        "kwargs": {"n_resamples": 500, "method": "percentile", "seed": 42, "confidence": 0.95},
+        "kwargs": {"n_resamples": 500, "method": "percentile", "rng": 42, "confidence": 0.95},
     },
     {
-        "id": "roc_auc_tied_n40_BCa_seed42",
+        "id": "roc_auc_tied_n40_BCa_rng42",
         "data": "tied_n40",
         "metric": "roc_auc",
-        "kwargs": {"n_resamples": 500, "method": "BCa", "seed": 42, "confidence": 0.95},
+        "kwargs": {"n_resamples": 500, "method": "BCa", "rng": 42, "confidence": 0.95},
     },
 ]
 

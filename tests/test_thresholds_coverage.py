@@ -223,7 +223,7 @@ def test_ci_safe_selected_operating_point_with_bootstrap() -> None:
     y = np.concatenate([np.zeros(20, dtype=int), np.ones(20, dtype=int)])
     s = np.concatenate([rng.uniform(0.0, 0.4, 20), rng.uniform(0.6, 1.0, 20)])
     selector = CISafeThresholdSelector(max_fpr=0.5, min_recall=0.5)
-    out = selector.selected_operating_point(y, s, bootstrap_selected=True, n_resamples=10, seed=1)
+    out = selector.selected_operating_point(y, s, bootstrap_selected=True, n_resamples=10, rng=1)
     # When bootstrap is requested, a bootstrap_selected block is present
     # with per-metric percentile CIs.
     assert "bootstrap_selected" in out

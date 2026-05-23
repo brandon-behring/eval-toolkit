@@ -33,6 +33,7 @@ import numpy as np
 from scipy.stats import norm as _scipy_norm
 from sklearn.metrics import precision_recall_curve, roc_curve
 
+from eval_toolkit._rng import RNGLike, SeedLike
 from eval_toolkit.calibration import CostMatrix
 from eval_toolkit.metrics import ThresholdResult, _validate_inputs, metrics_at_threshold
 
@@ -369,7 +370,7 @@ class CISafeThresholdSelector:
         *,
         bootstrap_selected: bool = False,
         n_resamples: int = 1000,
-        seed: int = 42,
+        rng: RNGLike | SeedLike | None = 42,
     ) -> dict[str, object]:
         """Return selected threshold metadata and optional bootstrap CIs."""
         selected = self.select(y_true, y_score)
@@ -391,7 +392,7 @@ class CISafeThresholdSelector:
                 y_score,
                 selected.threshold,
                 n_resamples=n_resamples,
-                seed=seed,
+                rng=rng,
             )
         return out
 
@@ -461,14 +462,14 @@ def _bootstrap_threshold_metric_cis(
     threshold: float,
     *,
     n_resamples: int,
-    seed: int,
+    rng: RNGLike | SeedLike | None,
 ) -> dict[str, object]:
     """Percentile bootstrap CIs for selected-threshold operating metrics."""
     y_true_arr = np.asarray(y_true, dtype=int).ravel()
     y_score_arr = np.asarray(y_score, dtype=float).ravel()
     if y_true_arr.shape != y_score_arr.shape:
         raise ValueError("y_true and y_score must have identical shape")
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(rng)
     samples: dict[str, list[float]] = {"fpr": [], "recall": [], "precision": [], "f1": []}
     n = len(y_true_arr)
     for _ in range(n_resamples):

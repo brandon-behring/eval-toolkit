@@ -76,7 +76,7 @@ them; deviations need justification in the PR description.
 | `n_jobs` | Parallelism (joblib + sklearn convention) |
 | `ax` | Matplotlib axis (matplotlib convention) |
 | `metric` | Callable `(y_true, y_score) -> float` |
-| `rng` | RNG argument per [SPEC 7](https://scientific-python.org/specs/spec-0007/) — target convention; adopted in v0.50.0 |
+| `rng` | RNG argument per [SPEC 7](https://scientific-python.org/specs/spec-0007/) — **canonical** convention (adopted v0.50.0). Accepts `int`, `np.random.Generator`, `BitGenerator`, `SeedSequence`, or `None`. |
 
 The v0.50.0 SPEC 7 adoption preserves two `seed: int` exceptions:
 `set_global_seeds(seed: int)` (global-state setter, not per-function
