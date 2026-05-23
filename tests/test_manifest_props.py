@@ -15,7 +15,7 @@ from hypothesis import strategies as st
 
 from eval_toolkit.manifest import (
     MANIFEST_SCHEMA_VERSION,
-    build_manifest,
+    make_manifest,
     write_manifest,
 )
 
@@ -46,8 +46,8 @@ def test_config_hash_invariant_to_key_order(keys: list[str], values: list[int]) 
     items = list(zip(keys[:n], values[:n], strict=True))
     config1 = dict(items)
     config2 = dict(reversed(items))  # different insertion order, same mapping
-    m1 = build_manifest(run_id="r1", config=config1)
-    m2 = build_manifest(run_id="r2", config=config2)
+    m1 = make_manifest(run_id="r1", config=config1)
+    m2 = make_manifest(run_id="r2", config=config2)
     assert m1.config_hash == m2.config_hash
 
 
@@ -66,11 +66,11 @@ def test_config_hash_invariant_to_key_order(keys: list[str], values: list[int]) 
 @settings(deadline=None, max_examples=15)
 def test_config_hash_changes_when_config_changes(config: dict[str, int]) -> None:
     """If we mutate ANY value in the config, the hash changes."""
-    m1 = build_manifest(run_id="r1", config=config)
+    m1 = make_manifest(run_id="r1", config=config)
     mutated = dict(config)
     first_key = next(iter(mutated))
     mutated[first_key] = mutated[first_key] + 1
-    m2 = build_manifest(run_id="r2", config=mutated)
+    m2 = make_manifest(run_id="r2", config=mutated)
     assert m1.config_hash != m2.config_hash
 
 
@@ -83,8 +83,8 @@ def test_config_hash_changes_when_config_changes(config: dict[str, int]) -> None
 @given(run_id=st.text(min_size=1, max_size=30))
 @settings(deadline=None, max_examples=10)
 def test_schema_version_always_current(run_id: str) -> None:
-    """Every build_manifest result has the current MANIFEST_SCHEMA_VERSION."""
-    m = build_manifest(run_id=run_id, config={"k": 5})
+    """Every make_manifest result has the current MANIFEST_SCHEMA_VERSION."""
+    m = make_manifest(run_id=run_id, config={"k": 5})
     assert m.schema_version == MANIFEST_SCHEMA_VERSION
 
 
@@ -107,7 +107,7 @@ def test_data_hashes_always_sha256_prefixed(n_files: int, payload_size: int) -> 
             p = Path(d) / f"data_{i}.bin"
             p.write_bytes(b"x" * payload_size)
             files[f"data_{i}"] = p
-        m = build_manifest(run_id="r", config={}, data_files=files)
+        m = make_manifest(run_id="r", config={}, data_files=files)
         for digest in m.data_hashes.values():
             assert digest == "" or digest.startswith("sha256:")
 
@@ -130,7 +130,7 @@ def test_data_hashes_always_sha256_prefixed(n_files: int, payload_size: int) -> 
 @settings(deadline=None, max_examples=10)
 def test_manifest_json_round_trip(run_id: str, seeds: dict[str, int]) -> None:
     """write_manifest → read JSON preserves run_id, schema_version, seeds."""
-    m = build_manifest(run_id=run_id, config={"k": 5}, seeds=seeds)
+    m = make_manifest(run_id=run_id, config={"k": 5}, seeds=seeds)
     with tempfile.TemporaryDirectory() as d:
         path = write_manifest(m, d)
         loaded = json.loads(path.read_text())
@@ -154,7 +154,7 @@ def test_versioned_objects_collected_when_version_present(version: str) -> None:
         def __init__(self, v: str) -> None:
             self.version = v
 
-    m = build_manifest(
+    m = make_manifest(
         run_id="r",
         config={},
         versioned={"my_obj": _V(version)},
@@ -169,7 +169,7 @@ def test_versioned_objects_skip_when_version_absent() -> None:
     class _NoVersion:
         pass
 
-    m = build_manifest(
+    m = make_manifest(
         run_id="r",
         config={},
         versioned={"obj": _NoVersion()},

@@ -6,6 +6,12 @@ The coding-standards reference lives separately in [`STYLE.md`](STYLE.md); read
 that for naming conventions, type-hint rules, docstring format, and the
 anti-overengineering principles that shape PR review.
 
+For the formal naming-convention decision record (including industry
+citations and the asymmetric-promotion principle), see
+[ADR 0004 — Naming conventions](docs/source/adr/0004-naming-conventions.md).
+STYLE.md is the day-to-day quick reference; ADR 0004 is the authoritative
+source if the two ever diverge.
+
 ## Dev setup
 
 Requirements: **Python ≥ 3.13** (RunPod-parity floor; see `pyproject.toml`'s

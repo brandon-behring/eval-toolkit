@@ -21,7 +21,7 @@ import json
 import pytest
 
 from eval_toolkit.artifacts import validate_manifest
-from eval_toolkit.manifest import build_manifest
+from eval_toolkit.manifest import make_manifest
 
 VALID_FLAGS: tuple[str, ...] = (
     "verified_disjoint",
@@ -47,7 +47,7 @@ def test_contamination_flag_round_trip_via_json_validation(flag_value: str) -> N
     otherwise sneak through if all per-value tests only construct in-
     memory manifests without round-tripping.
     """
-    manifest = build_manifest(
+    manifest = make_manifest(
         run_id=f"test_run_{flag_value}",
         config={"k": 5, "test_label": "round_trip"},
         contamination_flags={"scorer_A": flag_value},
@@ -65,14 +65,14 @@ def test_contamination_flag_round_trip_via_json_validation(flag_value: str) -> N
 
 
 def test_contamination_flag_invalid_value_rejected_at_build_time() -> None:
-    """Invalid contamination_flags values are rejected at ``build_manifest`` time.
+    """Invalid contamination_flags values are rejected at ``make_manifest`` time.
 
     Schema validation only fires after construction; the
-    ``build_manifest`` validator should reject invalid values before
+    ``make_manifest`` validator should reject invalid values before
     serialization to give early, clear error messages.
     """
     with pytest.raises(ValueError, match="invalid contamination_flags values"):
-        build_manifest(
+        make_manifest(
             run_id="test_invalid",
             config={"k": 5},
             contamination_flags={"scorer_A": "not_a_real_enum_value"},
@@ -92,7 +92,7 @@ def test_contamination_flag_multi_scorer_round_trip() -> None:
         "scorer_C": "vendor_black_box",
         "scorer_D": "unknown",
     }
-    manifest = build_manifest(
+    manifest = make_manifest(
         run_id="test_multi_scorer",
         config={"k": 5},
         contamination_flags=flags,

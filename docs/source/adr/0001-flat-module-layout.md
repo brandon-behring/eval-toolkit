@@ -191,6 +191,37 @@ Specific triggers per the criteria above (any ONE is sufficient):
    feedback in the v1.x cycle.
 3. ≥2 independent discoverability complaints from real users.
 
+## Asymmetric module promotion (v0.49.0 amendment)
+
+Per v0.49.0 (R4-A in `~/.claude/plans/what-git-issues-are-bright-torvalds.md`),
+this ADR is amended with one concrete sub-rule for private-to-public
+module promotion:
+
+**Collection-of-types private modules MAY be promoted to plural-public.
+Single-function private modules SHOULD stay underscore.**
+
+The asymmetry is justified by export-count + user-value:
+
+- A private module that holds **multiple public types** (e.g.,
+  `_scorecard.py` at v0.46–v0.48 held `Scorecard`, `MetricSpec`,
+  `MetricResult`, `scorecard`) earns its public module path: power
+  users can write `from eval_toolkit.scorecards import Scorecard` for
+  type annotations, sphinx autodoc, and namespace hygiene.
+- A private module that holds **one public function only** (e.g.,
+  `_sweep.py` holds just the `sweep()` callable) does not benefit
+  from a submodule path: nothing to extract that isn't already
+  accessible via top-level. Promotion would add forever-Tier-2
+  contract surface for zero user value.
+
+Concretely at v0.49.0:
+
+- `_scorecard.py` → `scorecards.py` (PROMOTED — plural noun consistent
+  with `metrics`, `loaders`, `protocols` collection-modules).
+- `_sweep.py` → STAYS as `_sweep.py` (1 export; underscore stays).
+
+The naming convention (plural noun for collection-of-types modules) is
+documented separately in [ADR 0004 — Naming conventions](0004-naming-conventions.md).
+
 ## References
 
 - v1.0 plan: `~/.claude/plans/evaluate-all-the-work-twinkly-kite.md`

@@ -35,9 +35,9 @@ claim gate needs to ask whether a run actually included the evidence
 class it says it used.
 
 ```python
-from eval_toolkit import SourceRoleRecord, build_manifest
+from eval_toolkit import SourceRoleRecord, make_manifest
 
-manifest = build_manifest(
+manifest = make_manifest(
     run_id="demo",
     config={"seed": 42},
     source_roles=[

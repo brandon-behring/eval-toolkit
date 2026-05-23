@@ -18,7 +18,7 @@ into eval-toolkit's harness.
 >   [`SimilarityStrategy`](#similarity-strategy). Use these when you
 >   want the harness to orchestrate.
 > - **Tier 3 — reproducibility scaffolding.**
->   [`build_manifest`](api/manifest.md),
+>   [`make_manifest`](api/manifest.md),
 >   [`set_global_seeds`](api/seeds.md),
 >   `provenance.*`. Use these regardless of which tier you build at.
 
@@ -93,7 +93,7 @@ print(f"first 5 scores: {preds.round(3)}")
 
 Note the `version` attribute — implementing the
 [`Versioned`](api/leakage.md) opt-in Protocol means
-`build_manifest(versioned={...})` auto-captures it, so cross-version
+`make_manifest(versioned={...})` auto-captures it, so cross-version
 metric comparisons can be invalidated. See
 [`methodology/versioning.md`](methodology/versioning.md) for the full
 story (when to expose `version`, how to choose a version string, the
@@ -355,7 +355,7 @@ from eval_toolkit import (
     EvalSlice, evaluate_folded,
     NormalizedFormLeakageCheck, LabelConflictCheck,
     StratifiedKFoldSplitter, MaxF1Selector,
-    build_manifest, write_manifest, set_global_seeds,
+    make_manifest, write_manifest, set_global_seeds,
 )
 
 set_global_seeds(42)
@@ -390,7 +390,7 @@ print(f"PR-AUC: {fs['mean']:.3f}  CI [{fs['ci_low']:.3f}, {fs['ci_high']:.3f}]")
 
 # 4. Reproducibility manifest.
 import tempfile
-m = build_manifest(
+m = make_manifest(
     run_id="custom-harness-demo",
     config={"k": 3, "seed": 42, "scorer": "dummy"},
     seeds={"global": 42, "bootstrap": 42},

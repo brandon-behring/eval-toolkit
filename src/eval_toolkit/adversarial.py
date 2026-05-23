@@ -12,7 +12,7 @@ Core techniques (shipped in v0.43.0):
 - :class:`HomoglyphSubstitution` — Latin → Cyrillic/Greek lookalikes
 - :class:`DiacriticInjection` — combining-mark insertion (NFC bypass)
 - :class:`WhitespaceInjection` — variable whitespace padding (regular + NBSP)
-- :class:`CaseRandomization` — random case-flipping per character
+- :class:`CaseInjection` — random case-flipping per character
 - :class:`PunctuationInjection` — non-semantic punctuation insertion
 
 Advanced techniques (shipped in v0.47 per Decision Q11.3):
@@ -20,8 +20,8 @@ Advanced techniques (shipped in v0.47 per Decision Q11.3):
 - :class:`BidiRTLInjection` — U+202E…U+202C override block
 - :class:`TagStrippingInjection` — ``<…>`` tag removal (idempotent)
 - :class:`SynonymSubstitution` — whitelisted-word swap, seed-deterministic
-- :class:`TokenSplitting` — mid-word single-space insertion
-- :class:`UnicodeNormalization` — NFC / NFD / NFKC / NFKD form switch
+- :class:`TokenSplittingInjection` — mid-word single-space insertion
+- :class:`UnicodeNormalizationInjection` — NFC / NFD / NFKC / NFKD form switch
 - :class:`InvisibleCharsInjection` — 5 invisible code points
 
 The convenience tuples :data:`CORE_TECHNIQUES` (6-tuple),
@@ -54,15 +54,15 @@ __all__ = [
     "ALL_TECHNIQUES",
     "BidiRTLInjection",
     "CORE_TECHNIQUES",
-    "CaseRandomization",
+    "CaseInjection",
     "DiacriticInjection",
     "HomoglyphSubstitution",
     "InvisibleCharsInjection",
     "PunctuationInjection",
     "SynonymSubstitution",
     "TagStrippingInjection",
-    "TokenSplitting",
-    "UnicodeNormalization",
+    "TokenSplittingInjection",
+    "UnicodeNormalizationInjection",
     "WhitespaceInjection",
     "ZeroWidthSpaceInjection",
 ]
@@ -287,7 +287,7 @@ class WhitespaceInjection:
 
 
 @dataclass(frozen=True, slots=True)
-class CaseRandomization:
+class CaseInjection:
     """Randomly flip the case of alphabetic characters.
 
     Deterministic given the seed. Numeric / punctuation / whitespace pass
@@ -311,7 +311,7 @@ class CaseRandomization:
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.ratio <= 1.0:
-            raise ValueError(f"CaseRandomization: ratio must be in [0, 1]; got {self.ratio}")
+            raise ValueError(f"CaseInjection: ratio must be in [0, 1]; got {self.ratio}")
 
     def transform(self, text: str) -> str:
         rng = random.Random(self.seed)
@@ -524,7 +524,7 @@ class SynonymSubstitution:
 
 
 @dataclass(frozen=True, slots=True)
-class TokenSplitting:
+class TokenSplittingInjection:
     """Insert a single space inside each long enough word.
 
     Forces subword tokenizers to break a single token into two, often
@@ -552,10 +552,10 @@ class TokenSplitting:
     def __post_init__(self) -> None:
         if self.min_word_length < 2:
             raise ValueError(
-                f"TokenSplitting: min_word_length must be >= 2; got {self.min_word_length}"
+                f"TokenSplittingInjection: min_word_length must be >= 2; got {self.min_word_length}"
             )
         if not 0.0 <= self.ratio <= 1.0:
-            raise ValueError(f"TokenSplitting: ratio must be in [0, 1]; got {self.ratio}")
+            raise ValueError(f"TokenSplittingInjection: ratio must be in [0, 1]; got {self.ratio}")
 
     def transform(self, text: str) -> str:
         rng = random.Random(self.seed)
@@ -576,7 +576,7 @@ class TokenSplitting:
 
 
 @dataclass(frozen=True, slots=True)
-class UnicodeNormalization:
+class UnicodeNormalizationInjection:
     """Apply a Unicode normalization form to the input.
 
     Defaults to NFKC which folds compatibility characters (e.g., ``ＡＢＣ``
@@ -598,7 +598,7 @@ class UnicodeNormalization:
     def __post_init__(self) -> None:
         if self.form not in {"NFC", "NFD", "NFKC", "NFKD"}:
             raise ValueError(
-                f"UnicodeNormalization: form must be NFC / NFD / NFKC / NFKD; got {self.form!r}"
+                f"UnicodeNormalizationInjection: form must be NFC / NFD / NFKC / NFKD; got {self.form!r}"
             )
 
     def transform(self, text: str) -> str:
@@ -659,15 +659,15 @@ CORE_TECHNIQUES: tuple[type[Any], ...] = (
     HomoglyphSubstitution,
     DiacriticInjection,
     WhitespaceInjection,
-    CaseRandomization,
+    CaseInjection,
     PunctuationInjection,
 )
 ADVANCED_TECHNIQUES: tuple[type[Any], ...] = (
     BidiRTLInjection,
     TagStrippingInjection,
     SynonymSubstitution,
-    TokenSplitting,
-    UnicodeNormalization,
+    TokenSplittingInjection,
+    UnicodeNormalizationInjection,
     InvisibleCharsInjection,
 )
 ALL_TECHNIQUES: tuple[type[Any], ...] = CORE_TECHNIQUES + ADVANCED_TECHNIQUES
@@ -703,8 +703,8 @@ def _whitespace(
 
 
 def _case_random(text: str, ratio: float = 0.5, seed: int = 42) -> str:
-    """Functional alias for :class:`CaseRandomization`."""
-    return CaseRandomization(ratio=ratio, seed=seed).transform(text)
+    """Functional alias for :class:`CaseInjection`."""
+    return CaseInjection(ratio=ratio, seed=seed).transform(text)
 
 
 def _punctuation(text: str, ratio: float = 0.1, seed: int = 42) -> str:

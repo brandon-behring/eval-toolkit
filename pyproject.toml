@@ -74,15 +74,14 @@ probes = ["torch>=2.0", "transformers>=4.40"]
 # (granular extras — losses callers should not have to install the larger
 # transformers stack). Shares the torch version pin with [probes].
 losses = ["torch>=2.0"]
-# DEPRECATED (announced v0.30.1, removal v0.33.0).
+# NO-OP extra kept for backward compatibility (R3 at v0.49.0).
 #
-# Retained as a transitive no-op so `pip install eval-toolkit[validation]`
-# / dev still resolve cleanly. jsonschema moved to the base deps in
-# v0.16.0; this extra has been a no-op ever since. The 2-minor-version
-# window (v0.30.1 announce → v0.33.0 remove) matches the @deprecated
-# policy in docs/DEPRECATION.md. Extras can't trigger import-time
-# DeprecationWarnings, so the deprecation is documentation-only here +
-# in CHANGELOG ### Deprecated + docs/DEPRECATION.md.
+# jsonschema>=4.21 moved to base deps at v0.16.0; this extra has been a
+# no-op ever since. Originally announced as deprecated in v0.30.1 with
+# target removal at v0.33.0, but reclassified at v0.49.0 (R3 in
+# docs/DEPRECATION.md) as a permanent no-op — hard removal would break
+# consumer pip pins of the form `eval-toolkit[validation]` for zero
+# functional benefit. Retained indefinitely.
 validation = []
 # v0.31.0 docs site: Sphinx + pydata-sphinx-theme (replaces v0.28.0's
 # mkdocs-material). Migration drivers — pain points Q1 in the v0.31.0

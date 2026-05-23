@@ -92,6 +92,7 @@ api/plotting
 api/preprocessing
 api/probes
 api/protocols
+api/strict_tier2_protocols
 api/provenance
 api/scorecard
 api/seeds

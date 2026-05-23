@@ -167,7 +167,7 @@ Reopening would require **SemVer-major (v2.0)**. Concrete triggers:
   (F1 / F2 / F4 drove this ADR).
 - Issue [#36](https://github.com/brandon-behring/eval-toolkit/issues/36) —
   original consumer ask (inline bootstrap CI).
-- `src/eval_toolkit/_scorecard.py` — implementation.
+- `src/eval_toolkit/scorecards.py` — implementation (renamed from `_scorecard.py` at v0.49.0; see ADR 0004 + STYLE.md §3d for the asymmetric-promotion principle).
 - `src/eval_toolkit/metric_specs.py` — first-party spec namespace.
 - `src/eval_toolkit/artifacts.py:30-61` — `MetricState` vocabulary reused
   by `MetricResult`.

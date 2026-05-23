@@ -79,7 +79,7 @@ are fixed via v0.46.1 hotfix and the remaining items are scheduled.
 - `CHANGELOG.md` (new v0.45.0 + v0.46.0 entries since Round 5)
 - Source tree, with focus on the v0.45 + v0.46 additions:
   - `src/eval_toolkit/stacking.py` (v0.45, ~370 lines)
-  - `src/eval_toolkit/_scorecard.py` (v0.46, ~430 lines)
+  - `src/eval_toolkit/scorecards.py` (renamed from `_scorecard.py` at v0.49.0; ~585 lines)
   - `src/eval_toolkit/metric_specs.py` (v0.46, ~180 lines)
   - `src/eval_toolkit/__init__.py` — `__getattr__` deprecation branch +
     `_DEPRECATED_SCALARS` (Audit F4 invariant region)

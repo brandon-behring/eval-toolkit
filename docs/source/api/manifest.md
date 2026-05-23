@@ -10,7 +10,7 @@
    MANIFEST_SCHEMA_VERSION
    RunManifest
    SourceRoleRecord
-   build_manifest
+   make_manifest
    validate_source_roles
    write_manifest
 ```

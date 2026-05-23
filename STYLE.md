@@ -36,6 +36,11 @@ Run via `make lint` (= `ruff check + black --check + mypy`) and `make test`.
 
 ## 3. Naming
 
+For the full decision record + industry-citations, see
+[ADR 0004 — Naming conventions](docs/source/adr/0004-naming-conventions.md).
+This section is the day-to-day quick reference; the ADR is the
+authoritative source.
+
 - Module names: `snake_case`, lowercase package (`eval_toolkit`).
 - Class names: `PascalCase`. Suffixes used in this repo:
   - `*Config` — frozen dataclass for settings
@@ -54,6 +59,68 @@ Run via `make lint` (= `ruff check + black --check + mypy`) and `make test`.
   ```
 - Mutation marking: not used. Mutating functions return `None` (Pythonic over
   Julia's `_inplace` suffix).
+
+### 3a. Parameter naming (canonical list, locked at v1.0)
+
+These names mean these things, everywhere. Future functions MUST use
+them; deviations need justification in the PR description.
+
+| Parameter | Meaning |
+|---|---|
+| `y_true` | Ground-truth labels (binary, shape `(n,)`) |
+| `y_score` | Continuous score / probability (shape `(n,)`) |
+| `y_pred` | Discrete prediction (threshold-dependent) |
+| `n_resamples` | Bootstrap iteration count |
+| `confidence` | Two-sided confidence level (0.95 default) |
+| `n_bins` | Binning count for calibration / ECE |
+| `n_jobs` | Parallelism (joblib + sklearn convention) |
+| `ax` | Matplotlib axis (matplotlib convention) |
+| `metric` | Callable `(y_true, y_score) -> float` |
+| `rng` | RNG argument per [SPEC 7](https://scientific-python.org/specs/spec-0007/) — target convention; adopted in v0.50.0 |
+
+The v0.50.0 SPEC 7 adoption preserves two `seed: int` exceptions:
+`set_global_seeds(seed: int)` (global-state setter, not per-function
+RNG; SPEC 7 doesn't apply) and adversarial dataclass fields (use Python
+`random.Random(seed)`; not NumPy-RNG, so SPEC 7's typing doesn't fit).
+
+### 3b. Class suffixes by domain
+
+Each suffix maps to a Protocol contract. Stay within the pattern:
+
+| Suffix | Domain | Protocol |
+|---|---|---|
+| `*Selector` | Threshold selection | `ThresholdSelector` |
+| `*Splitter` | Cross-validation splits | `Splitter` |
+| `*Check` | Leakage detection | `LeakageCheck` |
+| `*Loader` | Dataset loading | `DatasetLoader` |
+| `*Reader` | Prediction artifact reading | `PredictionReader` |
+| `*Variant` | Preprocessing variant | (functional API) |
+| `*Strategy` | Dedup similarity backend | `SimilarityStrategy` |
+| `*Injection` / `*Substitution` | Adversarial char-injection / -substitution | `TextTransform` |
+
+### 3c. Module naming (singular vs plural)
+
+- **Plural noun** for collection-of-types modules: `metrics`,
+  `loaders`, `protocols`, `losses`, `probes`, `splits`, `paths`,
+  `seeds`, `thresholds`, `artifacts`, `claims`, `embeddings`,
+  `scorecards`.
+- **Singular noun** for domain-concept modules: `harness`,
+  `bootstrap`, `manifest`, `calibration`, `leakage`, `analysis`,
+  `provenance`, `evidence`, `stacking`, `text_dedup`.
+- **Gerund** for process-domain modules: `preprocessing`.
+
+### 3d. Asymmetric module promotion (private → public)
+
+Collection-of-types private modules MAY be promoted to plural-public
+when they hold ≥2 user-relevant types. Single-function private
+modules SHOULD stay underscore. See
+[ADR 0001](docs/source/adr/0001-flat-module-layout.md) for the trigger
+analysis.
+
+Examples:
+
+- `_scorecard.py` (4 public exports) → `scorecards.py` at v0.49.0. ✓ promote.
+- `_sweep.py` (1 public function `sweep`) → stays `_sweep.py`. ✓ keep private.
 
 ## 4. Type hints
 
@@ -79,16 +146,38 @@ Run via `make lint` (= `ruff check + black --check + mypy`) and `make test`.
     for 4 reference impls.
   - `SimilarityStrategy` (`text_dedup.py`) — pluggable similarity backend for
     `near_dedup` / `cross_dedup` / `NearDuplicateCheck` / `CrossSplitLeakageCheck`.
-  - `Versioned` (`leakage.py`) — opt-in single-attribute Protocol; any Tier-2
-    implementation may expose `version: str`. `RunManifest.versioned_objects`
-    auto-collects them. Mirrors the `lm-evaluation-harness` task `VERSION`
-    pattern. See `docs/methodology/versioning.md`.
+  - `Versioned` (`protocols.py`) — opt-in single-attribute Protocol; any
+    Tier-2 implementation may expose `version: str`.
+    `RunManifest.versioned_objects` auto-collects them. Mirrors the
+    `lm-evaluation-harness` task `VERSION` pattern. See
+    `docs/methodology/versioning.md`. (Single source of truth at
+    `protocols.py:64` since v0.49.0; the duplicate previously in
+    `leakage.py:82` was removed.)
 - All seams are `@runtime_checkable` so callers can `isinstance(obj, Protocol)`.
 - Reference impls are `@dataclass(frozen=True, slots=True)` with config in the
   constructor (`TargetRecallSelector(recall=0.90)`) and the Protocol method as
   the only behavior.
 - `NamedTuple` for stable public records that benefit from positional access;
   frozen dataclasses with `slots=True` otherwise.
+
+### 4a. Fitted-attribute trailing underscore (sklearn convention)
+
+Estimator-style classes (`fit`/`predict` pattern) that store
+**learned-from-data attributes** use trailing underscore per scikit-learn
+convention: `coef_`, `classes_`, `n_features_in_`, `feature_importances_`.
+These attributes MUST NOT be set in `__init__` — set them only in `fit()`.
+
+Frozen reference-impl dataclasses (`@dataclass(frozen=True, slots=True)`)
+are **exempt** — they hold config, not fitted state.
+
+Current canonical example: `stacking.LogisticStacker`.
+
+### 4b. TypeVar naming
+
+Internal (private) `TypeVar`s use a leading underscore per Google Python
+Style Guide §3.19.10: `_T = TypeVar("_T")`. Public, constrained `TypeVar`s
+without the underscore are allowed only when explicitly part of an
+exported generic API.
 
 ## 5. Dataclasses
 
@@ -220,6 +309,10 @@ def fit_temperature(val_logits, val_labels, bounds=(0.05, 20.0)):
 - **References** cites arXiv IDs / DOIs / journal cites.
 - For modules where doctests would be contrived (`plotting`, `harness`,
   `provenance`), Examples are optional.
+- **Docstring prose wraps at 75 cols** (numpydoc convention) so that
+  `help()` is readable in a terminal. Doctest code blocks inside the
+  docstring follow the 100-col Black rule (code stays comfortable in an
+  editor even though prose around it is narrower).
 
 ## 13. Comments
 
@@ -228,6 +321,12 @@ restate what the code says.
 
 ## 14. Tests
 
+- **File naming**: `tests/test_<module>.py` mirrors
+  `src/eval_toolkit/<module>.py`. Auxiliary tests per module use
+  suffixes (`test_<module>_props.py`, `test_<module>_validation.py`,
+  `test_<module>_golden.py`).
+- **Function naming**: `test_<thing_under_test>_<scenario>`. No
+  class-based test grouping unless fixtures truly demand it (rare).
 - **Markers**: `unit`, `property`, `smoke`, `golden`.
 - **Sklearn-reference + analytical** as the unit-test oracle where available.
 - **Hypothesis** required for math/stat invariants. Strategies use

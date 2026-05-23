@@ -59,7 +59,7 @@ bump to alter:
   - `Splitter` (from `splits.py`)
   - `ThresholdSelector` (from `thresholds.py`)
   - `DatasetLoader` (from `loaders.py`)
-  - `MetricSpec` (from `_scorecard.py`, shipped v0.46)
+  - `MetricSpec` (from `scorecards.py` since v0.49.0; was `_scorecard.py` v0.46–v0.48)
   - `TextTransform` (from `protocols.py`, shipped v0.47)
   - `MetaLearner` (from `stacking.py`, shipped v0.45)
   - `Probe` (from `probes.py`, shipped v0.43)

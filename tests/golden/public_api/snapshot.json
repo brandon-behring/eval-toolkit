@@ -10,7 +10,7 @@
     "BootstrapCI",
     "CISafeThresholdSelector",
     "CORE_TECHNIQUES",
-    "CaseRandomization",
+    "CaseInjection",
     "ClaimReport",
     "ClaimSpec",
     "CorrectionMethod",
@@ -122,9 +122,9 @@
     "ThresholdSelector",
     "ThresholdedMetricFn",
     "TimeSeriesSplitter",
-    "TokenSplitting",
+    "TokenSplittingInjection",
     "TokenizationLeakageCheck",
-    "UnicodeNormalization",
+    "UnicodeNormalizationInjection",
     "Versioned",
     "WhitespaceInjection",
     "WilsonInterval",
@@ -139,7 +139,6 @@
     "bootstrap_ci",
     "bootstrap_metric_from_predictions",
     "brier_decomposition",
-    "build_manifest",
     "capture_git_sha",
     "compute_file_hash",
     "compute_label_overlap",
@@ -178,6 +177,7 @@
     "iter_folds_with_pool",
     "load_prediction_arrays",
     "low_fpr_feasibility_gate",
+    "make_manifest",
     "make_minilm_embedder",
     "make_palette",
     "make_run_dir",
@@ -321,7 +321,7 @@
       "kind": "value",
       "type": "tuple"
     },
-    "CaseRandomization": {
+    "CaseInjection": {
       "bases": [
         "object"
       ],
@@ -1282,7 +1282,7 @@
       "kind": "class",
       "signature": "(k: 'int' = 5, time_col: 'str | None' = None) -> None"
     },
-    "TokenSplitting": {
+    "TokenSplittingInjection": {
       "bases": [
         "object"
       ],
@@ -1298,7 +1298,7 @@
       "kind": "class",
       "signature": "(tokenizer: 'Callable[[str], Mapping[str, object]]', target_splits: 'Sequence[str] | None' = None, severity: 'Severity' = 'error') -> None"
     },
-    "UnicodeNormalization": {
+    "UnicodeNormalizationInjection": {
       "bases": [
         "object"
       ],
@@ -1353,7 +1353,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'0.48.0'"
+      "value": "'0.49.0'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1394,11 +1394,6 @@
       "doc_first_line": "Murphy 1973 [#murphy]_ decomposition of the Brier score.",
       "kind": "function",
       "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', n_bins: 'int' = 10) -> 'dict[str, float]'"
-    },
-    "build_manifest": {
-      "doc_first_line": "Pure builder: assemble a :class:`RunManifest` from components.",
-      "kind": "function",
-      "signature": "(*, run_id: 'str', config: 'Mapping[str, Any]', data_files: 'Mapping[str, Path | str] | None' = None, seeds: 'Mapping[str, int] | None' = None, extra_code_versions: 'Mapping[str, str] | None' = None, data_revisions: 'Mapping[str, str] | None' = None, metadata: 'Mapping[str, str] | None' = None, versioned: 'Sequence[object] | Mapping[str, object] | None' = None, leakage_report: 'object | None' = None, source_roles: 'Sequence[SourceRoleRecord | Mapping[str, object]] | None' = None, required_source_roles: 'Sequence[str]' = (), guardrails: 'Sequence[str | Mapping[str, object]] | None' = None, prediction_artifacts: 'Sequence[PredictionArtifactRef | Mapping[str, object]] | None' = None, contamination_flags: 'Mapping[str, str] | None' = None, wall_clock_seconds: 'float | None' = None, repo_root: 'Path | str | None' = None, git_sha: 'str | None' = None, config_path: 'Path | str | None' = None) -> 'RunManifest'"
     },
     "capture_git_sha": {
       "doc_first_line": "Current HEAD full SHA, or ``None`` if not in a git repo.",
@@ -1589,6 +1584,11 @@
       "doc_first_line": "Require enough negatives for a low-FPR claim to be statistically feasible.",
       "kind": "function",
       "signature": "(slice_name: 'str', *, max_fpr: 'float', confidence: 'float' = 0.95, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "make_manifest": {
+      "doc_first_line": "Pure builder: assemble a :class:`RunManifest` from components.",
+      "kind": "function",
+      "signature": "(*, run_id: 'str', config: 'Mapping[str, Any]', data_files: 'Mapping[str, Path | str] | None' = None, seeds: 'Mapping[str, int] | None' = None, extra_code_versions: 'Mapping[str, str] | None' = None, data_revisions: 'Mapping[str, str] | None' = None, metadata: 'Mapping[str, str] | None' = None, versioned: 'Sequence[object] | Mapping[str, object] | None' = None, leakage_report: 'object | None' = None, source_roles: 'Sequence[SourceRoleRecord | Mapping[str, object]] | None' = None, required_source_roles: 'Sequence[str]' = (), guardrails: 'Sequence[str | Mapping[str, object]] | None' = None, prediction_artifacts: 'Sequence[PredictionArtifactRef | Mapping[str, object]] | None' = None, contamination_flags: 'Mapping[str, str] | None' = None, wall_clock_seconds: 'float | None' = None, repo_root: 'Path | str | None' = None, git_sha: 'str | None' = None, config_path: 'Path | str | None' = None) -> 'RunManifest'"
     },
     "make_minilm_embedder": {
       "doc_first_line": "Factory for a MiniLM-based embedder compatible with EmbeddingCosineStrategy.",

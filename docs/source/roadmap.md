@@ -71,7 +71,7 @@ Highlights since v0.33:
   preprocessing dataclasses (`DelimitVariant` / `DatamarkVariant` /
   `EncodeVariant`). 6 new advanced character-injection techniques
   (`BidiRTLInjection`, `TagStrippingInjection`, `SynonymSubstitution`,
-  `TokenSplitting`, `UnicodeNormalization`, `InvisibleCharsInjection`)
+  `TokenSplittingInjection`, `UnicodeNormalizationInjection`, `InvisibleCharsInjection`)
   → `ALL_TECHNIQUES` = 12. Removed: the v0.46 `__getattr__`
   deprecation shim (top-level scalars now `AttributeError`), module-
   level `adversarial.sweep` + `preprocessing.sweep`,

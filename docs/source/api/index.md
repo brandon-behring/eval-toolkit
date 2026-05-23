@@ -91,10 +91,10 @@ The v0.47 unified `TextTransform` Protocol covers both defence-side
   optional `original_score` / `transformed_score` / `asr` columns
 - Defence: `DelimitVariant`, `DatamarkVariant`, `EncodeVariant`
 - Attack (core 6, v0.43+): `ZeroWidthSpaceInjection`, `HomoglyphSubstitution`,
-  `DiacriticInjection`, `WhitespaceInjection`, `CaseRandomization`,
+  `DiacriticInjection`, `WhitespaceInjection`, `CaseInjection`,
   `PunctuationInjection`
 - Attack (advanced 6, v0.47+): `BidiRTLInjection`, `TagStrippingInjection`,
-  `SynonymSubstitution`, `TokenSplitting`, `UnicodeNormalization`,
+  `SynonymSubstitution`, `TokenSplittingInjection`, `UnicodeNormalizationInjection`,
   `InvisibleCharsInjection`
 - Convenience tuples: `CORE_TECHNIQUES`, `ADVANCED_TECHNIQUES`, `ALL_TECHNIQUES`
 
@@ -158,7 +158,7 @@ require `pip install eval-toolkit[probes]` or `eval-toolkit[losses]`.
 
 ### Manifest ([`manifest`](manifest.md))
 
-- `RunManifest`, `build_manifest`, `write_manifest`
+- `RunManifest`, `make_manifest`, `write_manifest`
 - NeurIPS Reproducibility Checklist-aligned (git_sha, seeds,
   code_versions, env, data_hashes, contamination_flags, etc.)
 - v3 schema with `validate_manifest(payload)`

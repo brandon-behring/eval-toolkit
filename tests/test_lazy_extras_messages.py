@@ -25,7 +25,7 @@ The 8 surfaces audited (one assertion per surface):
   5. ``loaders.HFDatasetsLoader``           (no extra — direct ``datasets`` install)
   6. ``loaders.ood_dataset_from_manifest``  ([yaml] extra)
   7. ``probes.ActivationDeltaProbe``        ([probes] extra)
-  8. ``_scorecard.Scorecard.to_pandas``     ([dataframe] extra)
+  8. ``scorecards.Scorecard.to_pandas``     ([dataframe] extra)
 """
 
 from __future__ import annotations
@@ -232,7 +232,7 @@ def test_activation_delta_probe_canonical_import_error(
 
 
 # ---------------------------------------------------------------------------
-# Surface 8: _scorecard.Scorecard.to_pandas
+# Surface 8: scorecards.Scorecard.to_pandas
 # ---------------------------------------------------------------------------
 
 

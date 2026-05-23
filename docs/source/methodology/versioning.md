@@ -18,7 +18,7 @@ ThresholdSelector, DatasetLoader) and how it threads into the
 ## Setup
 
 ```python
-from eval_toolkit import Versioned, build_manifest, write_manifest
+from eval_toolkit import Versioned, make_manifest, write_manifest
 import tempfile
 ```
 
@@ -37,7 +37,7 @@ runtime-checkable Protocol:
 ```
 
 **Opt-in**: implementations are not required to expose `version`. If
-present, `build_manifest(versioned=...)` auto-collects it into
+present, `make_manifest(versioned=...)` auto-collects it into
 `RunManifest.versioned_objects`; if absent, the object is silently
 skipped (per `_collect_versioned` in
 [`manifest.py`](../api/manifest.md)).
@@ -61,7 +61,7 @@ class _ScorerNoVersion:
         import numpy as np
         return np.full(len(X), 0.5)
 
-m = build_manifest(
+m = make_manifest(
     run_id="versioning-demo",
     config={"model": "lr-tfidf"},
     versioned={"my_scorer": _Scorer(), "no_version": _ScorerNoVersion()},
@@ -158,7 +158,7 @@ class _LoRAScorer:
         return np.full(len(X), 0.5)
 
 scorers = {"lr": _LRBaselineScorer(), "lora": _LoRAScorer("abc123def456")}
-m = build_manifest(run_id="r", config={}, versioned=scorers)
+m = make_manifest(run_id="r", config={}, versioned=scorers)
 print(m.versioned_objects)
 ```
 
@@ -175,7 +175,7 @@ print(m.versioned_objects)
   (LoRA rank, regex pattern set, LLM model name) without bumping
   the version, the manifest looks the same as before — but the
   metric isn't comparable. Discipline matters.
-- **Not passing `versioned=` to `build_manifest`.** The manifest
+- **Not passing `versioned=` to `make_manifest`.** The manifest
   builder doesn't auto-discover Versioned objects; you must pass them
   explicitly. Cross-link from the harness script you wrote: typically
   `versioned=scorers` (the dict you also pass to `evaluate(...)`).
@@ -188,7 +188,7 @@ print(m.versioned_objects)
 
 ```python
 from eval_toolkit import (
-    EvalSlice, evaluate, build_manifest, write_manifest,
+    EvalSlice, evaluate, make_manifest, write_manifest,
     set_global_seeds,
 )
 import pandas as pd
@@ -210,7 +210,7 @@ scorers = {"regex": _RegexScorer(), "lr": _LRScorer()}
 df = pd.DataFrame({"text": ["a", "b"], "label": [0, 1]})
 result = evaluate(scorers, [EvalSlice(name="test", df=df)], run_id="r")
 
-m = build_manifest(
+m = make_manifest(
     run_id="r",
     config={"scorers": list(scorers.keys())},
     versioned=scorers,  # ← auto-collects {regex: "regex-v1.0", lr: "lr-tfidf-v1.2.0"}

@@ -2,7 +2,7 @@
 
 Pairs with `test_manifest.py` (which covers the happy path). These
 tests target the error branches of `validate_source_roles`,
-`build_manifest`'s guardrail / prediction-artifact validation, and the
+`make_manifest`'s guardrail / prediction-artifact validation, and the
 mapping-shape normalizers `_object_to_dict` /
 `_prediction_artifact_to_dict`.
 """
@@ -19,8 +19,8 @@ from eval_toolkit.manifest import (
     _is_git_dirty,
     _object_to_dict,
     _prediction_artifact_to_dict,
-    build_manifest,
     gpu_info,
+    make_manifest,
     validate_source_roles,
 )
 
@@ -89,9 +89,9 @@ def test_validate_source_roles_flags_non_mapping_metadata() -> None:
 
 
 @pytest.mark.unit
-def test_build_manifest_rejects_empty_guardrail() -> None:
+def test_make_manifest_rejects_empty_guardrail() -> None:
     with pytest.raises(ValueError, match="guardrails must be non-empty strings"):
-        build_manifest(run_id="r", config={}, guardrails=["valid", ""])
+        make_manifest(run_id="r", config={}, guardrails=["valid", ""])
 
 
 @pytest.mark.unit

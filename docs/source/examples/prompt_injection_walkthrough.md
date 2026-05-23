@@ -44,7 +44,7 @@ from eval_toolkit import (
     EvalSlice, DataFrameLoader,
     NormalizedFormLeakageCheck, LabelConflictCheck, CrossSplitLeakageCheck,
     SourceDisjointKFoldSplitter, evaluate_folded, set_global_seeds,
-    build_manifest, write_manifest, MaxF1Selector,
+    make_manifest, write_manifest, MaxF1Selector,
 )
 set_global_seeds(42)
 ```
@@ -244,7 +244,7 @@ for metric_name, stats in summary.items():
 
 ## Step 6 — reproducibility manifest
 
-`build_manifest` aggregates seeds, code versions, env, GPU info,
+`make_manifest` aggregates seeds, code versions, env, GPU info,
 versioned objects, and the leakage-report into one JSON sidecar.
 `write_manifest` writes it to a run directory next to the
 `results.json` files.
@@ -252,7 +252,7 @@ versioned objects, and the leakage-report into one JSON sidecar.
 ```{code-cell}
 import tempfile
 
-m = build_manifest(
+m = make_manifest(
     run_id="pi-walkthrough",
     config={"k_folds": 3, "splitter": "SourceDisjointKFoldSplitter", "seed": 42},
     seeds={"global": 42, "bootstrap": 42},
@@ -298,7 +298,7 @@ The shape of a real consumer project's `evaluate.py`:
 ```{code-cell}
 # Sketch — uncomment and fill in for your project.
 # from eval_toolkit import (
-#     evaluate_folded, build_manifest, write_manifest,
+#     evaluate_folded, make_manifest, write_manifest,
 #     SourceDisjointKFoldSplitter, NormalizedFormLeakageCheck,
 #     CrossSplitLeakageCheck, LabelConflictCheck, set_global_seeds,
 # )
@@ -326,7 +326,7 @@ The shape of a real consumer project's `evaluate.py`:
 #     ],
 #     on_leakage="raise",
 # )
-# m = build_manifest(
+# m = make_manifest(
 #     run_id=run_id,
 #     config=config_dict,
 #     data_files={"corpus": loader.path},   # if applicable

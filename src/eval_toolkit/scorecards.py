@@ -57,10 +57,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 
+from eval_toolkit.artifacts import MetricStatus
 from eval_toolkit.bootstrap import BootstrapCI, bootstrap_ci
 from eval_toolkit.metrics import is_metric_defined_for_slice
 
@@ -73,9 +74,9 @@ __all__ = [
     "scorecard",
 ]
 
-
-# Status vocabulary mirrors eval_toolkit.artifacts.MetricState (artifacts.py:30).
-MetricStatus = Literal["ok", "skipped", "error"]
+# `MetricStatus` (the canonical "ok"/"skipped"/"error" vocabulary) lives in
+# `eval_toolkit.artifacts` (artifacts.py:30). Re-imported above so the
+# scorecards module uses it via a single source of truth (N6 dedup at v0.49.0).
 
 
 @runtime_checkable

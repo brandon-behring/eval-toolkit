@@ -9,14 +9,14 @@ captures git provenance (with dirty-flag), code versions, seeds, data hashes,
 config hash, environment fingerprint, GPU info, wall-clock time, and any
 :class:`~eval_toolkit.leakage.LeakageReport` produced inline by the harness.
 
-Per-object versions of any :class:`~eval_toolkit.leakage.Versioned`
+Per-object versions of any :class:`~eval_toolkit.protocols.Versioned`
 implementation (Scorer, LeakageCheck, Splitter, ThresholdSelector,
 DatasetLoader) are auto-captured into ``versioned_objects`` so cross-version
 metric comparisons can be invalidated explicitly. Mirrors the
 ``lm-evaluation-harness`` task ``VERSION`` field pattern.
 
 Pure / IO split mirrors :func:`eval_toolkit.harness.evaluate` /
-:func:`eval_toolkit.harness.write_run_result` — :func:`build_manifest` is
+:func:`eval_toolkit.harness.write_run_result` — :func:`make_manifest` is
 deterministic and side-effect-free; :func:`write_manifest` is the sole IO sink.
 """
 
@@ -42,7 +42,7 @@ __all__ = [
     "MANIFEST_SCHEMA_VERSION",
     "RunManifest",
     "SourceRoleRecord",
-    "build_manifest",
+    "make_manifest",
     "gpu_info",
     "validate_source_roles",
     "write_manifest",
@@ -91,7 +91,7 @@ class RunManifest:
     run_id : str
         Caller-supplied run identifier (timestamp / UUID).
     captured_at : str
-        ISO-8601 UTC timestamp captured at :func:`build_manifest` call time
+        ISO-8601 UTC timestamp captured at :func:`make_manifest` call time
         (``"YYYY-MM-DDTHH:MM:SSZ"``). v2 field — distinguishes wall-clock
         capture from caller-meaningful ``run_id``.
     git_sha : str or None
@@ -134,7 +134,7 @@ class RunManifest:
         Caller-supplied total run duration in seconds.
     versioned_objects : dict[str, str]
         ``{object_name: version_string}`` auto-captured for every
-        :class:`~eval_toolkit.leakage.Versioned` Tier-2 implementation in
+        :class:`~eval_toolkit.protocols.Versioned` Tier-2 implementation in
         the run (scorers, checks, splitters, etc.). Used to invalidate
         cross-version metric comparisons.
     leakage_report : dict[str, object] or None
@@ -203,7 +203,7 @@ def _hash_canonical_json(payload: Mapping[str, Any]) -> str:
 def _file_sha256_hexdigest(path: Path) -> str:
     """SHA-256 over the raw bytes of ``path``. Format: ``sha256:<hex>``.
 
-    Used by :func:`build_manifest` when ``config_path`` is supplied so the
+    Used by :func:`make_manifest` when ``config_path`` is supplied so the
     config_hash captures the exact file revision (including comments and
     key ordering, which are lost by :func:`_hash_canonical_json` after the
     YAML parser normalizes them).
@@ -236,7 +236,7 @@ def gpu_info() -> tuple[dict[str, object], str | None]:
 
     Returns ``({}, None)`` if ``nvidia-smi`` is unavailable, fails, or
     times out. Never raises — meant to be called unconditionally from
-    :func:`build_manifest` with graceful fallback for CPU-only environments.
+    :func:`make_manifest` with graceful fallback for CPU-only environments.
 
     Returns
     -------
@@ -392,7 +392,7 @@ _VALID_CONTAMINATION_FLAGS: frozenset[str] = frozenset(
 )
 
 
-def build_manifest(
+def make_manifest(
     *,
     run_id: str,
     config: Mapping[str, Any],
@@ -494,8 +494,8 @@ def build_manifest(
 
     Examples
     --------
-    >>> from eval_toolkit.manifest import build_manifest
-    >>> m = build_manifest(run_id="demo", config={"k": 5})
+    >>> from eval_toolkit.manifest import make_manifest
+    >>> m = make_manifest(run_id="demo", config={"k": 5})
     >>> m.run_id, m.schema_version
     ('demo', 'v3')
     """

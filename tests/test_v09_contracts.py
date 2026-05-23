@@ -28,7 +28,7 @@ from eval_toolkit.claims import (
 )
 from eval_toolkit.evidence import AggregateEvidence, EvidenceAxis, PairingMetadata
 from eval_toolkit.harness import RunResult
-from eval_toolkit.manifest import SourceRoleRecord, build_manifest, write_manifest
+from eval_toolkit.manifest import SourceRoleRecord, make_manifest, write_manifest
 from eval_toolkit.provenance import file_sha256
 from eval_toolkit.text_dedup import ExactNormalizedHashStrategy, audit_source_label_similarity
 from eval_toolkit.thresholds import CISafeThresholdSelector, ThresholdPolicyMetadata
@@ -148,7 +148,7 @@ def test_v09_generic_contract_roundtrip(tmp_path: Path) -> None:
         ).to_dict(),
         threshold_policy=threshold_policy.to_dict(),
     )
-    manifest = build_manifest(
+    manifest = make_manifest(
         run_id="v09",
         config=result.config,
         source_roles=[

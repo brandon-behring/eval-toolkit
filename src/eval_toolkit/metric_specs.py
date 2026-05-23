@@ -47,7 +47,6 @@ from typing import Literal
 
 import numpy as np
 
-from eval_toolkit._scorecard import MetricSpec
 from eval_toolkit.metrics import brier_score as _brier_score
 from eval_toolkit.metrics import expected_calibration_error as _ece_uniform
 from eval_toolkit.metrics import (
@@ -55,6 +54,7 @@ from eval_toolkit.metrics import (
 )
 from eval_toolkit.metrics import pr_auc as _pr_auc
 from eval_toolkit.metrics import roc_auc as _roc_auc
+from eval_toolkit.scorecards import MetricSpec
 
 __all__ = [
     "brier",

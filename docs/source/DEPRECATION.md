@@ -118,9 +118,19 @@ When the release that contains the deadline ships (e.g., `0.31.0`):
 
 ## Active deprecations
 
-| Symbol / artifact | Announced | Removal | Reason |
+_None at v0.49.0 — every prior deprecation has either been hard-removed
+or formally re-classified as a no-op kept for backward compatibility
+(see below)._
+
+## No-op extras kept for backward compatibility
+
+These extras still resolve via `pip install` but install nothing —
+their underlying dependencies moved to base deps. They are retained
+indefinitely so that downstream `pip` pins do not break.
+
+| Extra | Originally introduced | No-op since | Notes |
 |---|---|---|---|
-| `[validation]` optional-dependency extra | v0.30.1 | v0.33.0 | No-op since v0.16.0 (jsonschema moved to base deps). Extras cannot emit `DeprecationWarning` at import time, so the deprecation is documentation-only. `pip install eval-toolkit[validation]` will continue to resolve cleanly through v0.32.x and will be removed in v0.33.0. |
+| `[validation]` | pre-v0.16.0 | v0.16.0 | `jsonschema>=4.21` moved to base deps. The error message in `eval_toolkit/__main__.py` still recommends `pip install 'eval-toolkit[validation]'` for users who hit the missing-jsonschema path; the resolve-as-no-op behavior is deliberate. Originally announced as a deprecation in v0.30.1 with target removal v0.33.0; reclassified at v0.49.0 (R3) as permanent-no-op rather than removed because hard removal would break consumer pip pins of the form `eval-toolkit[validation]` for no functional benefit. |
 
 ## One-time exceptions to the 2-minor-version warning policy
 

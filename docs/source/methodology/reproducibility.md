@@ -21,7 +21,7 @@ eval-toolkit's reproducibility primitives:
 - [`provenance.capture_git_sha`](../api/provenance.md)
   + [`provenance.make_run_dir`](../api/provenance.md) —
   per-run directory + git provenance.
-- [`build_manifest`](../api/manifest.md) +
+- [`make_manifest`](../api/manifest.md) +
   [`write_manifest`](../api/manifest.md) — aggregates
   all of the above into one `manifest.json` per run, NeurIPS-aligned.
 
@@ -31,7 +31,7 @@ eval-toolkit's reproducibility primitives:
 import json
 import tempfile
 from pathlib import Path
-from eval_toolkit import build_manifest, write_manifest, MANIFEST_SCHEMA_VERSION
+from eval_toolkit import make_manifest, write_manifest, MANIFEST_SCHEMA_VERSION
 ```
 
 (end-to-end)=
@@ -41,7 +41,7 @@ dirty-flag, seeds, data hashes, env, GPU info, wall-clock time, and any
 inline leakage report.
 
 ```python
-m = build_manifest(
+m = make_manifest(
     run_id="2026-05-08T15:00",
     config={"model": "deberta-lora", "k_folds": 5, "seed": 42},
     seeds={"global": 42, "bootstrap": 42},
@@ -291,7 +291,7 @@ from eval_toolkit import set_global_seeds
 set_global_seeds(42)
 
 # 2. Build manifest with seeds + config + data hashes.
-m = build_manifest(
+m = make_manifest(
     run_id="reproducibility-demo",
     config={"k_folds": 5, "splitter": "StratifiedKFoldSplitter"},
     seeds={"global": 42, "bootstrap": 42},

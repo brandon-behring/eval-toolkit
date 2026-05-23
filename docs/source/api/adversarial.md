@@ -17,15 +17,15 @@ combine them via {func}`eval_toolkit.sweep`.
    ALL_TECHNIQUES
    BidiRTLInjection
    CORE_TECHNIQUES
-   CaseRandomization
+   CaseInjection
    DiacriticInjection
    HomoglyphSubstitution
    InvisibleCharsInjection
    PunctuationInjection
    SynonymSubstitution
    TagStrippingInjection
-   TokenSplitting
-   UnicodeNormalization
+   TokenSplittingInjection
+   UnicodeNormalizationInjection
    WhitespaceInjection
    ZeroWidthSpaceInjection
 ```

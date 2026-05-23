@@ -71,28 +71,16 @@ __all__ = [
     "Severity",
     "TemporalLeakageCheck",
     "TokenizationLeakageCheck",
-    "Versioned",
     "run_leakage_checks",
 ]
 
 Severity = Literal["error", "warning", "info"]
 
-
-@runtime_checkable
-class Versioned(Protocol):
-    """Anything exposing a ``version: str`` attribute.
-
-    Used by :class:`~eval_toolkit.manifest.RunManifest` to capture per-object
-    versions of any Tier-2 implementation (Scorer, LeakageCheck, Splitter,
-    ThresholdSelector, DatasetLoader). Mirrors the lm-evaluation-harness
-    ``VERSION`` field pattern, which invalidates cross-version metric
-    comparisons. Opt-in: implementations are not required to set ``version``.
-    """
-
-    @property
-    def version(self) -> str:  # pragma: no cover
-        """Stable version string for this implementation."""
-        ...
+# `Versioned` Protocol previously had a duplicate definition here (v0.7+).
+# Removed at v0.49.0 (N5 dedup) — canonical home is `eval_toolkit.protocols`
+# per `protocols.py:1-5` ("Lightweight public Protocols with minimal dependency
+# surface"). Use `from eval_toolkit.protocols import Versioned` (or top-level
+# `from eval_toolkit import Versioned`).
 
 
 # ---------------------------------------------------------------------------

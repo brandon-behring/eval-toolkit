@@ -5,6 +5,113 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.49.0] — 2026-05-23 — Global naming-standards sweep + final cleanup before v1.0
+
+Final pre-v1.0 minor consolidating the naming-convention standardization
+that locks the v1.0 Tier-1 contract. Audit + industry-research pass
+(PEP 8, scikit-learn, NumPy, Google Python Style Guide, Scientific
+Python SPEC 7) found the repo already 95-99% consistent; this release
+closes the small remaining gaps + documents the conventions as
+[ADR 0004](docs/source/adr/0004-naming-conventions.md). The SPEC 7
+``rng`` parameter convention is documented here and adopted in v0.50.0.
+
+### BREAKING
+
+Five Tier-1 renames for naming consistency (pre-v1.0; SemVer-minor per
+the v0.34.0 BREAKING-minor precedent). Single-consumer lockstep bump in
+``prompt-injection-detection-submission``; no deprecation aliases.
+
+- **``build_manifest`` → ``make_manifest``** (manifest.py). Aligns
+  with ``make_minilm_embedder`` / ``make_palette`` / ``make_run_dir``
+  factory pattern. ``build_*`` was the only outlier.
+- **``CaseRandomization`` → ``CaseInjection``** (adversarial.py).
+  Aligns with ``*Injection`` / ``*Substitution`` adversarial suffix
+  convention.
+- **``TokenSplitting`` → ``TokenSplittingInjection``** (adversarial.py).
+  Same rationale.
+- **``UnicodeNormalization`` → ``UnicodeNormalizationInjection``**
+  (adversarial.py). Same rationale.
+- **``eval_toolkit._scorecard.py`` → ``eval_toolkit.scorecards.py``**
+  (private → public module promotion). The 4 top-level symbols
+  (``scorecard``, ``Scorecard``, ``MetricSpec``, ``MetricResult``)
+  remain top-level Tier-1; the new public submodule path
+  ``from eval_toolkit.scorecards import Scorecard`` is now stable.
+  ``_scorecard.py`` is gone — old import paths raise
+  ``ModuleNotFoundError``. Per the asymmetric-promotion principle in
+  [ADR 0001](docs/source/adr/0001-flat-module-layout.md): promote
+  collection-of-types modules, keep single-function modules underscore
+  (``_sweep.py`` stays private).
+
+### Added
+
+- **[ADR 0004](docs/source/adr/0004-naming-conventions.md)** — Naming
+  conventions decision record with industry citations. Covers module
+  naming (singular vs plural), class suffixes by domain, function
+  verb-prefix conventions, canonical parameter list, fitted-attribute
+  trailing underscore (sklearn convention), TypeVar leading underscore
+  (Google convention), and the SPEC 7 ``rng`` parameter convention
+  (adopted in v0.50.0).
+- **STYLE.md** extended with §3a-d (parameter naming, class suffixes
+  by domain, module naming, asymmetric promotion), §4a-b
+  (fitted-attribute trailing underscore + TypeVar), §12 (75-col
+  docstring prose rule), §14 (test naming convention).
+- **CONTRIBUTING.md** cross-link to ADR 0004 + STYLE.md.
+- **[docs/source/api/strict_tier2_protocols.md](docs/source/api/strict_tier2_protocols.md)** —
+  new docs page enumerating the 9 strict Tier-2 Protocols + 1 opt-in
+  per [ADR 0003 §1](docs/source/adr/0003-stability-contract-and-gate3-methodology.md),
+  with canonical top-level import paths. Resolves #69's discoverability
+  concern without breaking the lightweight design intent of
+  ``eval_toolkit.protocols`` (per ``protocols.py:1-5``).
+- **``src/eval_toolkit/_rng.py``** — private module with SPEC 7 type
+  aliases (``SeedLike``, ``RNGLike``). Not yet referenced; scaffold for
+  the v0.50.0 SPEC 7 adoption.
+- **[ADR 0001](docs/source/adr/0001-flat-module-layout.md)** amendment
+  — added the asymmetric-promotion sub-rule (collection-of-types MAY
+  promote, single-function SHOULD stay underscore).
+
+### Changed
+
+- **Duplicate-type consolidation** (single source of truth):
+  - ``Versioned`` Protocol — canonical at ``protocols.py:64``; the
+    duplicate at ``leakage.py:82`` removed. Removed
+    ``"Versioned"`` from ``leakage.__all__``; previously-unused
+    ``from eval_toolkit.leakage import Versioned`` now raises
+    ``ImportError``. Use ``from eval_toolkit.protocols import Versioned``
+    or top-level ``from eval_toolkit import Versioned``.
+  - ``MetricStatus`` ``Literal`` — canonical at ``artifacts.py:30``; the
+    duplicate at ``scorecards.py:78`` removed; ``scorecards`` now
+    imports from ``artifacts``.
+- **[validation] optional extra** reclassified from "active deprecation
+  with removal target v0.33.0" → "permanent no-op kept for backward
+  compatibility." Hard removal would break consumer pip pins of the
+  form ``eval-toolkit[validation]`` for zero functional benefit
+  (R3 in DEPRECATION.md).
+- **Sphinx cross-references** updated from
+  ``eval_toolkit.leakage.Versioned`` → ``eval_toolkit.protocols.Versioned``
+  in ``manifest.py`` docstrings.
+
+### Deferred to v0.50.0
+
+- **SPEC 7 ``rng`` parameter adoption** across ~30 NumPy-RNG functions.
+  Scope deferred from v0.49.0 after the planning audit revealed the
+  full blast radius (~30 signature sites + 247 test kwarg sites +
+  7 internal helpers + SeedSequence/Generator/sklearn-bridge
+  conversions). Splitting matches the "one cleanup per minor" pattern
+  per [feedback_staggered_breaking_releases]. ``_rng.py`` ships in
+  v0.49.0 as the scaffold; v0.50.0 wires it into every applicable
+  function.
+
+### Notes
+
+- Round 8 audit STOP-GATE per Decision Y.2 — briefing committed at
+  v0.48.0 (commit ``6f6839a``); v0.49.0 ships in parallel since the
+  audit-trail synthesis confirmed R8 audits the existing contract
+  (does not prescribe new changes). Any R8 finding folds into v0.49.1
+  hotfix if needed.
+- Issue #69 closed by the new strict-Tier-2-Protocols docs page; see
+  ``docs/source/api/strict_tier2_protocols.md`` and the close
+  rationale on the issue itself.
+
 ## [0.48.0] — 2026-05-22 — Polish + audit-driven tightening before v1.0 (Round 7 follow-on + cross-API consistency + doc-execution gates)
 
 Third + final BREAKING minor of the staggered v0.45 → v0.46 → v0.46.1 → v0.47

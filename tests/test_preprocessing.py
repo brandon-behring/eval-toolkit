@@ -239,7 +239,7 @@ def test_adversarial_strategies_satisfy_text_transform() -> None:
     """
     from eval_toolkit import TextTransform
     from eval_toolkit.adversarial import (
-        CaseRandomization,
+        CaseInjection,
         DiacriticInjection,
         HomoglyphSubstitution,
         PunctuationInjection,
@@ -248,7 +248,7 @@ def test_adversarial_strategies_satisfy_text_transform() -> None:
     )
 
     for cls in (
-        CaseRandomization,
+        CaseInjection,
         DiacriticInjection,
         HomoglyphSubstitution,
         PunctuationInjection,
