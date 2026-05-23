@@ -1,5 +1,5 @@
 src/eval_toolkit/_deprecated.py
-src/eval_toolkit/_scorecard.py
+src/eval_toolkit/scorecards.py
 src/eval_toolkit/_sweep.py
 src/eval_toolkit/bootstrap.py
 src/eval_toolkit/calibration.py
