@@ -150,12 +150,12 @@ print(f"ECE (10 bins): {expected_calibration_error(y, s, n_bins=10):.3f}")
 from eval_toolkit import bootstrap_ci, paired_bootstrap_diff
 from eval_toolkit.metrics import pr_auc
 
-ci = bootstrap_ci(y, s, pr_auc, n_resamples=1000, seed=42)
+ci = bootstrap_ci(y, s, pr_auc, n_resamples=1000, rng=42)
 print(f"PR-AUC: {ci.point_estimate:.3f}  95% CI: [{ci.ci_low:.3f}, {ci.ci_high:.3f}]")
 
 # Paired bootstrap on the lift between two scorers (s_baseline must be in [0, 1] too).
 s_baseline = np.clip(rng.normal(0.5, 0.3, size=200), 0, 1)
-diff = paired_bootstrap_diff(y, s_baseline, s, pr_auc, n_resamples=1000, seed=42)
+diff = paired_bootstrap_diff(y, s_baseline, s, pr_auc, n_resamples=1000, rng=42)
 print(f"Δ PR-AUC: {diff.delta:.3f}  overlaps zero: {diff.overlaps_zero}")
 ```
 
