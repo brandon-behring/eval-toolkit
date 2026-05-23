@@ -84,7 +84,7 @@ for imbalanced binary detection. Smaller `C` (e.g. `0.1`) regularizes more
 strongly, useful when the stacking set is small or detectors are noisy.
 
 ```{code-cell}
-stacker = LogisticStacker(C=1.0, class_weight="balanced", random_state=0)
+stacker = LogisticStacker(C=1.0, class_weight="balanced", rng=0)
 stacker.fit(score_matrix, y)
 print("coef_:", stacker.coef_)
 print("intercept_:", stacker.intercept_)
