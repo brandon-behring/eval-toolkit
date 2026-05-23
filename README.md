@@ -178,13 +178,13 @@ print(f"NLL: {result['nll_pre']:.3f} -> {result['nll_post']:.3f}")
 ```python
 import tempfile
 from pathlib import Path
-from eval_toolkit import build_manifest, write_manifest
+from eval_toolkit import make_manifest, write_manifest
 
 with tempfile.TemporaryDirectory() as run_dir:
     # data_files: {name: path} → eval_toolkit hashes the files for you;
     # versioned: any object with a `version` attribute (e.g. a scorer or
     # leakage check) is captured by name → version in the manifest.
-    manifest = build_manifest(
+    manifest = make_manifest(
         run_id="quickstart-demo",
         config={"threshold_criterion": "max_f1", "seed": 42},
         seeds={"global": 42, "bootstrap": 42},
@@ -207,7 +207,7 @@ with tempfile.TemporaryDirectory() as run_dir:
 | `eval_toolkit.leakage` | `LeakageCheck` Protocol + 7 reference impls (exact / near / encoding-obfuscated / cross-split / label-conflict / group / temporal); `Versioned` opt-in Protocol |
 | `eval_toolkit.splits` | `Splitter` Protocol + 5 reference impls (holdout / stratified / group / source-disjoint / time-series) |
 | `eval_toolkit.loaders` | `DatasetLoader` Protocol + 4 reference impls (DataFrame / SingleSlice / ParquetGlob / HF datasets) with Croissant-compatible `describe()` |
-| `eval_toolkit.manifest` | `RunManifest` (NeurIPS-aligned) + source-role / guardrail metadata + `build_manifest` / `write_manifest` |
+| `eval_toolkit.manifest` | `RunManifest` (NeurIPS-aligned) + source-role / guardrail metadata + `make_manifest` / `write_manifest` |
 | `eval_toolkit.claims` | `EvidenceGate` class (frozen dataclass: name + callable check + severity), reference gate factories (`required_metric_gate`, `minimum_slice_size_gate`, `metric_threshold_gate`, etc.), `evaluate_claims()`, and `ClaimReport` for claim-mode vs exploratory-mode checks. See [`docs/extending.md`](docs/extending.md) for writing custom gates and [`docs/examples/claims_and_gates.md`](docs/examples/claims_and_gates.md) for a worked end-to-end example. |
 | `eval_toolkit.text_dedup` | `SimilarityStrategy` Protocol + 5 strategies (TF-IDF / hash / embedding / Jaccard / MinHash-LSH); `near_dedup` / `cross_dedup` orchestrators |
 | `eval_toolkit.plotting` | PR curves, reliability diagrams, confusion matrices, score histograms, lift CIs |
