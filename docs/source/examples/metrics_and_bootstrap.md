@@ -62,7 +62,7 @@ r = scorecard(
     y_true, y_score,
     metrics=[ms.pr_auc, ms.roc_auc, ms.brier],
     n_resamples=200,
-    seed=42,
+    rng=42,
 )
 for name in ("pr_auc", "roc_auc", "brier"):
     cell = r[name]
@@ -85,7 +85,7 @@ in `metric_specs`, or when you want non-default CI knobs (e.g., a
 live under `eval_toolkit.metrics` per ADR 0002:
 
 ```{code-cell}
-ci_ap = bootstrap_ci(y_true, y_score, metric=pr_auc, n_resamples=200, seed=42)
+ci_ap = bootstrap_ci(y_true, y_score, metric=pr_auc, n_resamples=200, rng=42)
 print(f"pr_auc = {ci_ap.point_estimate:.3f}  [95% CI: {ci_ap.ci_low:.3f}, {ci_ap.ci_high:.3f}]")
 assert ci_ap.ci_low <= ci_ap.point_estimate <= ci_ap.ci_high
 assert ci_ap.confidence == 0.95
@@ -100,7 +100,7 @@ samples where BCa's jackknife step can degenerate:
 ```{code-cell}
 ci_perc = bootstrap_ci(
     y_true, y_score, metric=pr_auc,
-    n_resamples=200, method="percentile", seed=42,
+    n_resamples=200, method="percentile", rng=42,
 )
 print(f"pr_auc (percentile) = [{ci_perc.ci_low:.3f}, {ci_perc.ci_high:.3f}]")
 ```

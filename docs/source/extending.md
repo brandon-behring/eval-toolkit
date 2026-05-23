@@ -42,7 +42,7 @@ rng = np.random.default_rng(42)
 y = rng.binomial(1, 0.3, size=200)
 s = np.clip(0.6 * y + rng.normal(0, 0.25, size=200), 0, 1)
 
-ci = bootstrap_ci(y, s, pr_auc, n_resamples=500, seed=42)
+ci = bootstrap_ci(y, s, pr_auc, n_resamples=500, rng=42)
 print(f"PR-AUC: {ci.point_estimate:.3f}  CI [{ci.ci_low:.3f}, {ci.ci_high:.3f}]")
 ```
 

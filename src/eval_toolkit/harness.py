@@ -728,7 +728,9 @@ def _run_leakage_phase(
 # Tuple shape for the flat `(slice × scorer)` work-unit dispatched to
 # parallel_map by `_score_all_slices`. Defined at module scope so workers
 # can pickle the function reference.
-_ScoreOnePairItem = tuple[EvalSlice, str, Scorer, int, int, Literal["raise", "record"]]
+_ScoreOnePairItem = tuple[
+    EvalSlice, str, Scorer, int, "RNGLike | SeedLike | None", Literal["raise", "record"]
+]
 _ScoreOnePairResult = tuple[str, str, dict[str, object], np.ndarray]
 
 

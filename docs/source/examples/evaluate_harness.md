@@ -95,7 +95,7 @@ result = evaluate(
     slices=[val_slice, ood_slice],
     run_id="example_run",
     n_resamples=50,  # smaller for the example — production: 1000+
-    seed=42,
+    rng=42,
 )
 print(f"run_id: {result.run_id}")
 print(f"slices in result: {list(result.by_slice.keys())}")

@@ -31,7 +31,7 @@ from scipy.stats import norm as _scipy_norm
 from scipy.stats import rankdata as _scipy_rankdata
 
 from eval_toolkit._parallel import parallel_map
-from eval_toolkit._rng import RNGLike, SeedLike
+from eval_toolkit._rng import RNGLike, SeedLike, spawn_seed_sequences
 
 _logger = logging.getLogger(__name__)
 
@@ -443,8 +443,7 @@ def _bootstrap_t_ci(
     Skips degenerate resamples (single-class draws causing the metric to
     raise); raises if > 5% of resamples are degenerate.
     """
-    rng = np.random.default_rng(rng)
-    seed_seqs = rng.bit_generator.seed_seq.spawn(n_resamples)
+    seed_seqs = spawn_seed_sequences(rng, n_resamples)
     step = functools.partial(_bootstrap_t_step, y_true=y_true, y_score=y_score, metric=metric)
     raw_results = parallel_map(step, seed_seqs, n_jobs=n_jobs, description="bootstrap_t")
     valid_pairs = [r for r, _ in raw_results if r is not None]
@@ -584,8 +583,7 @@ def paired_bootstrap_diff(
         raise ValueError(f"n={n} too small for paired bootstrap; need ≥ 10")
 
     delta_point = float(metric(y_true_arr, b)) - float(metric(y_true_arr, a))
-    rng = np.random.default_rng(rng)
-    seed_seqs = rng.bit_generator.seed_seq.spawn(n_resamples)
+    seed_seqs = spawn_seed_sequences(rng, n_resamples)
     step = functools.partial(
         _paired_bootstrap_diff_step,
         y_true_arr=y_true_arr,
@@ -719,8 +717,7 @@ def paired_bootstrap_ece_diff(
         raise ValueError(f"n={n} too small for paired bootstrap; need >= 10")
 
     delta_point = float(ece_fn(y_true_arr, b, n_bins)) - float(ece_fn(y_true_arr, a, n_bins))
-    rng = np.random.default_rng(rng)
-    seed_seqs = rng.bit_generator.seed_seq.spawn(n_resamples)
+    seed_seqs = spawn_seed_sequences(rng, n_resamples)
     step = functools.partial(
         _paired_bootstrap_ece_diff_step,
         y_true_arr=y_true_arr,
@@ -918,8 +915,7 @@ def paired_bootstrap_op_point_diff(
         metric_fn(test_y_arr, test_a, thr_a_full)
     )
 
-    rng = np.random.default_rng(rng)
-    seed_seqs = rng.bit_generator.seed_seq.spawn(n_resamples)
+    seed_seqs = spawn_seed_sequences(rng, n_resamples)
     step = functools.partial(
         _paired_bootstrap_op_point_diff_step,
         val_y_arr=val_y_arr,

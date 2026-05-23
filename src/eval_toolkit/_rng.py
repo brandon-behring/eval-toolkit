@@ -26,6 +26,7 @@ Exceptions to the SPEC 7 convention — documented in STYLE.md §3a:
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import cast
 
 import numpy as np
 
@@ -44,3 +45,21 @@ type RNGLike = np.random.Generator | np.random.BitGenerator
 ``Generator`` inputs and lifts ``BitGenerator`` inputs into a
 ``Generator`` — both forms compose cleanly.
 """
+
+
+def spawn_seed_sequences(rng: RNGLike | SeedLike | None, n: int) -> list[np.random.SeedSequence]:
+    """Spawn ``n`` independent SeedSequences from any SPEC 7 ``rng`` input.
+
+    Normalizes the input to a ``Generator``, then extracts the underlying
+    ``SeedSequence`` via the bit-generator and spawns ``n`` children.
+    The cast satisfies mypy strict: the ``seed_seq`` attribute on a
+    concrete BitGenerator is a ``SeedSequence`` instance, but the type
+    stub on ``BitGenerator.seed_seq`` returns the abstract
+    ``ISeedSequence`` interface (which lacks ``spawn``).
+
+    Used by the bootstrap parallel workers (which take spawned
+    ``SeedSequence`` objects to seed their internal ``default_rng()`` calls).
+    """
+    gen = np.random.default_rng(rng)
+    seed_seq = cast(np.random.SeedSequence, gen.bit_generator.seed_seq)
+    return seed_seq.spawn(n)

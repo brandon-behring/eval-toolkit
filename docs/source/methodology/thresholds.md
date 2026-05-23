@@ -225,7 +225,7 @@ diff = paired_bootstrap_op_point_diff(
     val_y=val_y, val_score_a=val_s_a, val_score_b=val_s_b,
     test_y=test_y, test_score_a=test_s_a, test_score_b=test_s_b,
     threshold_fn=threshold_fn, metric_fn=f1_at,
-    n_resamples=200, seed=42,
+    n_resamples=200, rng=42,
 )
 print(f"Δ F1: {diff.delta:.3f}  CI [{diff.ci_low:.3f}, {diff.ci_high:.3f}]")
 ```

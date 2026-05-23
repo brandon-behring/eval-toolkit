@@ -182,7 +182,7 @@ assert arrays.labels.shape == (n,)
 assert arrays.scores.shape == (n,)
 
 # Bootstrap PR-AUC CI directly from the on-disk artifact:
-ci = bootstrap_metric_from_predictions(baseline_ref.to_dict(), n_resamples=50, seed=1)
+ci = bootstrap_metric_from_predictions(baseline_ref.to_dict(), n_resamples=50, rng=1)
 assert ci["n_resamples"] == 50
 # v0.48 BootstrapCI.to_dict() schema: separate `low` + `high` keys
 # (instead of the pre-v0.48 `ci_95: [l, h]` list). See migration/v0.48.md.
@@ -193,7 +193,7 @@ diff = paired_diff_from_prediction_refs(
     baseline_ref.to_dict(),
     candidate_ref.to_dict(),
     n_resamples=50,
-    seed=1,
+    rng=1,
 )
 assert diff["n_resamples"] == 50
 ```

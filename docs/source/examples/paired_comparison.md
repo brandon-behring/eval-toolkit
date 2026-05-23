@@ -71,7 +71,7 @@ confidence level (default 95%):
 
 ```{code-cell}
 result = paired_bootstrap_diff(
-    y_true, s_a, s_b, metric=pr_auc, n_resamples=500, seed=42,
+    y_true, s_a, s_b, metric=pr_auc, n_resamples=500, rng=42,
 )
 print(f"delta = {result.delta:.3f}  [95% CI: {result.ci_low:.3f}, {result.ci_high:.3f}]")
 significant = result.ci_low > 0 or result.ci_high < 0

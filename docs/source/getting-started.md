@@ -233,7 +233,7 @@ result = evaluate(
     [dev_slice],
     run_id="demo-run",
     n_resamples=50,  # small for the doctest; use 1000+ in real runs
-    seed=42,
+    rng=42,
 )
 
 assert result.run_id == "demo-run"

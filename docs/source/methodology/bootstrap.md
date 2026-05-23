@@ -55,8 +55,8 @@ Two CI-construction methods ship in `bootstrap_ci`:
   completeness.
 
 ```python
-ci_bca = bootstrap_ci(y, s_b, pr_auc, n_resamples=500, method="BCa", seed=42)
-ci_pct = bootstrap_ci(y, s_b, pr_auc, n_resamples=500, method="percentile", seed=42)
+ci_bca = bootstrap_ci(y, s_b, pr_auc, n_resamples=500, method="BCa", rng=42)
+ci_pct = bootstrap_ci(y, s_b, pr_auc, n_resamples=500, method="percentile", rng=42)
 print(f"BCa:        {ci_bca.point_estimate:.3f}  CI [{ci_bca.ci_low:.3f}, {ci_bca.ci_high:.3f}]")
 print(f"Percentile: {ci_pct.point_estimate:.3f}  CI [{ci_pct.ci_low:.3f}, {ci_pct.ci_high:.3f}]")
 ```
@@ -75,7 +75,7 @@ the resampling noise cancels: rows that are hard for A are also hard
 for B. Paired bootstrap exploits this by sharing resample indices.
 
 ```python
-diff = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=500, seed=42)
+diff = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=500, rng=42)
 print(f"Δ PR-AUC: {diff.delta:.3f}  CI [{diff.ci_low:.3f}, {diff.ci_high:.3f}]")
 print(f"  overlaps zero: {diff.overlaps_zero}")
 ```
@@ -83,8 +83,8 @@ print(f"  overlaps zero: {diff.overlaps_zero}")
 Compare with computing two separate CIs and eyeballing them:
 
 ```python
-ci_a = bootstrap_ci(y, s_a, pr_auc, n_resamples=500, seed=42)
-ci_b = bootstrap_ci(y, s_b, pr_auc, n_resamples=500, seed=42)
+ci_a = bootstrap_ci(y, s_a, pr_auc, n_resamples=500, rng=42)
+ci_b = bootstrap_ci(y, s_b, pr_auc, n_resamples=500, rng=42)
 print(f"A CI: [{ci_a.ci_low:.3f}, {ci_a.ci_high:.3f}]")
 print(f"B CI: [{ci_b.ci_low:.3f}, {ci_b.ci_high:.3f}]")
 print(f"unpaired-CI width sum: {(ci_a.ci_high - ci_a.ci_low) + (ci_b.ci_high - ci_b.ci_low):.3f}")
@@ -173,7 +173,7 @@ externally and feeds them in).
 - **Bootstrapping accuracy on n < 30.** BCa's jackknife is degenerate.
   The toolkit emits an error in that regime; fall back to
   `method="percentile"` and document the choice.
-- **Not seeding.** `bootstrap_ci(..., seed=42)` makes runs reproducible.
+- **Not seeding.** `bootstrap_ci(..., rng=42)` makes runs reproducible.
   An unseeded run will give a slightly different CI on every
   invocation — annoying for golden-test discipline and CI flakiness.
 - **Comparing ECE bootstrap CIs across runs with different `n_bins`.**

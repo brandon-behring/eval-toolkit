@@ -59,7 +59,7 @@ result = evaluate(
     slices=[parent],
     run_id="claim_example",
     n_resamples=50,
-    seed=42,
+    rng=42,
 )
 ```
 

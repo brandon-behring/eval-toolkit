@@ -48,10 +48,10 @@ methods:
 - **studentized** — bootstrap-t. Rare in ML eval; ships for completeness.
 
 ```python
-ci = bootstrap_ci(y, s_b, pr_auc, n_resamples=1000, method="BCa", seed=42)
+ci = bootstrap_ci(y, s_b, pr_auc, n_resamples=1000, method="BCa", rng=42)
 print(f"BCa: PR-AUC={ci.point_estimate:.3f} CI [{ci.ci_low:.3f}, {ci.ci_high:.3f}]")
 
-ci_p = bootstrap_ci(y, s_b, pr_auc, n_resamples=1000, method="percentile", seed=42)
+ci_p = bootstrap_ci(y, s_b, pr_auc, n_resamples=1000, method="percentile", rng=42)
 print(f"pct: PR-AUC={ci_p.point_estimate:.3f} CI [{ci_p.ci_low:.3f}, {ci_p.ci_high:.3f}]")
 ```
 
@@ -73,7 +73,7 @@ resample for both A and B.
 
 ```python
 diff = paired_bootstrap_diff(
-    y, s_a, s_b, pr_auc, n_resamples=1000, seed=42,
+    y, s_a, s_b, pr_auc, n_resamples=1000, rng=42,
 )
 print(f"Δ PR-AUC: {diff.delta:.3f}  CI [{diff.ci_low:.3f}, {diff.ci_high:.3f}]")
 print(f"  overlaps zero: {diff.overlaps_zero}")
@@ -105,7 +105,7 @@ from eval_toolkit.metrics import expected_calibration_error_l2_debiased
 diff_ece = paired_bootstrap_ece_diff(
     y, s_a, s_b,
     ece_fn=expected_calibration_error_l2_debiased,
-    n_bins=10, n_resamples=1000, seed=42,
+    n_bins=10, n_resamples=1000, rng=42,
 )
 print(f"Δ ECE: {diff_ece.delta:.4f}  CI [{diff_ece.ci_low:.4f}, {diff_ece.ci_high:.4f}]")
 ```
@@ -227,9 +227,9 @@ consumer computes via `scipy.stats` if needed.
 Full A-vs-B comparison report:
 
 ```python
-ci_a = bootstrap_ci(y, s_a, pr_auc, n_resamples=1000, seed=42)
-ci_b = bootstrap_ci(y, s_b, pr_auc, n_resamples=1000, seed=42)
-diff = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=1000, seed=42)
+ci_a = bootstrap_ci(y, s_a, pr_auc, n_resamples=1000, rng=42)
+ci_b = bootstrap_ci(y, s_b, pr_auc, n_resamples=1000, rng=42)
+diff = paired_bootstrap_diff(y, s_a, s_b, pr_auc, n_resamples=1000, rng=42)
 mde = mde_from_ci(diff, alpha=0.05, power=0.80)
 
 print(f"A: PR-AUC={ci_a.point_estimate:.3f} CI [{ci_a.ci_low:.3f}, {ci_a.ci_high:.3f}]")
