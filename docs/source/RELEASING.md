@@ -20,8 +20,22 @@ see [DEPRECATION.md](DEPRECATION.md). For ongoing contributor flow
 5. Tag: git tag -a vX.Y.Z -m "vX.Y.Z — <short description>"
 6. Push tag: git push origin vX.Y.Z
 7. Watch publish.yml + docs.yml fire
-8. Smoke-test: pip install eval-toolkit==X.Y.Z in a clean Py3.13 venv
-9. Update memory: project_etk_on_pypi reflects the new version
+8. **GitHub Release object** (NEW Step 8 — historic anti-pattern was
+   tag-only):
+   ```bash
+   awk '/^## \[X.Y.Z\]/{p=1;next} /^## \[/{exit} p' CHANGELOG.md > release_notes.md
+   gh release create vX.Y.Z --repo brandon-behring/eval-toolkit \
+     --title "vX.Y.Z — <short description>" \
+     --notes-file release_notes.md \
+     --latest
+   rm release_notes.md
+   ```
+   The notes-file MUST live inside `$PWD` (gh snap can't read /tmp/
+   nor $HOME dotfiles per `feedback_gh_snap_tmp_confinement`).
+   Earlier-release backfills omit `--latest` (would downgrade the
+   current latest pointer).
+9. Smoke-test: pip install eval-toolkit==X.Y.Z in a clean Py3.13 venv
+10. Update memory: project_etk_on_pypi reflects the new version
 ```
 
 **The `make release-prep` target (added v0.30.1)** automates steps 1 + 2
