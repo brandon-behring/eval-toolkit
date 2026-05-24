@@ -16,6 +16,22 @@ the v0.51 RC.
 
 ### BREAKING
 
+- **R8-C3** — `thresholds.recall_at_fpr(...)` fallback semantics changed
+  when no threshold satisfies `target_fpr`. Pre-v0.51 the fallback set
+  `threshold = 1.0` and then computed `y_pred = (y_score >= 1.0)` —
+  inclusive comparator — which classified any negative-class sample
+  with score exactly 1.0 as predicted-positive. The probe
+  `recall_at_fpr(y=[0,1], scores=[1.0,1.0], target_fpr=0.0)` returned
+  `actual_fpr=1.0, fp=1` in silent violation of the function's
+  FPR-ceiling invariant. v0.51 returns a SENTINEL
+  `RecallAtFprResult(threshold=np.inf, recall=0.0, actual_fpr=0.0,
+  fp=0, tn=n_val_neg)` whenever the constraint is unsatisfiable.
+  Callers detect via `np.isinf(result.threshold)`. The
+  `actual_fpr ≤ target_fpr` invariant is now preserved by construction.
+  Migration: any caller filtering on `result.threshold` should add an
+  `np.isinf(...)` branch — pre-v0.51 the sentinel value was `1.0`.
+  (Verified at `audit-verification-codex-gemini-v0.50.0.md`.)
+
 - **R8-C4(a)** — `harness.evaluate(...)` with a `Generator`-typed `rng`
   is now bit-stable across `n_jobs` values. Prior to v0.51, the same
   `rng` object was attached to every `(slice, scorer)` work_unit;

@@ -563,8 +563,7 @@ class TargetRecallSelector:
         eligible = np.where(recalls >= self.recall)[0]
         if len(eligible) == 0:
             raise RuntimeError(
-                f"No threshold achieves recall ≥ {self.recall}; "
-                f"max recall = {recalls.max():.3f}"
+                f"No threshold achieves recall ≥ {self.recall}; max recall = {recalls.max():.3f}"
             )
         idx = int(eligible[-1])
         return _pr_curve_result_at(precisions, recalls, thresholds, idx, self.criterion)
@@ -676,7 +675,7 @@ class TargetFPRSelector:
         eligible = np.where(fprs <= self.fpr)[0]
         if len(eligible) == 0:
             raise RuntimeError(
-                f"No threshold achieves FPR ≤ {self.fpr}; " f"min fpr = {fprs.min():.3f}"
+                f"No threshold achieves FPR ≤ {self.fpr}; min fpr = {fprs.min():.3f}"
             )
         # Trimmed ROC: thresholds are sorted descending, FPR is non-decreasing
         # as threshold decreases. Eligible is contiguous from index 0;
@@ -701,14 +700,20 @@ class RecallAtFprResult:
     ----------
     threshold : float
         The smallest threshold (highest-TPR feasible) meeting FPR ≤ target,
-        as chosen by :class:`TargetFPRSelector`. Set to ``1.0`` when no
-        threshold meets the target (degenerate scoring fallback).
+        as chosen by :class:`TargetFPRSelector`. Set to ``np.inf`` when no
+        threshold meets the target (v0.51+ sentinel for the unsatisfiable
+        case — callers may filter via ``np.isinf(result.threshold)``).
+        Pre-v0.51 this fallback returned ``threshold=1.0`` which silently
+        violated the ``actual_fpr ≤ target_fpr`` invariant when any
+        negative-class sample scored ``≥ 1.0``.
     recall : float
         TPR at the chosen threshold; ``0.0`` in the no-feasible-threshold
         fallback.
     actual_fpr : float
-        Realized FPR at the chosen threshold (typically ``≤ target_fpr`` by
-        construction, but recorded explicitly for audit).
+        Realized FPR at the chosen threshold. Always ``≤ target_fpr`` by
+        construction — in the unsatisfiable fallback case the sentinel
+        result has ``actual_fpr = 0.0`` because no positives are predicted
+        at ``threshold = np.inf``.
     n_val_neg : int
         Number of negative-class rows in ``y_true`` (the denominator of
         the FPR calculation).
@@ -750,9 +755,21 @@ def recall_at_fpr(
     ``.select()`` + re-derive-FP/TN-at-threshold dance.
 
     When no threshold meets the target FPR (degenerate scoring), returns
-    ``RecallAtFprResult(threshold=1.0, recall=0.0, actual_fpr=0.0, fp=0,
-    tn=n_val_neg)``. This is the V5 reference behavior (no false positives
-    at threshold 1.0 by construction).
+    a SENTINEL result
+    ``RecallAtFprResult(threshold=np.inf, recall=0.0, actual_fpr=0.0,
+    fp=0, tn=n_val_neg)`` indicating the constraint is unsatisfiable.
+    Callers can detect this case via ``np.isinf(result.threshold)``. The
+    ``actual_fpr ≤ target_fpr`` invariant is honored — at
+    ``threshold = np.inf`` no sample is predicted positive, so
+    ``fp = 0`` and ``actual_fpr = 0.0``.
+
+    .. versionchanged:: 0.51
+       Pre-v0.51 this fallback returned ``threshold=1.0`` with
+       ``actual_fpr`` derived from ``y_score >= 1.0`` (inclusive). When
+       any negative-class sample scored exactly ``1.0`` that path
+       silently returned ``actual_fpr = 1.0`` — violating the function's
+       own FPR-ceiling invariant. The v0.51 sentinel approach removes
+       the silent invariant violation. (R8-C3 audit fix.)
 
     Parameters
     ----------
@@ -788,19 +805,32 @@ def recall_at_fpr(
     50
     """
     selector = TargetFPRSelector(fpr=target_fpr)
-    try:
-        result = selector.select(y_true, y_score)
-        threshold = float(result.threshold)
-        recall = float(result.recall)
-    except RuntimeError:
-        # No threshold achieves FPR ≤ target — fall back to threshold=1.0
-        # which by construction yields zero positives (recall=0, FPR=0).
-        threshold = 1.0
-        recall = 0.0
-
-    y_pred = (np.asarray(y_score) >= threshold).astype(int)
     is_neg = np.asarray(y_true) == 0
     n_val_neg = int(is_neg.sum())
+    try:
+        result = selector.select(y_true, y_score)
+    except RuntimeError:
+        # No threshold achieves FPR ≤ target (R8-C3): return SENTINEL
+        # without trusting any threshold value or comparator. The
+        # canonical fp=0 / actual_fpr=0.0 honors the function's own
+        # FPR-ceiling invariant; threshold=np.inf is the readable
+        # signal of unsatisfiability (callers filter via np.isinf).
+        # Pre-v0.51 this path computed `y_pred = (y_score >= 1.0)`
+        # which silently mis-classified score=1.0 negatives as
+        # positives, returning actual_fpr=1.0 in violation of the
+        # promised target_fpr ceiling.
+        return RecallAtFprResult(
+            threshold=float(np.inf),
+            recall=0.0,
+            actual_fpr=0.0,
+            n_val_neg=n_val_neg,
+            fp=0,
+            tn=n_val_neg,
+        )
+
+    threshold = float(result.threshold)
+    recall = float(result.recall)
+    y_pred = (np.asarray(y_score) >= threshold).astype(int)
     fp = int(((y_pred == 1) & is_neg).sum())
     actual_fpr = (fp / n_val_neg) if n_val_neg > 0 else 0.0
     return RecallAtFprResult(
@@ -872,7 +902,7 @@ class CostSensitiveSelector:
     def criterion(self) -> str:
         """Stable label embedding the cost-matrix triple."""
         cm = self.cost_matrix
-        return f"cost_sensitive_prior={cm.prior:.3f}" f"_fp={cm.fp_cost:.2f}_fn={cm.fn_cost:.2f}"
+        return f"cost_sensitive_prior={cm.prior:.3f}_fp={cm.fp_cost:.2f}_fn={cm.fn_cost:.2f}"
 
     def select(self, y_true: np.ndarray, y_score: np.ndarray) -> ThresholdResult:
         """Return the Bayes-optimal threshold for this cost matrix."""
