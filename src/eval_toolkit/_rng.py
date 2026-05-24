@@ -26,7 +26,6 @@ Exceptions to the SPEC 7 convention — documented in STYLE.md §3a:
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import cast
 
 import numpy as np
 
@@ -50,16 +49,36 @@ type RNGLike = np.random.Generator | np.random.BitGenerator
 def spawn_seed_sequences(rng: RNGLike | SeedLike | None, n: int) -> list[np.random.SeedSequence]:
     """Spawn ``n`` independent SeedSequences from any SPEC 7 ``rng`` input.
 
-    Normalizes the input to a ``Generator``, then extracts the underlying
-    ``SeedSequence`` via the bit-generator and spawns ``n`` children.
-    The cast satisfies mypy strict: the ``seed_seq`` attribute on a
-    concrete BitGenerator is a ``SeedSequence`` instance, but the type
-    stub on ``BitGenerator.seed_seq`` returns the abstract
-    ``ISeedSequence`` interface (which lacks ``spawn``).
+    Normalizes the input to a ``Generator``, then draws ``n`` random
+    64-bit entropy values FROM the generator and wraps each in a fresh
+    ``SeedSequence``. The draws advance the generator's internal state
+    so subsequent calls to ``spawn_seed_sequences`` on the same
+    ``Generator`` instance produce different children.
 
     Used by the bootstrap parallel workers (which take spawned
     ``SeedSequence`` objects to seed their internal ``default_rng()`` calls).
+
+    Notes
+    -----
+    Prior to v0.51, this function extracted the
+    ``bit_generator.seed_seq`` from the input and called ``.spawn(n)``
+    on it. That implementation IGNORED Generator state — a ``Generator``
+    that had been advanced by prior draws produced the same children as
+    a fresh ``Generator`` with the same construction seed. Two callers
+    sharing one ``Generator`` therefore got identical bootstrap streams,
+    silently violating bootstrap independence across (slice, scorer)
+    pairs in ``harness.evaluate`` and across resamples in
+    ``bootstrap.bootstrap_ci``. The v0.51 implementation draws fresh
+    entropy from the generator on every call so spawning is
+    state-respecting; this also restores the SPEC 7 bit-for-bit identity
+    contract between sequential and parallel modes when the seeds are
+    fanned out at a single batch boundary.
     """
     gen = np.random.default_rng(rng)
-    seed_seq = cast(np.random.SeedSequence, gen.bit_generator.seed_seq)
-    return seed_seq.spawn(n)
+    # Draw n independent 64-bit unsigned entropy values FROM the generator.
+    # Each draw advances generator state, so repeated calls on the same
+    # Generator instance yield different children. Each entropy value seeds
+    # an independent SeedSequence (SeedSequence's bit-mixing guarantees
+    # downstream independence across the n children).
+    seeds = gen.integers(0, 2**63 - 1, size=n, dtype=np.int64)
+    return [np.random.SeedSequence(int(s)) for s in seeds]

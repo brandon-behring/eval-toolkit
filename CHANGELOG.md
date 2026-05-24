@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — Round 8 rectification batch (targeting v0.51.0)
+
+The 18-item rectification batch following the Round 8 multi-LLM audit
+(Codex + Gemini reports verified at
+`audit-verification-codex-gemini-v0.50.0.md`, 2026-05-24). Per Decision
+Y.2 + the staggered-pre-v1.0 plan, v0.51.0 is a BREAKING-allowed
+minor bundling all fixes before v1.0 tags. Round 9 audit runs against
+the v0.51 RC.
+
+### BREAKING
+
+- **R8-C4(b)** — `eval_toolkit._rng.spawn_seed_sequences(rng, n)` now
+  respects `Generator` state. Prior to v0.51, the function extracted
+  the bit-generator's seed_seq and called `.spawn(n)` on it — so a
+  `Generator` advanced by prior draws produced the same children as a
+  fresh `Generator` with the same construction seed. The new
+  implementation draws `n` fresh entropy values FROM the generator
+  via `rng.integers(0, 2**63-1, size=n)` and wraps each in a
+  `SeedSequence`. Each call advances generator state, so repeated
+  calls on the same instance yield different children. This was the
+  root cause of bootstrap non-independence across `(slice, scorer)`
+  pairs in `harness.evaluate` — when the same `Generator` was shared
+  across bootstrap callsites, all callsites silently used the same
+  resample stream. (Verified probe at
+  `audit-verification-codex-gemini-v0.50.0.md`.)
+
 ## [0.50.0] — 2026-05-23 — SPEC 7 `rng` parameter adoption
 
 The SPEC 7 follow-up to v0.49.0. The `_rng.py` scaffold shipped at
