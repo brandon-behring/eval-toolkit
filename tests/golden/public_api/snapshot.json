@@ -1,5 +1,6 @@
 {
   "__all__": [
+    "ADRSubject",
     "ADVANCED_TECHNIQUES",
     "ALL_TECHNIQUES",
     "ANCHOR_RE",
@@ -11,6 +12,7 @@
     "CISafeThresholdSelector",
     "CORE_TECHNIQUES",
     "CaseInjection",
+    "CitationMisalignment",
     "ClaimReport",
     "ClaimSpec",
     "CorrectionMethod",
@@ -156,6 +158,7 @@
     "evaluate_folded",
     "evaluate_scorer_on_slice",
     "external_diagnostic_gate",
+    "extract_adr_subject_category",
     "fdr_bh_correct",
     "figure_metadata",
     "file_sha256",
@@ -235,6 +238,7 @@
     "stratified_recall",
     "strict_artifact_gate",
     "sweep",
+    "validate_citations",
     "validate_manifest",
     "validate_payload",
     "validate_prediction_artifact_ref",
@@ -248,6 +252,14 @@
     "write_run_result"
   ],
   "entries": {
+    "ADRSubject": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Subject category of a single ADR.",
+      "kind": "class",
+      "signature": "(adr_id: 'str', title: 'str', slug: 'str', category: 'str | None') -> None"
+    },
     "ADVANCED_TECHNIQUES": {
       "doc_first_line": "Built-in immutable sequence.",
       "kind": "value",
@@ -328,6 +340,14 @@
       "doc_first_line": "Randomly flip the case of alphabetic characters.",
       "kind": "class",
       "signature": "(ratio: 'float' = 0.5, seed: 'int' = 42, name: 'str' = 'case_random') -> None"
+    },
+    "CitationMisalignment": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "A \"per ADR-NNN\" citation whose category doesn't match the cited ADR's subject.",
+      "kind": "class",
+      "signature": "(file: 'Path', line: 'int', cited_adr_id: 'str', surrounding_text: 'str', claim_category: 'str | None', adr_actual_category: 'str | None') -> None"
     },
     "ClaimReport": {
       "bases": [
@@ -1480,6 +1500,11 @@
       "kind": "function",
       "signature": "(path: 'str', *, op: \"Literal['<', '<=', '>', '>=', '=='] | None\" = None, threshold: 'float | None' = None, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
     },
+    "extract_adr_subject_category": {
+      "doc_first_line": "Infer an ADR's claim-taxonomy category from its title + slug.",
+      "kind": "function",
+      "signature": "(title: 'str', slug: 'str', category_keywords: 'dict[str, list[str]]') -> 'str | None'"
+    },
     "fdr_bh_correct": {
       "doc_first_line": "Benjamini-Hochberg false-discovery-rate correction.",
       "kind": "function",
@@ -1874,6 +1899,11 @@
       "doc_first_line": "Apply each ``TextTransform`` strategy to each text; one row per pair.",
       "kind": "function",
       "signature": "(strategies: 'Sequence[TextTransform]', texts: 'Sequence[str]', *, scorer: 'Scorer | None' = None, attack_threshold: 'float | None' = None) -> 'pd.DataFrame'"
+    },
+    "validate_citations": {
+      "doc_first_line": "Find \"per ADR-NNN\" citations whose category doesn't match the cited ADR.",
+      "kind": "function",
+      "signature": "(*, markdown_text: 'str', markdown_path: 'Path', adr_subjects: 'dict[str, ADRSubject]', category_keywords: 'dict[str, list[str]]', citation_pattern: 'str' = '(?i)(?:per|via|by|under)\\\\s+ADR-(\\\\d{3})', context_lines: 'int' = 2, known_exempt_citations: 'Sequence[tuple[Path, int, str]]' = ()) -> 'list[CitationMisalignment]'"
     },
     "validate_manifest": {
       "doc_first_line": "Validate a serialized ``RunManifest`` payload.",
