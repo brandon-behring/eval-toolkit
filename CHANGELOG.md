@@ -16,6 +16,22 @@ the v0.51 RC.
 
 ### BREAKING
 
+- **R8-C4(a)** — `harness.evaluate(...)` with a `Generator`-typed `rng`
+  is now bit-stable across `n_jobs` values. Prior to v0.51, the same
+  `rng` object was attached to every `(slice, scorer)` work_unit;
+  joblib forked copies at the SAME generator state into N parallel
+  workers, so every worker used identical bootstrap sample streams —
+  silently producing non-independent CIs across `(slice, scorer)`
+  pairs in parallel mode and divergent results vs sequential mode.
+  The v0.51 implementation spawns one independent `SeedSequence` per
+  work unit at the dispatch boundary in `_score_all_slices` (depends
+  on the R8-C4(b) `spawn_seed_sequences` fix). Each pair now sees an
+  independent bootstrap stream; sequential (`n_jobs=1`) and parallel
+  (`n_jobs>1`) modes produce bit-identical CIs per the SPEC 7
+  contract at `docs/source/methodology/parallelism.md`. Integer `rng`
+  callers (the common case) are unaffected. (Verified by multi-slice
+  probe at `audit-verification-codex-gemini-v0.50.0.md`.)
+
 - **R8-C4(b)** — `eval_toolkit._rng.spawn_seed_sequences(rng, n)` now
   respects `Generator` state. Prior to v0.51, the function extracted
   the bit-generator's seed_seq and called `.spawn(n)` on it — so a

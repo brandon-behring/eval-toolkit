@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Final, Literal, cast
 import numpy as np
 
 from eval_toolkit._parallel import parallel_map
-from eval_toolkit._rng import RNGLike, SeedLike
+from eval_toolkit._rng import RNGLike, SeedLike, spawn_seed_sequences
 from eval_toolkit.artifacts import (
     error_metric,
     sanitize_for_json,
@@ -785,7 +785,7 @@ def _score_all_slices(
     """
     # Pre-filter skipped pairs (allow-list miss) before dispatching parallel
     # work-units. Logs the same skip messages as the pre-parallel version.
-    work_units: list[_ScoreOnePairItem] = []
+    candidate_units: list[tuple[EvalSlice, str, Scorer]] = []
     skipped: dict[tuple[str, str], dict[str, object]] = {}
     for slice_ in slices:
         _logger.info(
@@ -800,7 +800,28 @@ def _score_all_slices(
                 skipped[(slice_.name, sname)] = _skipped_scorer_result(slice_, reason)
                 _logger.info("    skipped %s: %s", sname, reason)
                 continue
-            work_units.append((slice_, sname, scorer, n_resamples, rng, on_scorer_error))
+            candidate_units.append((slice_, sname, scorer))
+
+    # Spawn one independent SeedSequence per work unit BEFORE parallel
+    # dispatch (R8-C4a fix). This ensures n_jobs is bit-stable: each
+    # (slice, scorer) pair gets a deterministic seed determined by its
+    # position in the iteration order, not by whether a joblib worker
+    # forked at a particular point in the rng's state-machine. Both
+    # sequential (n_jobs=1) and parallel (n_jobs>1) modes now produce
+    # bit-identical bootstrap CIs per the SPEC 7 contract documented at
+    # docs/source/methodology/parallelism.md.
+    #
+    # Pre-v0.51 this site passed the shared `rng` object into every
+    # work-unit. In sequential mode the generator advanced across items
+    # (so items got independent streams); in parallel mode joblib forked
+    # copies of the SAME rng state into N workers, causing every worker
+    # to use the same bootstrap samples — silent non-independence across
+    # (slice, scorer) pairs.
+    child_seeds = spawn_seed_sequences(rng, len(candidate_units))
+    work_units: list[_ScoreOnePairItem] = [
+        (slice_, sname, scorer, n_resamples, child_seed, on_scorer_error)
+        for (slice_, sname, scorer), child_seed in zip(candidate_units, child_seeds, strict=True)
+    ]
 
     # Parallel scoring. parallel_map at n_jobs=1 is a pure-Python for-loop
     # (Principle #4) — bit-identical to the pre-v0.36 sequential code.
