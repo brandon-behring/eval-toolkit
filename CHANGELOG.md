@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — Round 8 rectification batch (targeting v0.51.0)
+## [0.51.0] — 2026-05-24 — Round 8 rectification batch
 
 The 18-item rectification batch following the Round 8 multi-LLM audit
 (Codex + Gemini reports verified at
@@ -13,6 +13,12 @@ The 18-item rectification batch following the Round 8 multi-LLM audit
 Y.2 + the staggered-pre-v1.0 plan, v0.51.0 is a BREAKING-allowed
 minor bundling all fixes before v1.0 tags. Round 9 audit runs against
 the v0.51 RC.
+
+**Audit outcome**: 13 confirmed → fixed in this release; 2 deferred
+(R8-G3 custom exceptions, R8-G4 joblib OOM capping) to v1.x as Tier-2
+additive; 3 refuted (R8-G2 cyclic-import framing; R8-G5 cherry-picked
+weak test; R8-V1 + R8-V2 over-confident Gemini validations). See
+`docs/source/audit_findings.md` Round 8 section for the full ledger.
 
 ### Added
 

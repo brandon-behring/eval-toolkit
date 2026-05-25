@@ -214,12 +214,66 @@ Per user direction during plan refinement ("use the audits as seeds for things t
 
 ---
 
-## Round 8 (planned: post-v0.48 ship) — STOP-GATE before v1.0 tag
+## Round 8 (2026-05-24) — STOP-GATE before v1.0 tag, rectified in v0.51.0
 
-_To be populated after v0.48 ships. Focus: final pre-v1.0 packet, including the
-7 packet-drift fixes from §5E-prep, ADRs 0001 + 0002 + 0003, all locked
-decisions A–Z reflected in shipped state._
+Multi-LLM cross-review fired against the v0.50.0 state. **Codex** returned
+10 findings (3 with reproducible probes: C3, C4(a)/(b), C9); **Gemini**
+returned 5 findings + 3 positive validations (V1 style, V2 methodology,
+V3 scorer_error safety). Independent verification by Claude
+(`audit-verification-codex-gemini-v0.50.0.md`, 510 lines, untracked
+per `.gitignore`) confirmed 13 of 18 items, refuted 3, left 2 undecided.
+The v0.51.0 release ships fixes for all 13 confirmed items; 2 (G3, G4)
+are deferred to v1.x as Tier-2 additive; 3 refuted entries are recorded
+below for the audit trail.
 
-| ID | Severity | Finding | Disposition | Issue |
-|----|----------|---------|-------------|-------|
-| _pending_ | | | | |
+Round 9 multi-LLM cross-review runs against the v0.51 RC before v1.0
+tags.
+
+### Confirmed (13) — fixed in v0.51.0
+
+| ID | Severity | Finding | Disposition | Commit |
+|----|----------|---------|-------------|--------|
+| R8-C3 | blocker (escalated from Codex fix-rec) | `recall_at_fpr` fallback violated FPR ceiling (`actual_fpr=1.0` when `target_fpr=0.0`); probe `y=[0,1], scores=[1.0,1.0]`. | v0.51 sentinel `threshold=np.inf, actual_fpr=0.0, fp=0`. | `672d45f` |
+| R8-C4(a) | blocker (escalated) | Generator-rng not parallel-stable in `_score_all_slices`; n_jobs=1 vs n_jobs=2 produced different CIs; SPEC 7 contract violation. | v0.51 spawns child SeedSequences at the dispatch boundary. | `61964f6` |
+| R8-C4(b) | blocker (escalated) | `spawn_seed_sequences` ignored Generator state (extracted `bit_generator.seed_seq`). | v0.51 draws fresh entropy via `rng.integers(...)`. | `87453f6` |
+| R8-C1 | fix-recommended | `evaluate_folded(seeds=)` reused the splitter across the seed loop — partitions never varied. | v0.51 adds `reseed_splitter` callback + DeprecationWarning when multi-seed + None. Warning persists past v1.0. | `f60d43c` |
+| R8-C2 | fix-recommended | `SourceDisjointKFoldSplitter.iter_folds` yielded empty test partitions when k > n_sources; `get_n_splits` returned `min(k, n_sources)`. | v0.51 caps iter_folds at `min(k, n_sources)` + UserWarning. | `f60d43c` |
+| R8-C5 | fix-recommended | README links to `docs/...` (broken); migration toctree listed only v0.7–v0.9 despite v0.49–v0.51 BREAKING releases. | v0.51 repoints all README links to `docs/source/...`; toctree + MIGRATION.md index extended through v0.51; v0.49/v0.50/v0.51 migration guides authored. | `c206b54` |
+| R8-C6 | fix-recommended | `calibration.reliability_curve`, `maximum_calibration_error` did not validate `y_score ∈ [0,1]`; `fit_temperature` did not validate `bounds`. | v0.51 Tier-2 additive validation matching `metrics.py`-side ECE rigor. | `4c5e140` |
+| R8-C7 | fix-recommended | Tests covered counts where semantics matter: `test_harness_folded.py:92-107` no partition-content check; `test_harness_parallelism.py:77-122` no Generator-rng; `test_protocol_conformance.py:228-240` no k>n_sources. | v0.51 adds semantic-property regression tests bundled with C1/C2/C4 fixes. | `87453f6` + `61964f6` + `f60d43c` |
+| R8-C8 | minor | `SimilarityStrategy` listed as Tier-2 in README + `extending.md` but absent from `strict_tier2_protocols.md`'s 9-strict list. | v0.51 demotes SimilarityStrategy to "pre-v0.7 internal interface" in README + extending.md (aligns to v1.0 contract per ADR 0003). | `c206b54` |
+| R8-C9 | minor | `GateResult.to_dict()` returned numpy + NaN unchanged; `json.dumps(..., allow_nan=False)` raised TypeError on the result. | v0.51 docstring documents the JSON-safety contract — strict-JSON requires `artifacts.write_json_strict` or `sanitize_for_json`. | `c206b54` |
+| R8-C10 | minor | `.gitignore` patterns covered only `gate3-audit-*-report.md`; new `codex-comprehensive-audit-*-report.md` + `audit-verification-*.md` were tracked by default. | v0.51 `.gitignore` extended with new patterns. | `c206b54` |
+| R8-F1 | fix-recommended (Claude — missed-by-both) | `losses.RecallAtLowFPR.__init__` did not validate `pos_weight > 0`; non-positive values produced degenerate-but-bounded loss values silently. | v0.51 eager validation matching sibling-kwarg pattern. | `4c5e140` |
+| R8-F2 | minor (Claude — missed-by-both) | `metric_specs.ece(n_bins=)` validated `strategy` eagerly but deferred `n_bins` to compute time. | v0.51 eager `_validate_n_bins` call at factory level. | `4c5e140` |
+| R8-F3 | minor (Claude — missed-by-both) | `analysis.CsvPredictionReader.read_predictions` silently filled missing CSV columns with empty strings → cryptic dtype error downstream. | v0.51 detects missing columns at read time; raises actionable `ValueError`. | `4c5e140` |
+
+### Refuted (3) — recorded for audit trail; NO fix shipped
+
+| ID | Severity (as auditor marked it) | Finding (rejected) | Rationale |
+|----|---------|---------|-----------|
+| R8-G2 | fix-recommended (Gemini) | "Cyclic import leakage→harness identified but left unresolved." | REFUTED: `harness.py:709-712` resolves the cycle via TYPE_CHECKING + lazy `noqa: PLC0415` import; comment explicitly states the resolution. Cycle is deliberately broken by an asymmetric-by-design pattern, not unresolved. |
+| R8-G5 | minor (Gemini) | "Plotting tests use weak assertions (`assert fig is not None`)." | REFUTED: `tests/test_plotting_edge.py:125-140` does have that weak assertion, but the same file has structural assertions (line 92 `assert out is fig`; lines 220, 230 `.get_title()` equality). Cherry-picked; not representative. |
+| R8-V1 | "Style + consistency: Exceptional" (Gemini) | Validation that the axis is exceptional. | REFUTED: Gemini's specific tooling claim (Ruff + Black + Mypy strict compliance) is true, but the axis is broader. Codex C1 + C5 + C6 + C7 + C8 + R8-G3 confirm substantive cross-API / docs / contract consistency drifts. Tooling-clean ≠ axis-exceptional. |
+| R8-V2 | "Domain methodology: Masterclass" (Gemini) | Validation that methodology is masterclass. | REFUTED: Codex C1 + C3 + C4 + C6 confirm methodology bugs at fix-recommended-or-blocker severity. Methodology has real flaws; "Masterclass" overstates. Gemini's evidence (research-grounded tests exist) conflates research-citation discipline with methodology correctness. |
+| R8-V3 | "scorer_error catches predictions safely" (Gemini) | Validation that the mechanism is safe. | CONFIRMED, recorded for completeness: `harness.py:468-474` correctly re-raises `MemoryError` + `AssertionError` BEFORE the broad `except Exception`, so critical exceptions escape the silent-capture path. |
+
+### Deferred to v1.x (2)
+
+| ID | Severity | Finding | Disposition |
+|----|----------|---------|-------------|
+| R8-G3 | fix-recommended (Gemini) | Codebase uses `ValueError` for every error condition (295 raises in src/; 0 custom exception classes). | Deferred to v1.x as Tier-2 additive. Custom exception hierarchy subclassing ValueError preserves catch-compatibility; adding it post-v1.0 is non-breaking. Reconsider when a downstream consumer requests it. |
+| R8-G4 | minor (Gemini) | joblib OOM hazard documented at `_parallel.py:55-59` but not structurally mitigated (no memory-aware `n_jobs` capping in `harness.evaluate`). | Deferred to v1.x. Memory-aware capping needs RAM-measurement + dataframe-size accounting — non-trivial, no clear best-practice. Caller is responsible for `n_jobs` sizing under their RAM budget at v1.0. |
+
+### Round 8 ship status
+
+- **13 confirmed findings**: all RESOLVED in v0.51.0 via the
+  per-finding commits above (Phase 1 + 2 + 3 + 4 on `release/v0.51.0`).
+- **3 refuted findings + 2 over-confident Gemini validations**:
+  recorded above; no shipped fix needed.
+- **2 deferred findings** (G3 + G4): Tier-2 additive; v1.x or later.
+- **Round 8 STOP-GATE status**: CLOSED via v0.51.0 ship. **Round 9 audit
+  STOP-GATE** per Decision Y.2 opens against the v0.51.0 RC before
+  `v1.0.0` tag can land.
+
+---
