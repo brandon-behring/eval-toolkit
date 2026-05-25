@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`audit_citation_alignment` module** — flat-module per [ADR 0001](docs/source/adr/0001-flat-module-layout.md)
+  (stay-flat-through-v1.x; subpackage restructure deferred to v2.0).
+  Exports `validate_citations(...)`, `ADRSubject`, `CitationMisalignment`,
+  and `extract_adr_subject_category` as Tier 1 STRICT (per
+  [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md)).
+  Validator catches the bug class where a markdown surface cites "per
+  ADR-NNN" but the cited ADR's actual subject doesn't match the
+  surrounding claim category — motivated by the V1.3.2 P1-2 finding in
+  the consumer `prompt-injection-detection-prototype` audit where
+  `docs/REPRODUCIBILITY.md:76` cited ADR-029 (test markers) for a
+  tier-lock claim that should have cited ADR-034 (reproducibility tier
+  ladder). The mis-citation went undetected by lychee (URL-resolves
+  check), consumer's `audit_numbers.py` (numeric values), and consumer's
+  `audit_adr_count_claims.py` (count claims). Closes #73.
+
 ## [1.0.0] — 2026-05-25 — Stability contract activates per ADR 0003
 
 v1.0 is a **stability-contract activation**, not a code delta from v0.51.

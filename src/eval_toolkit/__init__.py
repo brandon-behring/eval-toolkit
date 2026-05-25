@@ -52,6 +52,14 @@ _EXPORTS: dict[str, str] = {
     # CharacterInjectionStrategy + character_injection SimpleNamespace
     # removed at v0.47 (Decision N + plan §4E). TextTransform Protocol +
     # the 12 concrete dataclasses are now the only public path.
+    # --- audit_citation_alignment ---
+    # Flat-module per ADR 0001 (Stay flat through v1.x; subpackage
+    # restructure deferred to v2.0). Closes #73. Motivated by consumer
+    # V1.3.2 P1-2 ADR-029 mis-citation finding.
+    "ADRSubject": "eval_toolkit.audit_citation_alignment",
+    "CitationMisalignment": "eval_toolkit.audit_citation_alignment",
+    "extract_adr_subject_category": "eval_toolkit.audit_citation_alignment",
+    "validate_citations": "eval_toolkit.audit_citation_alignment",
     # --- losses ---
     "RecallAtLowFPR": "eval_toolkit.losses",
     # --- preprocessing ---
