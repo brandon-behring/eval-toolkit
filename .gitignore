@@ -58,6 +58,7 @@ gate3-audit-round-*-report.md
 # audit-verification-* naming conventions introduced at v0.50/v0.51.
 codex-comprehensive-audit-*-report.md
 codex-microaudit-*.md
+gemini-microaudit-*.md
 audit-gemini.md
 comprehensive-audit-codex.md
 audit-verification-*.md
