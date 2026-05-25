@@ -33,6 +33,24 @@ class Scorer(Protocol):
     Pandas is imported under ``TYPE_CHECKING`` only, so this Protocol
     has no runtime pandas dependency.
 
+    Contract semantics (R10 follow-on)
+    ----------------------------------
+    ``predict_proba`` returns **calibrated probability scores** — finite
+    floats in ``[0, 1]`` representing the model's probability estimate
+    for the positive class. Uncalibrated detector scores (logits, log-
+    odds, unbounded ranking scores) must be passed through a calibrator
+    (see ``eval_toolkit.calibration``) before being wrapped in a Scorer.
+
+    Range and finiteness are part of the contract but **not currently
+    enforced at runtime** by the Scorer Protocol itself (Protocols are
+    structural typing in Python; no class-level invariants). Downstream
+    consumers may enforce finiteness at the boundary they own — e.g.,
+    ``_sweep._validate_scorer_output`` (since v0.51) and
+    ``stacking._validate_fit_inputs`` reject NaN / +inf / -inf. Range
+    enforcement ``[0, 1]`` is intentionally NOT yet a boundary check;
+    it may be added in a future minor once consumer usage patterns
+    are clearer.
+
     Notes
     -----
     When passed to a parallel-capable harness call (``n_jobs > 1``), Scorer
@@ -47,7 +65,7 @@ class Scorer(Protocol):
     def predict_proba(  # pragma: no cover
         self, X: Sequence[str] | np.ndarray | pd.Series
     ) -> np.ndarray:
-        """Return one P(positive) score per input row."""
+        """Return one calibrated P(positive) score in [0, 1] per input row."""
         ...
 
 

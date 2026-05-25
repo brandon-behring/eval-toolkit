@@ -59,6 +59,44 @@ full ledger.
   `if width <= 0` check (NaN <= 0 is False in IEEE float) and
   silently returned `MDEEstimate.mde = NaN`. Bundled with F-bootstrap-1.
 
+### Fixed (Round 10 follow-on)
+
+Pre-tag scoped Codex + Gemini micro-audit on `edadddc` surfaced 3
+Codex-confirmed findings (all fix-recommended / minor; no v1.0
+blockers). Verified by Claude; 1 Gemini accept-as-design + 1 Gemini
+refuted (Pattern-1 violation; calibration record in
+`audit_findings.md` Round 10 section). All 3 confirmed findings
+shipped in this RC pre-tag:
+
+- **R10-F1** — `protocols.Scorer.predict_proba` docstring + `_sweep.py`
+  error message clarification. Pre-R10, `_validate_scorer_output`'s
+  runtime error said "finite floats in [0, 1]" but the boundary check
+  only enforced finiteness (no range validation); the Scorer Protocol
+  docstring also lacked an explicit `[0, 1]` contract statement. R10-F1
+  extends the Protocol docstring to document calibrated-probability
+  semantics + reword the sweep runtime message to drop the unenforced
+  `[0, 1]` claim. Range enforcement is intentionally deferred to a
+  future minor once consumer usage patterns clarify whether the
+  Protocol should be strict (`[0, 1]`) or permissive (ranking scores).
+
+- **R10-F2** — `tests/test_bootstrap_unit.py::test_bootstrap_ci_bca_degeneracy_emits_warning`
+  test predicate hardening. Pre-R10, the test's assertion block used
+  `if ci.ci_low == ci.ci_high == ci.point_estimate:` — but NaN==NaN is
+  False in IEEE float, so the assertions were silently skipped on the
+  current scipy fixture (which returns NaN bounds). The test passed
+  WITHOUT proving the warning fires for the common degeneracy mode.
+  R10-F2 mirrors the production predicate exactly:
+  `(not np.isfinite(low)) or (not np.isfinite(high)) or (low == high == point)`.
+  The assertion block now runs whenever ANY degeneracy mode fires.
+
+- **R10-F3** — `bootstrap.mde_from_ci` docstring update for the
+  R9-F-bootstrap-2 non-finite-width branch. Pre-R10, the Raises section
+  said "non-positive width" only; the implementation has also been
+  rejecting non-finite width since `edadddc` but the docstring lagged.
+  R10-F3 updates the Raises text to "non-positive or non-finite width"
+  and adds a 4-line note explaining the scipy-BCa NaN-bound motivation
+  so callers understand the new behavior is intentional, not incidental.
+
 ### Added
 
 - **R8-C6** — `calibration.reliability_curve(...)` and

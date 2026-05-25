@@ -331,14 +331,24 @@ def test_bootstrap_ci_bca_degeneracy_emits_warning() -> None:
         _warnings.simplefilter("always")
         # Use a metric that produces near-constant output on constant scores.
         ci = bootstrap_ci(y, s, metric=lambda yt, ys: float(ys.mean()), n_resamples=50, rng=rng)
-    # Either the warning fires (degenerate path) or the CI is well-defined.
-    # If well-defined, this test is a no-op for this seed/data combo; the
-    # contract is "warn IF degenerated", not "always warn".
-    if ci.ci_low == ci.ci_high == ci.point_estimate:
+    # R10 follow-on (F2): mirror the production predicate at
+    # bootstrap.py:376-388 — the warning fires for ANY of three degeneracy
+    # modes: non-finite low, non-finite high, OR low==high==point. The
+    # previous test used only the equality clause and silently no-op'd on
+    # NaN bounds (NaN == NaN is False in IEEE float), so a regression that
+    # removed the non-finite-bound branch could pass the test. Codex R10
+    # Option A.
+    degenerated = (
+        (not np.isfinite(ci.ci_low))
+        or (not np.isfinite(ci.ci_high))
+        or (ci.ci_low == ci.ci_high == ci.point_estimate)
+    )
+    if degenerated:
         user_warnings = [w for w in ws if issubclass(w.category, UserWarning)]
         assert len(user_warnings) >= 1, (
-            f"BCa degenerated (ci_low=ci_high=point={ci.ci_low}) but no "
-            "UserWarning emitted. F-bootstrap-1 fix should catch this."
+            f"BCa degenerated (low={ci.ci_low}, high={ci.ci_high}, "
+            f"point={ci.point_estimate}) but no UserWarning emitted. "
+            "F-bootstrap-1 fix should catch this."
         )
         assert "BCa degenerated" in str(user_warnings[0].message)
 

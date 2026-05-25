@@ -1101,8 +1101,13 @@ def mde_from_ci(
     ValueError
         If ``alpha`` or ``power`` is not in (0, 1).
     RuntimeError
-        If the supplied CI has non-positive width (bootstrap likely
-        degenerate; no usable variance signal).
+        If the supplied CI has non-positive or non-finite width (bootstrap
+        likely degenerate; no usable variance signal). The non-finite branch
+        catches the case where ``scipy.stats.bootstrap`` returns NaN bounds
+        from a degenerate-jackknife BCa run (small n + ceiling/floor metric
+        + skewed distribution); without this guard the NaN width would
+        silently propagate to ``MDEEstimate.mde = NaN``. Added in v0.51
+        per R10 micro-audit follow-on F3.
 
     Notes
     -----

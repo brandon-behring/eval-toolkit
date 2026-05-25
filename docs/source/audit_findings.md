@@ -369,3 +369,47 @@ already fix-in-PR at `4c43771`; the remaining items defer to v1.0.1.
   question" not "v1.0 blocker."
 
 ---
+
+## Round 10 (2026-05-25) — v1.0 pre-tag micro-audit
+
+Scoped Codex + Gemini micro-audit on the `edadddc` R9 follow-on commit
+only (full `~/Claude/audit-templates/audit-prompt.md` template with a
+scope-override preamble constraining attention to ~126 LOC src + ~110
+LOC tests in `_sweep.py` + `bootstrap.py`). Dispatched per the Round
+10 locking decision: targeted micro-audit, not full multi-LLM gate
+re-run. **Codex** returned a 311-line report with 3 substantive
+findings + per-axis verdicts + 4-test probe verification (all 4
+passed). **Gemini** returned an 86-line report with 2 findings (1
+self-recommended-status-quo + 1 fix-recommended on metrics.py
+finiteness — direct contradiction with Codex's "Completeness"
+verdict). Claude verification re-read every cited line. Reports
+archived locally at `codex-microaudit-edadddc-report.md` +
+`gemini-microaudit-edadddc-report.md` (gitignored).
+
+### Confirmed (3) — disposition mapped
+
+| ID | Severity | Source | Finding | Disposition | Commit |
+|----|----------|--------|---------|-------------|--------|
+| R10-F1 | fix-recommended | Codex | `_sweep.py:298-299` error message says "finite floats in [0, 1]" but check is `np.isfinite` only — no range enforcement. Cross-ref `protocols.py:29-51` Scorer Protocol docstring also lacked explicit `[0, 1]` contract statement. | Fixed in PR (Codex Option C): extend Protocol docstring to document `[0, 1]` calibrated-probability semantics + reword sweep runtime message to drop `[0, 1]` (boundary still doesn't enforce range; enforcement deferred to a future minor once consumer usage patterns clarify). | R10 follow-on commit on `release/v0.51.0` |
+| R10-F2 | fix-recommended | Codex | `tests/test_bootstrap_unit.py:337-343` BCa degeneracy test uses `if ci.ci_low == ci.ci_high == ci.point_estimate:` — silently no-ops when scipy returns NaN bounds (NaN==NaN is False in IEEE float). Test passes WITHOUT proving the warning fires. Codex probe-verified the no-op path on the current scipy fixture. | Fixed in PR (Codex Option A): mirror the production predicate — `(not np.isfinite(low)) or (not np.isfinite(high)) or (low == high == point)`. Assertion block runs whenever ANY degeneracy mode fires. | R10 follow-on commit on `release/v0.51.0` |
+| R10-F3 | minor-observation | Codex | `bootstrap.py:1099-1105` Raises docstring says "non-positive width" but `:1132-1140` implementation rejects on `width <= 0 or not np.isfinite(width)`. Code stricter than docs. | Fixed in PR (Codex Option A + brief Option B context): update Raises text to "non-positive or non-finite width" + 4-line note explaining scipy BCa NaN-bound motivation. | R10 follow-on commit on `release/v0.51.0` |
+
+### Partial (1) — accept-as-design
+
+| ID | Severity | Source | Finding | Disposition |
+|----|----------|--------|---------|-------------|
+| R10-RG1 | minor-observation | Gemini | `bootstrap.py:376-386` BCa degeneracy check uses output proxy (`ci_low == ci_high == point` + non-finite bounds) rather than catching scipy's internal `DegenerateDataWarning`. May miss edge-case degeneracies where jackknife acceleration is undefined but bounds don't exactly collapse. | Accept-as-design. **Gemini's own recommendation was Option B (status quo)**: "Deterministic, fast, and covers the primary 'small n + ceiling metric' failure mode perfectly." Output-proxy approach avoids `warnings.catch_warnings` overhead on a hot path. Catching internal `DegenerateDataWarning` is a potential v1.1 enhancement if real-world degeneracy modes surface that the output proxy misses. |
+
+### Refuted (1) — Pattern-1 calibration record
+
+| ID | Severity (as Gemini marked it) | Source | Finding | Rationale |
+|----|----------|--------|---------|-----------|
+| R10-RG2 | fix-recommended | Gemini | "`metrics.py` functions like `pr_auc` and `roc_auc` lack a similar `np.isfinite` boundary check." | **REFUTED**. `metrics.py:_validate_inputs` (line 1846) explicitly contains `if not np.isfinite(y_score_arr).all(): raise ValueError("y_score contains NaN or inf")`. Called at 20+ public-function sites (lines 366, 441, 479, 552, 650, 802, 872, 942, 1036, 1157, 1261, 1337, 1429, plus more). The check predates the audit chain (the comment "harmonizes with `score_distribution_summary`'s own guard" suggests pre-v0.46 vintage). Gemini did not read the cited code before making the claim — textbook **Pattern-1 (validation-without-reading)** violation, despite the micro-audit prompt's `Calibrated-confidence discipline` section explicitly calling out this exact pattern. The calibration record is preserved here. |
+
+### Multi-LLM audit-machinery calibration (R10)
+
+- **Codex R10 quality**: 3/3 substantive findings hold; probe-backed; cited file:line on every observation; honest "What I didn't look at" calibration. Same depth and rigor as R8 + R9.
+- **Gemini R10 quality**: 1/2 findings honest (F1, with self-recommendation = status quo — effectively an open-question framed as a finding); 1/2 REFUTED (F2, Pattern-1 violation). **The prompt's explicit Pattern-1 discipline section did NOT change the outcome.** Pattern-1 is now confirmed across R8 V1+V2, R9 RG6, and R10 RG2 — four independent rounds. Conclusion: Gemini's training-trace defaults toward positive validation without reading; explicit prompt-level discipline is necessary but not sufficient to correct it. Practical implication: future audits should treat Gemini validations as "raises the question" and require Claude (or Codex) read-back before accepting any positive validation.
+- **Round 10 STOP-GATE status**: **CLOSED with mitigations** — 3 Codex confirmed findings fixed in this RC; 1 Gemini accept-as-design; 1 Gemini refuted. v1.0 can tag from the R10 follow-on commit post-CI-green.
+
+---

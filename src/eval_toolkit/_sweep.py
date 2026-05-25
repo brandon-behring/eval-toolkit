@@ -290,13 +290,17 @@ def _validate_scorer_output(scores: np.ndarray, *, expected_n: int, label: str) 
             f"a 1-D array of length len(texts)."
         )
     # R9 follow-on (F-sweep-1): close the NaN/inf gap in R7-C.
+    # R10 follow-on (F1): drop `[0, 1]` from the runtime message since the
+    # finiteness check doesn't enforce range; the [0, 1] semantic contract
+    # is documented in `protocols.Scorer` but boundary-enforcement of range
+    # is intentionally deferred to a future minor (R10 Codex Option C).
     if not np.all(np.isfinite(scores)):
         n_nonfinite = int(np.sum(~np.isfinite(scores)))
         raise ValueError(
             f"sweep(): scorer.predict_proba({label}) returned non-finite "
             f"values (NaN / +inf / -inf); got {n_nonfinite}/{expected_n} "
-            f"non-finite scores. The Scorer Protocol requires finite "
-            f"floats in [0, 1] (see `eval_toolkit.protocols.Scorer`); "
+            f"non-finite scores. The Scorer Protocol requires finite float "
+            f"P(positive) scores (see `eval_toolkit.protocols.Scorer`); "
             f"check the scorer for div-by-zero, log(0), missing-data, "
             f"or unguarded sigmoid-of-large-logit paths."
         )
