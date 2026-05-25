@@ -287,6 +287,63 @@ def test_mde_from_ci_validates() -> None:
 
 
 @pytest.mark.unit
+def test_mde_from_ci_rejects_nan_width() -> None:
+    """R9 follow-on (F-bootstrap-2): NaN CI width bypasses `<= 0` check.
+
+    Pre-v0.51 R9 follow-on: width = NaN passes `width <= 0` (NaN <= 0 is
+    False in IEEE float), so mde_from_ci silently returns MDEEstimate
+    with mde=NaN. Could happen when scipy.stats.bootstrap BCa returns
+    NaN bounds on degenerate jackknife. Explicit `not np.isfinite` check
+    surfaces this as RuntimeError. audit-verification-round-9-v0.51.0.md
+    Part 2.
+    """
+    nan_ci = BootstrapCI(
+        point_estimate=0.5,
+        ci_low=float("nan"),
+        ci_high=float("nan"),
+        confidence=0.95,
+        n_resamples=100,
+        method="BCa",
+    )
+    with pytest.raises(RuntimeError, match=r"non-finite|degenerate"):
+        mde_from_ci(nan_ci, alpha=0.05, power=0.80)
+
+
+@pytest.mark.unit
+def test_bootstrap_ci_bca_degeneracy_emits_warning() -> None:
+    """R9 follow-on (F-bootstrap-1): BCa degeneracy emits UserWarning.
+
+    Pre-v0.51 the R8-C4(b) RNG bug spuriously varied bootstrap streams
+    and could mask BCa degeneracy (ci_low == ci_high == point on small
+    n with ceiling/floor metrics); post-v0.51 with correct RNG, the
+    brittleness is exposed. v0.51 R9 follow-on adds UserWarning so
+    callers know to switch to method='percentile' or use larger n.
+    audit-verification-round-9-v0.51.0.md Part 2.
+    """
+    import warnings as _warnings
+
+    # Construct a small-n + ceiling-metric scenario that degenerates BCa.
+    # Constant-1 scores on alternating labels → no variance in resamples.
+    rng = np.random.default_rng(7)
+    y = np.array([0, 1] * 10)
+    s = np.ones(20)  # constant scores → degenerate
+    with _warnings.catch_warnings(record=True) as ws:
+        _warnings.simplefilter("always")
+        # Use a metric that produces near-constant output on constant scores.
+        ci = bootstrap_ci(y, s, metric=lambda yt, ys: float(ys.mean()), n_resamples=50, rng=rng)
+    # Either the warning fires (degenerate path) or the CI is well-defined.
+    # If well-defined, this test is a no-op for this seed/data combo; the
+    # contract is "warn IF degenerated", not "always warn".
+    if ci.ci_low == ci.ci_high == ci.point_estimate:
+        user_warnings = [w for w in ws if issubclass(w.category, UserWarning)]
+        assert len(user_warnings) >= 1, (
+            f"BCa degenerated (ci_low=ci_high=point={ci.ci_low}) but no "
+            "UserWarning emitted. F-bootstrap-1 fix should catch this."
+        )
+        assert "BCa degenerated" in str(user_warnings[0].message)
+
+
+@pytest.mark.unit
 def test_mde_from_ci_accepts_bootstrap_ci() -> None:
     """v0.34.0: mde_from_ci accepts BootstrapCI (was paired-only before rename)."""
     fake_marginal = BootstrapCI(

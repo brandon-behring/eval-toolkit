@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -360,6 +361,32 @@ def bootstrap_ci(
         )
         ci_low = float(res.confidence_interval.low)
         ci_high = float(res.confidence_interval.high)
+        # R9 follow-on (F-bootstrap-1): scipy.stats.bootstrap with BCa can
+        # degenerate at small n with ceiling/floor metrics or skewed
+        # distributions — the jackknife acceleration constant blows up or
+        # produces NaN bounds. scipy emits DegenerateDataWarning but does
+        # NOT raise; the returned CI has ci_low == ci_high == point OR
+        # NaN bounds. Pre-v0.51 the R8-C4(b) RNG bug spuriously varied
+        # bootstrap streams and could mask degeneracy; post-v0.51 with
+        # correct RNG the brittleness is exposed. Surface a UserWarning
+        # so callers know to switch to method='percentile' OR use a
+        # larger n. (R9 third-audit finding F-bootstrap-1; my hunt of
+        # modules neither auditor cited; verified at
+        # audit-verification-round-9-v0.51.0.md Part 2.)
+        if method == "BCa" and (
+            not np.isfinite(ci_low) or not np.isfinite(ci_high) or (ci_low == ci_high == point)
+        ):
+            warnings.warn(
+                f"bootstrap_ci: BCa degenerated on n={n} "
+                f"(metric={getattr(metric, '__name__', repr(metric))!r}; "
+                f"ci_low={ci_low}, ci_high={ci_high}, point={point}). "
+                "Common causes: small n with ceiling/floor metric, "
+                "near-constant scores, or skewed distributions where "
+                "the jackknife acceleration is undefined. Use "
+                "method='percentile' for a safer fallback at small n.",
+                UserWarning,
+                stacklevel=2,
+            )
     return BootstrapCI(
         point_estimate=point,
         ci_low=ci_low,
@@ -1103,8 +1130,15 @@ def mde_from_ci(
     if not 0.0 < power < 1.0:
         raise ValueError(f"power must be in (0, 1), got {power}")
     width = ci.ci_high - ci.ci_low
-    if width <= 0:
-        raise RuntimeError(f"non-positive CI width ({width}); bootstrap likely degenerate")
+    # R9 follow-on (F-bootstrap-2): NaN width bypasses `<= 0` check in IEEE
+    # float comparison (NaN <= 0 is False). Scipy's BCa can return NaN bounds
+    # on degenerate jackknife; the resulting NaN width would silently
+    # propagate to MDEEstimate.mde = NaN. Explicit `not np.isfinite`
+    # branch surfaces the degeneracy as RuntimeError.
+    if width <= 0 or not np.isfinite(width):
+        raise RuntimeError(
+            f"non-positive or non-finite CI width ({width}); bootstrap likely degenerate"
+        )
     z_at_ci_conf = _normal_quantile((1.0 + ci.confidence) / 2.0)
     sigma = width / (2.0 * z_at_ci_conf)
     z_alpha = _normal_quantile(1.0 - alpha / 2.0)

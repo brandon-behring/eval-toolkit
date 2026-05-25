@@ -338,6 +338,31 @@ class _MatrixScorer:
         return np.array([[0.4, 0.6]] * len(X))
 
 
+class _NaNScorer:
+    """Returns NaN-laced scores — silent-failure path in pre-R9 behavior.
+
+    Pre-v0.51 R9 follow-on: NaN/inf passed _validate_scorer_output's shape
+    check and silently propagated into the sweep DataFrame, then into
+    s_orig >= threshold > s_adv (which becomes False for NaN comparisons),
+    silently zeroing the ASR flag. R7-C "no silent failures" invariant
+    closure added a finiteness check at the boundary.
+    """
+
+    def predict_proba(self, X: list[str]) -> np.ndarray:
+        scores = np.full(len(X), 0.5)
+        scores[0] = np.nan
+        return scores
+
+
+class _InfScorer:
+    """Returns +inf scores — same silent-failure class as _NaNScorer."""
+
+    def predict_proba(self, X: list[str]) -> np.ndarray:
+        scores = np.full(len(X), 0.5)
+        scores[-1] = np.inf
+        return scores
+
+
 def test_sweep_rejects_overlong_scorer_output() -> None:
     """Pre-§5J: silently accepted, extra score dropped (WORST class).
 
@@ -405,6 +430,35 @@ def test_sweep_scorer_shape_error_names_offending_strategy() -> None:
             [DelimitVariant()],
             ["a", "b"],
             scorer=_FlakyOnTransformed(),
+            attack_threshold=0.5,
+        )
+
+
+def test_sweep_rejects_nan_scorer_output() -> None:
+    """R9 follow-on (F-sweep-1): NaN in scorer output → API-level ValueError.
+
+    Pre-v0.51 R9 follow-on: NaN passed shape validation, silently propagated
+    into DataFrame, silently zeroed ASR comparisons (NaN >= threshold is False).
+    Closes the R7-C 'no silent failures' invariant gap surfaced by my Round 9
+    third-audit pass on _sweep.py (a module neither Codex R8/R9 nor Gemini
+    R8/R9 deeply audited). audit-verification-round-9-v0.51.0.md Part 2.
+    """
+    with pytest.raises(ValueError, match=r"non-finite"):
+        sweep(
+            [DelimitVariant()],
+            ["a", "b"],
+            scorer=_NaNScorer(),
+            attack_threshold=0.5,
+        )
+
+
+def test_sweep_rejects_inf_scorer_output() -> None:
+    """R9 follow-on (F-sweep-1): +inf in scorer output → same ValueError class."""
+    with pytest.raises(ValueError, match=r"non-finite"):
+        sweep(
+            [DelimitVariant()],
+            ["a", "b"],
+            scorer=_InfScorer(),
             attack_threshold=0.5,
         )
 

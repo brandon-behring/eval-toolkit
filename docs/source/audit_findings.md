@@ -277,3 +277,95 @@ tags.
   `v1.0.0` tag can land.
 
 ---
+
+## Round 9 (2026-05-24) — STOP-GATE before v1.0 tag
+
+Round 9 multi-LLM cross-review fired against the `release/v0.51.0` RC
+(7 commits at the time of audit; PR #75 draft, CI green). **Codex**
+returned 4 substantive findings (RC1-RC4) + self-validation worklog
+(69/69 v0.51 regression tests pass); explicitly skipped the 10 modules
+neither Round-8 auditor cited + 4 cross-cutting hunts. **Gemini** returned
+6 items (RG1-RG6): 3 design challenges (2 escalating already-locked v0.51
+decisions to v1.0 blockers) + 3 positive validations; zero probes, zero
+line citations, ~45% validation density. Independent verification by
+Claude (`audit-verification-round-9-v0.51.0.md`, 228 lines; gitignored
+per R8-C10) confirmed **6 / refuted 3 / partial 1** of the 10 source-report
+items, AND surfaced **3 third-audit findings + 3 minors** by hunting the
+modules Codex skipped. Of those, F-sweep-1 was a CANDIDATE v1.0 BLOCKER
+(R7-C "no silent failures" invariant violation on NaN scorer output)
+that neither Round-8 nor Round-9 auditor caught.
+
+Per the Path 3 lock from the post-R9 planning session, **two third-audit
+findings (F-sweep-1 + F-bootstrap-1) ship fixed in this PR**; RC1
+already fix-in-PR at `4c43771`; the remaining items defer to v1.0.1.
+
+### Confirmed (6) — disposition mapped
+
+| ID | Severity | Finding | Disposition | Commit / Defer-to |
+|----|----------|---------|-------------|--------------------|
+| R9-RC1 | fix-recommended (Codex) | README.md:208 has 2 broken `docs/extending.md` + `docs/examples/claims_and_gates.md` hyperlinks — R8-C5 regression (only the API-surface table-cell links; other R8-C5 sites are correct). | Fixed in PR. | `4c43771` |
+| R9-RC2 | fix-recommended (Codex) | `SimilarityStrategy` contract mismatch: `__init__.py:294` exports it + `snapshot.json:1103-1117` pins `protocol_methods` (de facto strict Tier-2 STRICT contract) BUT `extending.md:18` + `strict_tier2_protocols.md` 9-strict list omit it. Snapshot IS the v1.0 contract regardless of docs. | Deferred to v1.0.1. Two paths: add to strict-Tier-2 list (10 strict + 1 opt-in; ADR 0003 update) OR remove from `__all__` + snapshot. | v1.0.1 |
+| R9-RC3 | fix-recommended (Codex) | `test_evaluate_folded_reseed_splitter_varies_partitions` at `tests/test_harness_folded.py:134-164` only asserts key existence + count; no row-content comparison across seeds. Docstring claims partitions differ but assertions don't check it. Directly REFUTES Gemini RG6. | Deferred to v1.0.1 test hardening. | v1.0.1 |
+| R9-RC4 | minor (Codex) | "3 refuted" counts categories (V1+V2 paired as one) while 4 named items listed; defensible across all 4 surfaces but invites confusion. | Deferred to v1.0.1 docs polish. | v1.0.1 |
+| R9-RG4 | validation (Gemini) | metrics.py `SINGLE_CLASS_INCOMPATIBLE_METRICS` pattern is "elegant". | Validation accurate; pattern at metrics.py:35-99 is well-designed. | — |
+| R9-RG5 | validation (Gemini) | bootstrap.py defaults match "industry standards". | Validation accurate: `bootstrap.py:66-69` shows N=1000, α=0.95, BCa, seed=42 — all match common conventions. Terminology nit: Gemini used outdated "seed=" instead of v0.50 "rng=". | — |
+
+### Refuted (3) — recorded for audit trail; NO fix shipped
+
+| ID | Severity (as auditor marked it) | Finding (rejected) | Rationale |
+|----|---------|---------|-----------|
+| R9-RG2 | v1.0 blocker (Gemini) | "DeprecationWarning without sunset date is structurally wrong; v1.0 blocker." | REFUTED: re-litigates Q3-locked v0.51 design. `harness.py:1413-1414` shows the deliberate implementation; lines 1347-1349 + 1368 document "warning persists past v1.0" as chosen contract. Tested by `test_evaluate_folded_multi_seed_without_reseed_emits_deprecation_warning`. Meta-pattern: Gemini escalates without engaging with locked reasoning (same as R8 V1+V2). |
+| R9-RG3 | v1.0 blocker (Gemini) | "iter_folds capping silently is wrong; should raise." | REFUTED: re-litigates R8-C2 design lock. `splits.py:325-339` shows the deliberate cap-with-UserWarning implementation; warn-vs-raise IS a judgment call; the v0.51 decision was permissive-by-design (caller can opt into `warnings.filterwarnings('error', UserWarning)` for strictness). |
+| R9-RG6 | validation (Gemini) | "Regression tests apply strict invariant assertions, not weak proxies." | REFUTED — directly contradicted by RC3 which I independently confirmed. `tests/test_harness_folded.py:134-164` is precisely the weak-proxy pattern Gemini claims doesn't exist. Gemini didn't read the cited tests; textbook over-confident validation. |
+
+### Partial (1)
+
+| ID | Severity | Finding | Disposition |
+|----|----------|---------|-------------|
+| R9-RG1 | accept-with-rationale (Gemini) | `np.inf` sentinel from `recall_at_fpr` risks silent downstream failure. | PARTIAL: internally NO callers (grep across `src/` returned only function def + docstring mentions + an unrelated local var in `losses.py:156`). Sentinel risk is real only at user-code boundary; mitigated by Q1-locked design + docstring's "caller may filter via np.isinf" guidance. Accept-with-rationale at v1.0. |
+
+### Third-audit findings (Claude — modules neither auditor cited) — 3 substantive + 3 minor
+
+| ID | Severity | Finding | Disposition | Commit / Defer-to |
+|----|----------|---------|-------------|--------------------|
+| R9-F-sweep-1 | **blocker for v1.0** (Claude escalation) | `_sweep.py:_validate_scorer_output()` accepts NaN/inf scorer outputs without validation; R7-C "no silent failures" invariant violation in a module Codex R7 designed but didn't audit for finiteness. Stacking.py validates non-finite scores; sweep.py didn't. | Fixed in PR. NaN/inf check added to R7-C boundary; test bundled. | New commit on `release/v0.51.0` (this PR) |
+| R9-F-bootstrap-1 | fix-recommended | scipy's BCa returns degenerate CIs (`ci_low == ci_high == point` or NaN bounds) on small n + ceiling/floor metrics; scipy emits DegenerateDataWarning but doesn't raise; pre-v0.51 R8-C4(b) RNG bug may have masked this. | Fixed in PR. UserWarning added at the bootstrap_ci boundary when BCa degenerates; test bundled. | New commit on `release/v0.51.0` (this PR) |
+| R9-F-bootstrap-2 | minor | `mde_from_ci` width check `if width <= 0` doesn't catch NaN width (NaN <= 0 is False in IEEE float); silent NaN MDE if BCa returns NaN bounds. | Bundled into the F-bootstrap-1 commit. `or not np.isfinite(width)` guard added. | New commit on `release/v0.51.0` (this PR) |
+| R9-F-metrics-1 | minor (Claude) | `metrics.py:1305` Brier-decomposition docstring claims "≈ 1e-9" precision but actual error ~3e-3 dominated by binning. Self-contradictory. | Deferred to v1.0.1 docs polish. | v1.0.1 |
+| R9-F-metrics-3 | fix-recommended (Claude) | `expected_calibration_error(y=[0,0,1,1], y_score=[0.5,0.5,0.5,0.5], n_bins=10)` returns 0.0 — technically correct per formula but semantically misleading (uninformative model looks perfectly calibrated). Equal-mass binning correctly rejects n<n_bins; equal-width has no guard. | Deferred to v1.0.1; either guard against all-same-score input OR explicitly document. | v1.0.1 |
+| R9-F-metrics-4 | minor (Claude) | `brier_score` single-class docstring ambiguous about whether single-class is supported; implementation correctly handles it but wording is "implementation detail" not contract statement. | Deferred to v1.0.1 docs polish. | v1.0.1 |
+
+### Round 9 ship status
+
+- **6 confirmed source-report findings**: 1 fixed in PR (RC1 → `4c43771`),
+  4 deferred to v1.0.1, 2 validation-confirmations (RG4, RG5 — no action).
+- **3 refuted source-report findings** (RG2, RG3, RG6): recorded above for
+  audit trail; no shipped fix.
+- **1 partial** (RG1): accept-with-rationale at v1.0.
+- **2 third-audit fixes shipped in this PR**: F-sweep-1 (CANDIDATE BLOCKER
+  closed); F-bootstrap-1 + F-bootstrap-2 bundled (degeneracy warning +
+  NaN guard).
+- **4 third-audit items deferred to v1.0.1**: F-metrics-1, F-metrics-3,
+  F-metrics-4, RC2 (SimilarityStrategy contract resolution).
+- **Round 9 STOP-GATE status**: **CLOSED with mitigations** per the
+  Path 3 lock. v1.0 can tag from this PR post-CI-green.
+
+### Multi-LLM audit-machinery calibration notes
+
+- **Codex R9 quality**: 4/4 findings hold; RC1 over-cited (3 sites named
+  but only 1 had real broken links); no padding finding this round.
+  **Gap remains**: explicit skip of the 10 untouched modules + 4
+  cross-cutting hunts. F-sweep-1 (the candidate blocker) lives in
+  precisely that gap. Future-round briefings should make the
+  untouched-modules + hunts mandatory.
+- **Gemini R9 quality**: 2/6 validations honest (RG4, RG5); 3/6 REFUTED
+  (RG2, RG3, RG6). RG6 is the new V1/V2 pattern — uncited positive
+  validation on tests Gemini didn't read; directly contradicted by
+  Codex's RC3 + my verification. RG2 + RG3 escalate locked design
+  without engaging with the recorded rationale.
+- **Trust calibration**: Codex's probe-backed findings → high trust;
+  Codex's untouched-module gaps → fill with Claude third-audit. Gemini's
+  validations → unreliable; Gemini's design dissent → "raises the
+  question" not "v1.0 blocker."
+
+---

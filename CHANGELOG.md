@@ -20,6 +20,45 @@ additive; 3 refuted (R8-G2 cyclic-import framing; R8-G5 cherry-picked
 weak test; R8-V1 + R8-V2 over-confident Gemini validations). See
 `docs/source/audit_findings.md` Round 8 section for the full ledger.
 
+**Round 9 follow-on**: a Round 9 multi-LLM cross-review (Codex + Gemini)
+ran against the v0.51 RC pre-tag. Verified by Claude at
+`audit-verification-round-9-v0.51.0.md` (6 confirmed / 3 refuted / 1
+partial; plus 3 third-audit fixes in modules neither auditor cited).
+**Two third-audit findings + one source-report regression fix shipped
+in this RC pre-tag** (commit-graph below); the remaining 4 deferred
+items go to v1.0.1. See `audit_findings.md` Round 9 section for the
+full ledger.
+
+### Added (Round 9 follow-on)
+
+- **R9-F-sweep-1** (CANDIDATE v1.0 BLOCKER closed) — `_sweep.py:
+  _validate_scorer_output()` now validates scorer output is finite
+  (no NaN / +inf / -inf), not just shape. Pre-R9 follow-on, NaN/inf
+  scores passed R7-C's shape check and silently propagated into the
+  sweep DataFrame, then silently zeroed the ASR flag (NaN >= threshold
+  is False). Closes the "no silent failures" invariant gap R7-C
+  established for shape but didn't extend to finiteness. Brings sweep
+  validation to parity with `stacking.py`'s `_validate_fit_inputs` /
+  `_validate_predict_inputs`. Tier-2 additive — callers whose scorers
+  were silently producing NaN now get a clear `ValueError` with
+  diagnostic context.
+
+- **R9-F-bootstrap-1** — `bootstrap.bootstrap_ci(...)` emits a
+  `UserWarning` when scipy's BCa method degenerates (returns
+  `ci_low == ci_high == point` or non-finite bounds). Pre-R9, the
+  R8-C4(b) RNG bug spuriously varied bootstrap streams and could mask
+  BCa degeneracy on small-n + ceiling/floor-metric inputs; post-R8 with
+  correct RNG, the brittleness is exposed. Warning text recommends
+  `method='percentile'` as the safer fallback at small n. The default
+  remains `method='BCa'` (preserves bit-stability for non-degenerate
+  cases); auto-fallback is deferred to v1.0.1 if user demand.
+
+- **R9-F-bootstrap-2** — `bootstrap.mde_from_ci(...)` now explicitly
+  rejects NaN CI width with `RuntimeError`. Pre-R9, NaN width
+  (possible when scipy BCa returns NaN bounds) bypassed the
+  `if width <= 0` check (NaN <= 0 is False in IEEE float) and
+  silently returned `MDEEstimate.mde = NaN`. Bundled with F-bootstrap-1.
+
 ### Added
 
 - **R8-C6** — `calibration.reliability_curve(...)` and
