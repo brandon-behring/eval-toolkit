@@ -47,6 +47,7 @@ from typing import Literal
 
 import numpy as np
 
+from eval_toolkit.metrics import _validate_bin_count as _validate_n_bins
 from eval_toolkit.metrics import brier_score as _brier_score
 from eval_toolkit.metrics import expected_calibration_error as _ece_uniform
 from eval_toolkit.metrics import (
@@ -214,6 +215,12 @@ def ece(*, n_bins: int = 15, strategy: ECEStrategy = "uniform") -> MetricSpec:
     ValueError
         If ``strategy`` is not in ``{"uniform", "quantile"}``.
     """
+    # R8-F2 audit fix: eagerly validate n_bins at spec-construction time
+    # to match the strategy validation pattern above. Pre-v0.51 the
+    # factory only validated strategy; n_bins validation was deferred to
+    # compute time. This violated the fail-fast pattern the rest of the
+    # codebase uses (compare claims.py boundary validators).
+    _validate_n_bins(n_bins)
     _validate_ece_strategy(strategy)
     return _EceSpec(n_bins=n_bins, strategy=strategy)
 

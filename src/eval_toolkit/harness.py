@@ -35,7 +35,7 @@ import logging
 import pickle
 import time
 import traceback
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, cast
@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Final, Literal, cast
 import numpy as np
 
 from eval_toolkit._parallel import parallel_map
-from eval_toolkit._rng import RNGLike, SeedLike
+from eval_toolkit._rng import RNGLike, SeedLike, spawn_seed_sequences
 from eval_toolkit.artifacts import (
     error_metric,
     sanitize_for_json,
@@ -785,7 +785,7 @@ def _score_all_slices(
     """
     # Pre-filter skipped pairs (allow-list miss) before dispatching parallel
     # work-units. Logs the same skip messages as the pre-parallel version.
-    work_units: list[_ScoreOnePairItem] = []
+    candidate_units: list[tuple[EvalSlice, str, Scorer]] = []
     skipped: dict[tuple[str, str], dict[str, object]] = {}
     for slice_ in slices:
         _logger.info(
@@ -800,7 +800,28 @@ def _score_all_slices(
                 skipped[(slice_.name, sname)] = _skipped_scorer_result(slice_, reason)
                 _logger.info("    skipped %s: %s", sname, reason)
                 continue
-            work_units.append((slice_, sname, scorer, n_resamples, rng, on_scorer_error))
+            candidate_units.append((slice_, sname, scorer))
+
+    # Spawn one independent SeedSequence per work unit BEFORE parallel
+    # dispatch (R8-C4a fix). This ensures n_jobs is bit-stable: each
+    # (slice, scorer) pair gets a deterministic seed determined by its
+    # position in the iteration order, not by whether a joblib worker
+    # forked at a particular point in the rng's state-machine. Both
+    # sequential (n_jobs=1) and parallel (n_jobs>1) modes now produce
+    # bit-identical bootstrap CIs per the SPEC 7 contract documented at
+    # docs/source/methodology/parallelism.md.
+    #
+    # Pre-v0.51 this site passed the shared `rng` object into every
+    # work-unit. In sequential mode the generator advanced across items
+    # (so items got independent streams); in parallel mode joblib forked
+    # copies of the SAME rng state into N workers, causing every worker
+    # to use the same bootstrap samples — silent non-independence across
+    # (slice, scorer) pairs.
+    child_seeds = spawn_seed_sequences(rng, len(candidate_units))
+    work_units: list[_ScoreOnePairItem] = [
+        (slice_, sname, scorer, n_resamples, child_seed, on_scorer_error)
+        for (slice_, sname, scorer), child_seed in zip(candidate_units, child_seeds, strict=True)
+    ]
 
     # Parallel scoring. parallel_map at n_jobs=1 is a pure-Python for-loop
     # (Principle #4) — bit-identical to the pre-v0.36 sequential code.
@@ -1288,6 +1309,7 @@ def evaluate_folded(
     eval_split_names: Sequence[str] = ("test",),
     summary_metrics: Sequence[str] = ("pr_auc", "roc_auc"),
     n_jobs: int = 1,
+    reseed_splitter: Callable[[Splitter, int], Splitter] | None = None,
 ) -> RunResult:
     """Run a fold aggregator: ``Splitter × seeds → RunResult`` with CV-CI summary.
 
@@ -1315,6 +1337,37 @@ def evaluate_folded(
     git_sha : str or None
     seeds : sequence of int, optional
         RNG seeds for multi-seed × CV. Default ``(42,)`` (single seed).
+        Forwarded to :func:`evaluate` per fold as the bootstrap RNG.
+
+        .. note::
+           Pre-v0.51, ``seeds=(s1, s2, ...)`` only varied the bootstrap
+           RNG across the seed loop — the ``splitter`` instance was
+           never reseeded, so each seed iteration replayed identical
+           fold partitions. Multi-seed × CV in the literal sense
+           requires ``reseed_splitter=`` (see below). For backwards
+           compatibility, omitting ``reseed_splitter`` with
+           ``len(seeds) > 1`` emits a :class:`DeprecationWarning` but
+           preserves the historical behavior.
+    reseed_splitter : Callable[[Splitter, int], Splitter] or None, optional
+        v0.51+ (R8-C1 audit fix). When provided, called as
+        ``reseed_splitter(splitter, seed)`` at the top of each seed
+        iteration to produce a fresh splitter for that seed; the
+        returned splitter is used in place of the original for the
+        fold iteration. Common pattern for dataclass-style splitters::
+
+            from dataclasses import replace
+            evaluate_folded(
+                scorers, splitter, slice_,
+                seeds=(1, 2, 3),
+                reseed_splitter=lambda sp, s: replace(sp, seed=s),
+                ...
+            )
+
+        Default ``None`` preserves pre-v0.51 behavior (splitter reused
+        across the seed loop, only bootstrap RNG varies) but emits a
+        :class:`DeprecationWarning` whenever ``len(seeds) > 1``. The
+        warning persists past v1.0 because the pre-v1.0 deprecation
+        window is too short to close (per ADR 0003 / DEPRECATION.md).
     n_resamples, paired_diffs, leakage_checks, on_leakage, on_scorer_error :
         Forwarded to :func:`evaluate` per fold.
     n_jobs : int, optional
@@ -1357,10 +1410,36 @@ def evaluate_folded(
     if not scorers:
         raise ValueError("at least one scorer required")
 
+    # R8-C1 audit fix: emit DeprecationWarning when multi-seed is asked
+    # for but no reseed_splitter callback is provided. The historical
+    # behavior (splitter reused across the seed loop) is preserved for
+    # backwards compatibility but its multi-seed semantics are
+    # bootstrap-RNG-only, not partition-level. See the `seeds` +
+    # `reseed_splitter` docstring sections for the migration recipe.
+    if len(seeds) > 1 and reseed_splitter is None:
+        import warnings as _warnings
+
+        _warnings.warn(
+            "evaluate_folded(seeds=(...)) without reseed_splitter only "
+            "varies bootstrap RNG across the seed loop, not fold "
+            "partitions. For true multi-seed CV pass "
+            "reseed_splitter=lambda sp, s: dataclasses.replace(sp, seed=s) "
+            "(or a custom callable producing a fresh splitter per seed). "
+            "Single-seed callers can ignore. This warning persists past "
+            "v1.0 — fixing the default would BREAK any caller relying on "
+            "the historical replay-folds behavior, so the default is "
+            "intentionally back-compat. R8-C1 audit fix.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     by_fold: dict[str, RunResult] = {}
     fold_slice_names_seen: set[str] = set()
     for seed in seeds:
-        for fold_idx, fold_dict in enumerate(splitter.iter_folds(slice_)):
+        # Reseed the splitter per seed if a reseed_splitter is provided
+        # (R8-C1). Otherwise reuse the original (historical behavior).
+        seed_splitter = reseed_splitter(splitter, seed) if reseed_splitter else splitter
+        for fold_idx, fold_dict in enumerate(seed_splitter.iter_folds(slice_)):
             fold_id = f"seed={seed}/fold={fold_idx}"
             eval_slices = [fold_dict[name] for name in eval_split_names if name in fold_dict]
             if not eval_slices:

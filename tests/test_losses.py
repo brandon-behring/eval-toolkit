@@ -30,6 +30,20 @@ def test_construct_with_defaults() -> None:
 
 
 @pytest.mark.unit
+def test_recall_at_low_fpr_validates_pos_weight_at_construction() -> None:
+    """R8-F1 regression: pos_weight ≤ 0 rejected eagerly with ValueError.
+
+    Pre-v0.51 RecallAtLowFPR validated fpr_target / fpr_smoothing_beta /
+    reduction but NOT pos_weight. Non-positive pos_weight produced
+    degenerate-but-bounded loss values silently. v0.51 validates at
+    construction matching the sibling-kwarg pattern.
+    """
+    for bad in (0.0, -1.0, -1e-9):
+        with pytest.raises(ValueError, match=r"pos_weight must be > 0"):
+            RecallAtLowFPR(pos_weight=bad)
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize("fpr_target", [-0.1, 0.0, 1.5])
 def test_invalid_fpr_target_raises(fpr_target: float) -> None:
     with pytest.raises(ValueError, match="fpr_target"):

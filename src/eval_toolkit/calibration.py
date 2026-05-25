@@ -44,6 +44,12 @@ from scipy.special import log_softmax
 from sklearn.calibration import calibration_curve
 from sklearn.isotonic import IsotonicRegression
 
+# R8-C6 audit fix: probability-range validator (lives in metrics.py since v0.46+;
+# imported here so calibration.py's reliability_curve / maximum_calibration_error
+# match metrics.py-side ECE rigor — they all reject out-of-range scores with the
+# same actionable message).
+from eval_toolkit.metrics import _validate_calibrated_score
+
 __all__ = [
     "DEFAULT_FN_COST",
     "DEFAULT_FP_COST",
@@ -135,6 +141,13 @@ def reliability_curve(
         raise ValueError(f"n_bins must be > 1, got {n_bins}")
     if strategy not in {"uniform", "quantile"}:
         raise ValueError(f"strategy must be 'uniform' or 'quantile', got {strategy!r}")
+    # R8-C6 audit fix: probability-range validation mirroring metrics.py-side
+    # ECE rigor. Pre-v0.51 reliability_curve passed raw logits straight to
+    # sklearn.calibration.calibration_curve, which silently produced
+    # meaningless calibration data. The metrics.py ECE sites at lines
+    # 803/873/943/1037/1158/1262/1338 already use this validator —
+    # calibration.py functions now match for symmetric rigor.
+    _validate_calibrated_score(y_score_arr, name="y_score")
 
     n = int(y_true_arr.size)
     n_positive = int(y_true_arr.sum())
@@ -335,6 +348,10 @@ def maximum_calibration_error(
         raise ValueError(f"n_bins must be > 1, got {n_bins}")
     if strategy not in {"uniform", "quantile"}:
         raise ValueError(f"strategy must be 'uniform' or 'quantile', got {strategy!r}")
+    # R8-C6: match metrics.py-side ECE rigor — reject out-of-range scores
+    # with the same actionable message instead of silently producing
+    # meaningless MCE on raw logits.
+    _validate_calibrated_score(y_score_arr, name="y_score")
 
     n_positive = int(y_true_arr.sum())
     if n_positive == 0 or n_positive == y_true_arr.size:
@@ -1046,6 +1063,18 @@ def fit_temperature(
         raise ValueError("val_logits contains NaN or inf")
     if not set(np.unique(val_labels).tolist()).issubset({0, 1}):
         raise ValueError("val_labels must be binary (0/1)")
+    # R8-C6 audit fix: validate bounds tuple before passing to
+    # scipy.optimize.minimize_scalar. Pre-v0.51 a malformed bounds (NaN,
+    # negative T, or lo >= hi) was silently forwarded to scipy, producing
+    # cryptic optimizer errors. Validate finiteness, positivity, and
+    # ordering at the boundary for actionable diagnostics.
+    lo, hi = bounds
+    if not (np.isfinite(lo) and np.isfinite(hi)):
+        raise ValueError(f"bounds must be finite floats, got {bounds!r}")
+    if lo <= 0.0 or hi <= 0.0:
+        raise ValueError(f"bounds must be strictly positive (T > 0), got {bounds!r}")
+    if lo >= hi:
+        raise ValueError(f"bounds must have lo < hi, got {bounds!r}")
     n_pos = int(np.sum(val_labels))
     if n_pos == 0 or n_pos == val_labels.shape[0]:
         raise ValueError(

@@ -95,3 +95,48 @@ def test_recall_at_fpr_rejects_invalid_target_fpr() -> None:
         recall_at_fpr(y, s, target_fpr=1.5)
     with pytest.raises(ValueError, match=r"fpr"):
         recall_at_fpr(y, s, target_fpr=-0.1)
+
+
+@pytest.mark.unit
+def test_recall_at_fpr_unsatisfiable_returns_inf_sentinel() -> None:
+    """When no threshold meets target_fpr, return sentinel honoring the FPR ceiling.
+
+    Round 8 audit (R8-C3) regression: the verbatim probe case
+    ``y=[0,1], scores=[1.0,1.0], target_fpr=0.0`` previously returned
+    ``threshold=1.0, actual_fpr=1.0, fp=1`` — silently violating the
+    function's own FPR-ceiling invariant. Root cause: fallback path
+    computed ``y_pred = (y_score >= 1.0)`` (inclusive comparator), which
+    classified the negative-class sample with score 1.0 as predicted-positive.
+
+    v0.51 sentinel: ``threshold=np.inf, actual_fpr=0.0, fp=0`` — the
+    actual_fpr ≤ target_fpr invariant is preserved by construction
+    (np.inf threshold predicts nothing positive).
+    """
+    result = recall_at_fpr(np.array([0, 1]), np.array([1.0, 1.0]), target_fpr=0.0)
+    assert np.isinf(result.threshold), (
+        "Unsatisfiable case must signal via threshold=np.inf so callers "
+        "can detect it (e.g., via np.isinf)."
+    )
+    assert result.actual_fpr == 0.0, (
+        "actual_fpr must honor target_fpr ceiling even in unsatisfiable case "
+        "(pre-v0.51 returned 1.0 here, violating the contract)."
+    )
+    assert result.fp == 0, "No threshold = no predicted positives = fp=0."
+    assert result.recall == 0.0, "No predicted positives → recall=0."
+    assert result.n_val_neg == 1
+    assert result.tn == 1
+    # The invariant the function name itself promises:
+    assert result.actual_fpr <= 0.0, "FPR ceiling honored"
+
+
+@pytest.mark.unit
+def test_recall_at_fpr_unsatisfiable_with_multiple_score_one_negatives() -> None:
+    """Stress the sentinel path: many negative samples all scoring 1.0."""
+    y = np.array([0, 0, 0, 1])
+    s = np.array([1.0, 1.0, 1.0, 1.0])
+    result = recall_at_fpr(y, s, target_fpr=0.0)
+    assert np.isinf(result.threshold)
+    assert result.actual_fpr == 0.0
+    assert result.fp == 0
+    assert result.n_val_neg == 3
+    assert result.tn == 3

@@ -135,6 +135,18 @@ def test_ece_factory_rejects_invalid_strategy(strategy: str) -> None:
         ms.ece(strategy=strategy)
 
 
+@pytest.mark.parametrize("bad_n_bins", [0, 1, -1, -100])
+def test_ece_factory_rejects_invalid_n_bins_eagerly(bad_n_bins: int) -> None:
+    """R8-F2 regression: ece(n_bins=<bad>) fails at factory level, not compute time.
+
+    Pre-v0.51 metric_specs.ece() validated strategy eagerly but deferred
+    n_bins validation to compute time. v0.51 validates both at factory
+    construction for consistency with the fail-fast pattern.
+    """
+    with pytest.raises(ValueError, match="n_bins"):
+        ms.ece(n_bins=bad_n_bins)
+
+
 @pytest.mark.parametrize("strategy", ["uniform", "quantile"])
 def test_ece_factory_accepts_valid_strategies(strategy: str) -> None:
     """Both documented strategies still work after the v0.46.1 validation."""

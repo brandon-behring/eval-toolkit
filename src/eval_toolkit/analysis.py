@@ -50,11 +50,34 @@ class CsvPredictionReader:
         *,
         columns: Mapping[str, str],
     ) -> Mapping[str, Sequence[object]]:
-        """Read a local CSV file."""
+        """Read a local CSV file.
+
+        Raises
+        ------
+        ValueError
+            If the CSV file is missing any of the requested columns (R8-F3
+            audit fix). Pre-v0.51 the reader silently filled missing
+            columns with empty strings, deferring failure to a cryptic
+            ``ValueError: invalid literal for int() with base 10: ''``
+            during ``np.asarray(..., dtype=int)`` in
+            :func:`load_prediction_arrays`. v0.51 detects the missing
+            columns at read time and raises with the file path + column
+            name so the root cause is obvious.
+        """
         wanted = set(columns.values())
         out: dict[str, list[object]] = {col: [] for col in wanted}
         with Path(uri).open(newline="") as fh:
             reader = csv.DictReader(fh)
+            # R8-F3: validate the header up-front so missing columns
+            # surface as a clear ValueError rather than as a cryptic
+            # dtype-conversion failure downstream.
+            header = set(reader.fieldnames or [])
+            missing = sorted(wanted - header)
+            if missing:
+                raise ValueError(
+                    f"CSV file at {uri!r} is missing required column(s) "
+                    f"{missing}; available columns: {sorted(header)}"
+                )
             for row in reader:
                 for col in wanted:
                     out[col].append(row.get(col, ""))

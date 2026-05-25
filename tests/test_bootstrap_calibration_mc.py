@@ -66,7 +66,7 @@ def _compute_mc_bias(estimates: np.ndarray, true_value: float) -> float:
 
 
 def _generate_population(
-    n_population: int, prevalence: float, separation: float, seed: int
+    n_population: int, prevalence: float, separation: float, rng: int
 ) -> tuple[np.ndarray, np.ndarray]:
     """Build a deterministic reference population for binary-classification metrics.
 
@@ -74,16 +74,23 @@ def _generate_population(
     ``N(0.5 - separation/2, 0.2)``; both clipped to [0, 1]. Larger
     ``separation`` → more-discriminative scores → higher true pr_auc /
     roc_auc. ``prevalence`` controls the class balance.
+
+    .. note::
+       Signature renamed at v0.51 from ``seed=`` to ``rng=`` matching
+       the v0.50 SPEC 7 sweep (the helper was missed during the v0.50
+       migration; pre-existing test failures noted in the Round 8
+       verification report; not a runtime bug, just a test-helper
+       naming drift).
     """
-    rng = np.random.default_rng(seed)
+    rng_obj = np.random.default_rng(rng)
     n_pos = max(2, int(n_population * prevalence))
     n_neg = n_population - n_pos
     y = np.concatenate([np.ones(n_pos, dtype=int), np.zeros(n_neg, dtype=int)])
-    s_pos = np.clip(rng.normal(0.5 + separation / 2, 0.2, size=n_pos), 0.0, 1.0)
-    s_neg = np.clip(rng.normal(0.5 - separation / 2, 0.2, size=n_neg), 0.0, 1.0)
+    s_pos = np.clip(rng_obj.normal(0.5 + separation / 2, 0.2, size=n_pos), 0.0, 1.0)
+    s_neg = np.clip(rng_obj.normal(0.5 - separation / 2, 0.2, size=n_neg), 0.0, 1.0)
     s = np.concatenate([s_pos, s_neg])
     # Shuffle so the array isn't class-sorted
-    order = rng.permutation(n_population)
+    order = rng_obj.permutation(n_population)
     return y[order], s[order]
 
 

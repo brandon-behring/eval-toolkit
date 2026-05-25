@@ -5,6 +5,215 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.51.0] — 2026-05-24 — Round 8 rectification batch
+
+The 18-item rectification batch following the Round 8 multi-LLM audit
+(Codex + Gemini reports verified at
+`audit-verification-codex-gemini-v0.50.0.md`, 2026-05-24). Per Decision
+Y.2 + the staggered-pre-v1.0 plan, v0.51.0 is a BREAKING-allowed
+minor bundling all fixes before v1.0 tags. Round 9 audit runs against
+the v0.51 RC.
+
+**Audit outcome**: 13 confirmed → fixed in this release; 2 deferred
+(R8-G3 custom exceptions, R8-G4 joblib OOM capping) to v1.x as Tier-2
+additive; 3 refuted (R8-G2 cyclic-import framing; R8-G5 cherry-picked
+weak test; R8-V1 + R8-V2 over-confident Gemini validations). See
+`docs/source/audit_findings.md` Round 8 section for the full ledger.
+
+**Round 9 follow-on**: a Round 9 multi-LLM cross-review (Codex + Gemini)
+ran against the v0.51 RC pre-tag. Verified by Claude at
+`audit-verification-round-9-v0.51.0.md` (6 confirmed / 3 refuted / 1
+partial; plus 3 third-audit fixes in modules neither auditor cited).
+**Two third-audit findings + one source-report regression fix shipped
+in this RC pre-tag** (commit-graph below); the remaining 4 deferred
+items go to v1.0.1. See `audit_findings.md` Round 9 section for the
+full ledger.
+
+### Added (Round 9 follow-on)
+
+- **R9-F-sweep-1** (CANDIDATE v1.0 BLOCKER closed) — `_sweep.py:
+  _validate_scorer_output()` now validates scorer output is finite
+  (no NaN / +inf / -inf), not just shape. Pre-R9 follow-on, NaN/inf
+  scores passed R7-C's shape check and silently propagated into the
+  sweep DataFrame, then silently zeroed the ASR flag (NaN >= threshold
+  is False). Closes the "no silent failures" invariant gap R7-C
+  established for shape but didn't extend to finiteness. Brings sweep
+  validation to parity with `stacking.py`'s `_validate_fit_inputs` /
+  `_validate_predict_inputs`. Tier-2 additive — callers whose scorers
+  were silently producing NaN now get a clear `ValueError` with
+  diagnostic context.
+
+- **R9-F-bootstrap-1** — `bootstrap.bootstrap_ci(...)` emits a
+  `UserWarning` when scipy's BCa method degenerates (returns
+  `ci_low == ci_high == point` or non-finite bounds). Pre-R9, the
+  R8-C4(b) RNG bug spuriously varied bootstrap streams and could mask
+  BCa degeneracy on small-n + ceiling/floor-metric inputs; post-R8 with
+  correct RNG, the brittleness is exposed. Warning text recommends
+  `method='percentile'` as the safer fallback at small n. The default
+  remains `method='BCa'` (preserves bit-stability for non-degenerate
+  cases); auto-fallback is deferred to v1.0.1 if user demand.
+
+- **R9-F-bootstrap-2** — `bootstrap.mde_from_ci(...)` now explicitly
+  rejects NaN CI width with `RuntimeError`. Pre-R9, NaN width
+  (possible when scipy BCa returns NaN bounds) bypassed the
+  `if width <= 0` check (NaN <= 0 is False in IEEE float) and
+  silently returned `MDEEstimate.mde = NaN`. Bundled with F-bootstrap-1.
+
+### Fixed (Round 10 follow-on)
+
+Pre-tag scoped Codex + Gemini micro-audit on `edadddc` surfaced 3
+Codex-confirmed findings (all fix-recommended / minor; no v1.0
+blockers). Verified by Claude; 1 Gemini accept-as-design + 1 Gemini
+refuted (Pattern-1 violation; calibration record in
+`audit_findings.md` Round 10 section). All 3 confirmed findings
+shipped in this RC pre-tag:
+
+- **R10-F1** — `protocols.Scorer.predict_proba` docstring + `_sweep.py`
+  error message clarification. Pre-R10, `_validate_scorer_output`'s
+  runtime error said "finite floats in [0, 1]" but the boundary check
+  only enforced finiteness (no range validation); the Scorer Protocol
+  docstring also lacked an explicit `[0, 1]` contract statement. R10-F1
+  extends the Protocol docstring to document calibrated-probability
+  semantics + reword the sweep runtime message to drop the unenforced
+  `[0, 1]` claim. Range enforcement is intentionally deferred to a
+  future minor once consumer usage patterns clarify whether the
+  Protocol should be strict (`[0, 1]`) or permissive (ranking scores).
+
+- **R10-F2** — `tests/test_bootstrap_unit.py::test_bootstrap_ci_bca_degeneracy_emits_warning`
+  test predicate hardening. Pre-R10, the test's assertion block used
+  `if ci.ci_low == ci.ci_high == ci.point_estimate:` — but NaN==NaN is
+  False in IEEE float, so the assertions were silently skipped on the
+  current scipy fixture (which returns NaN bounds). The test passed
+  WITHOUT proving the warning fires for the common degeneracy mode.
+  R10-F2 mirrors the production predicate exactly:
+  `(not np.isfinite(low)) or (not np.isfinite(high)) or (low == high == point)`.
+  The assertion block now runs whenever ANY degeneracy mode fires.
+
+- **R10-F3** — `bootstrap.mde_from_ci` docstring update for the
+  R9-F-bootstrap-2 non-finite-width branch. Pre-R10, the Raises section
+  said "non-positive width" only; the implementation has also been
+  rejecting non-finite width since `edadddc` but the docstring lagged.
+  R10-F3 updates the Raises text to "non-positive or non-finite width"
+  and adds a 4-line note explaining the scipy-BCa NaN-bound motivation
+  so callers understand the new behavior is intentional, not incidental.
+
+### Added
+
+- **R8-C6** — `calibration.reliability_curve(...)` and
+  `calibration.maximum_calibration_error(...)` now call
+  `_validate_calibrated_score(y_score)` BEFORE the sklearn dispatch.
+  Pre-v0.51 these functions silently accepted raw logits (any range);
+  sibling `metrics.expected_calibration_error*` variants already
+  validated input range via the same helper. Now symmetric — out-of-range
+  scores raise `ValueError` with the same actionable diagnostic. Also,
+  `calibration.fit_temperature(...)` now validates the `bounds` tuple
+  (finiteness, positivity, `lo < hi`) BEFORE forwarding to
+  `scipy.optimize.minimize_scalar` — cryptic optimizer errors replaced
+  with actionable input-validation errors.
+
+- **R8-F1** — `losses.RecallAtLowFPR.__init__(...)` now validates
+  `pos_weight > 0` at construction time, matching the sibling-kwarg
+  validators for `fpr_target` and `fpr_smoothing_beta`. Pre-v0.51
+  non-positive `pos_weight` produced degenerate-but-bounded loss
+  values silently.
+
+- **R8-F2** — `metric_specs.ece(n_bins=, strategy=)` factory now validates
+  `n_bins` eagerly at spec-construction time (matches the eager
+  `strategy` validation already present). Pre-v0.51 `n_bins`
+  validation was deferred to compute time.
+
+- **R8-F3** — `analysis.CsvPredictionReader.read_predictions(...)` now
+  detects missing CSV columns at read time and raises a
+  `ValueError(f"CSV file at {uri!r} is missing required column(s) ...")`
+  with the file path + available columns. Pre-v0.51 missing columns
+  were silently filled with empty strings, causing cryptic
+  `ValueError: invalid literal for int() with base 10: ''` downstream
+  in `load_prediction_arrays`'s dtype conversion. Root cause now
+  surfaces at the boundary.
+
+- **R8-C1** — `harness.evaluate_folded(...)` now accepts an optional
+  `reseed_splitter: Callable[[Splitter, int], Splitter] | None`
+  callback. When provided, each seed iteration calls
+  `reseed_splitter(splitter, seed)` to produce a fresh splitter for
+  that seed's fold iteration. Default `None` preserves the historical
+  behavior (the same splitter instance is reused across the seed loop,
+  so multi-seed × CV only varies the bootstrap RNG, not fold
+  partitions) AND emits a `DeprecationWarning` when `len(seeds) > 1`.
+  The warning persists past v1.0 because the pre-v1.0 deprecation
+  window (v0.51 → v1.0) is one minor and ADR 0003 / DEPRECATION.md
+  require ≥2 minors to close a cycle. Migration example::
+
+      from dataclasses import replace
+      evaluate_folded(
+          scorers, splitter, slice_,
+          seeds=(1, 2, 3),
+          reseed_splitter=lambda sp, s: replace(sp, seed=s),
+          ...
+      )
+
+  R8-C1 audit fix.
+
+### BREAKING
+
+- **R8-C2** — `SourceDisjointKFoldSplitter.iter_folds(...)` now caps
+  the fold count at `min(self.k, n_sources)` (matching
+  `get_n_splits(...)`). Pre-v0.51 the loop ran `range(self.k)` and
+  yielded EMPTY test partitions for the surplus folds when
+  `k > n_sources` while `get_n_splits` returned `min(k, n_sources)`
+  — the two methods silently disagreed on fold count. v0.51 caps both
+  at the same value AND emits a `UserWarning` when `k > n_sources` so
+  the caller knows the cap was applied. Callers that consumed the
+  surplus empty-test folds will see fewer iterations now; that was
+  the bug. (Probe-verified at
+  `audit-verification-codex-gemini-v0.50.0.md`.)
+
+- **R8-C3** — `thresholds.recall_at_fpr(...)` fallback semantics changed
+  when no threshold satisfies `target_fpr`. Pre-v0.51 the fallback set
+  `threshold = 1.0` and then computed `y_pred = (y_score >= 1.0)` —
+  inclusive comparator — which classified any negative-class sample
+  with score exactly 1.0 as predicted-positive. The probe
+  `recall_at_fpr(y=[0,1], scores=[1.0,1.0], target_fpr=0.0)` returned
+  `actual_fpr=1.0, fp=1` in silent violation of the function's
+  FPR-ceiling invariant. v0.51 returns a SENTINEL
+  `RecallAtFprResult(threshold=np.inf, recall=0.0, actual_fpr=0.0,
+  fp=0, tn=n_val_neg)` whenever the constraint is unsatisfiable.
+  Callers detect via `np.isinf(result.threshold)`. The
+  `actual_fpr ≤ target_fpr` invariant is now preserved by construction.
+  Migration: any caller filtering on `result.threshold` should add an
+  `np.isinf(...)` branch — pre-v0.51 the sentinel value was `1.0`.
+  (Verified at `audit-verification-codex-gemini-v0.50.0.md`.)
+
+- **R8-C4(a)** — `harness.evaluate(...)` with a `Generator`-typed `rng`
+  is now bit-stable across `n_jobs` values. Prior to v0.51, the same
+  `rng` object was attached to every `(slice, scorer)` work_unit;
+  joblib forked copies at the SAME generator state into N parallel
+  workers, so every worker used identical bootstrap sample streams —
+  silently producing non-independent CIs across `(slice, scorer)`
+  pairs in parallel mode and divergent results vs sequential mode.
+  The v0.51 implementation spawns one independent `SeedSequence` per
+  work unit at the dispatch boundary in `_score_all_slices` (depends
+  on the R8-C4(b) `spawn_seed_sequences` fix). Each pair now sees an
+  independent bootstrap stream; sequential (`n_jobs=1`) and parallel
+  (`n_jobs>1`) modes produce bit-identical CIs per the SPEC 7
+  contract at `docs/source/methodology/parallelism.md`. Integer `rng`
+  callers (the common case) are unaffected. (Verified by multi-slice
+  probe at `audit-verification-codex-gemini-v0.50.0.md`.)
+
+- **R8-C4(b)** — `eval_toolkit._rng.spawn_seed_sequences(rng, n)` now
+  respects `Generator` state. Prior to v0.51, the function extracted
+  the bit-generator's seed_seq and called `.spawn(n)` on it — so a
+  `Generator` advanced by prior draws produced the same children as a
+  fresh `Generator` with the same construction seed. The new
+  implementation draws `n` fresh entropy values FROM the generator
+  via `rng.integers(0, 2**63-1, size=n)` and wraps each in a
+  `SeedSequence`. Each call advances generator state, so repeated
+  calls on the same instance yield different children. This was the
+  root cause of bootstrap non-independence across `(slice, scorer)`
+  pairs in `harness.evaluate` — when the same `Generator` was shared
+  across bootstrap callsites, all callsites silently used the same
+  resample stream. (Verified probe at
+  `audit-verification-codex-gemini-v0.50.0.md`.)
+
 ## [0.50.0] — 2026-05-23 — SPEC 7 `rng` parameter adoption
 
 The SPEC 7 follow-up to v0.49.0. The `_rng.py` scaffold shipped at

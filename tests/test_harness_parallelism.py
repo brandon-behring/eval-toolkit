@@ -93,6 +93,83 @@ def test_evaluate_n_jobs_1_vs_2_reproducibility() -> None:
 
 
 @pytest.mark.unit
+def test_evaluate_n_jobs_with_generator_rng_reproducibility() -> None:
+    """Generator-typed rng (np.random.default_rng) gives bit-identical CIs across n_jobs.
+
+    Round 8 audit (R8-C4a) regression test: the multi-slice multi-scorer
+    case with ``rng=np.random.default_rng(N)`` produced different
+    bootstrap CIs across n_jobs=1 vs n_jobs=2 pre-v0.51. Root cause: the
+    SAME rng object was attached to every (slice, scorer) work_unit and
+    joblib forked copies at the same state into N workers, so all
+    workers shared the same bootstrap sample stream. v0.51 fix spawns
+    one independent SeedSequence per work unit at the dispatch boundary.
+
+    Verified at audit-verification-codex-gemini-v0.50.0.md.
+    """
+    scorers, slices = _build_two_slice_fixture(n=50)
+
+    # CRITICAL: rng must be a Generator (not int) to exercise the spawn path.
+    seq = evaluate(
+        scorers,
+        slices,
+        run_id="seq",
+        n_resamples=100,
+        rng=np.random.default_rng(7),
+        n_jobs=1,
+    )
+    par = evaluate(
+        scorers,
+        slices,
+        run_id="par",
+        n_resamples=100,
+        rng=np.random.default_rng(7),
+        n_jobs=2,
+    )
+    seq_d = seq.to_dict()
+    par_d = par.to_dict()
+    seq_d.pop("run_id", None)
+    par_d.pop("run_id", None)
+    assert seq_d == par_d, (
+        "Generator-typed rng must produce bit-identical RunResults across "
+        "n_jobs values (SPEC 7 contract). R8-C4a regression."
+    )
+
+
+@pytest.mark.unit
+def test_evaluate_bootstrap_independent_across_scorer_pairs() -> None:
+    """Different (slice, scorer) pairs see independent bootstrap streams.
+
+    Round 8 audit (R8-C4a corollary): pre-v0.51, parallel mode produced
+    IDENTICAL bootstrap CIs for different scorers on the same slice
+    because all workers shared the rng state. v0.51 spawns one
+    SeedSequence per work unit so each pair sees independent samples.
+    """
+    scorers, slices = _build_two_slice_fixture(n=50)
+    out = evaluate(
+        scorers,
+        slices,
+        run_id="r",
+        n_resamples=100,
+        rng=np.random.default_rng(7),
+        n_jobs=2,
+    )
+    by_slice = out.to_dict()["by_slice"]
+    # On any slice, different scorers should produce different bootstrap CIs.
+    # (Underlying point estimates differ too because the scorers are
+    # distinct; what matters is the CI bound positions, which depend on
+    # bootstrap stream identity.)
+    low_values = {
+        sname: by_slice["slice_a"]["by_scorer"][sname]["pr_auc_ci"]["low"]
+        for sname in ("stub_low", "stub_mid", "stub_high")
+    }
+    assert len(set(low_values.values())) == 3, (
+        f"Different scorers on the same slice must see independent bootstrap "
+        f"streams. Got duplicated CI lows: {low_values}. Pre-v0.51 bug: "
+        "shared rng state in parallel workers produced identical CIs."
+    )
+
+
+@pytest.mark.unit
 def test_evaluate_n_jobs_with_paired_diffs_reproducibility() -> None:
     """Paired-diffs path is also deterministic across n_jobs values."""
     scorers, slices = _build_two_slice_fixture()

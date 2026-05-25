@@ -241,7 +241,7 @@ def _strategy_id_for(strategy: TextTransform) -> str:
 
 
 def _validate_scorer_output(scores: np.ndarray, *, expected_n: int, label: str) -> None:
-    """Validate the shape of a batched ``Scorer.predict_proba`` result.
+    """Validate the shape AND finiteness of a batched ``Scorer.predict_proba`` result.
 
     Decision R7-C (Round 7 audit, Codex R7-F3): three failure modes Codex
     surfaced via runtime probe — too many 1-D scores (silent truncation,
@@ -249,8 +249,20 @@ def _validate_scorer_output(scores: np.ndarray, *, expected_n: int, label: str) 
     (later ``TypeError`` when ``float(...)`` is applied to a row). All
     three become a single API-level ``ValueError`` with context.
 
+    R9 follow-on (R8-F-sweep-1 audit): the original R7-C check covered
+    shape only — NaN/inf scorer outputs passed validation and silently
+    propagated into the sweep DataFrame's ``original_score`` /
+    ``transformed_score`` columns, then into downstream comparisons
+    (``s_orig >= threshold > s_adv`` becomes ``False`` for any NaN
+    comparison, silently zeroing the ASR flag). The v0.51 audit
+    surfaced this as a candidate v1.0 blocker — same "no silent
+    failures" invariant R7-C was designed to enforce. Stacking.py
+    validates non-finite scores in ``_validate_fit_inputs`` and
+    ``_validate_predict_inputs``; this brings the sweep boundary to
+    parity.
+
     Style invariants 1 (no silent failures) + 3 (API-level errors, never
-    low-level exceptions through the boundary). Drives Decision R7-C.
+    low-level exceptions through the boundary).
 
     Parameters
     ----------
@@ -266,7 +278,8 @@ def _validate_scorer_output(scores: np.ndarray, *, expected_n: int, label: str) 
     Raises
     ------
     ValueError
-        If ``scores.shape != (expected_n,)``.
+        If ``scores.shape != (expected_n,)`` (R7-C original) OR if any
+        score is non-finite (NaN / +inf / -inf; R9 follow-on R8-F-sweep-1).
     """
     if scores.shape != (expected_n,):
         raise ValueError(
@@ -275,6 +288,21 @@ def _validate_scorer_output(scores: np.ndarray, *, expected_n: int, label: str) 
             f"requires one float P(positive) per input row (see "
             f"`eval_toolkit.protocols.Scorer`); ensure your adapter returns "
             f"a 1-D array of length len(texts)."
+        )
+    # R9 follow-on (F-sweep-1): close the NaN/inf gap in R7-C.
+    # R10 follow-on (F1): drop `[0, 1]` from the runtime message since the
+    # finiteness check doesn't enforce range; the [0, 1] semantic contract
+    # is documented in `protocols.Scorer` but boundary-enforcement of range
+    # is intentionally deferred to a future minor (R10 Codex Option C).
+    if not np.all(np.isfinite(scores)):
+        n_nonfinite = int(np.sum(~np.isfinite(scores)))
+        raise ValueError(
+            f"sweep(): scorer.predict_proba({label}) returned non-finite "
+            f"values (NaN / +inf / -inf); got {n_nonfinite}/{expected_n} "
+            f"non-finite scores. The Scorer Protocol requires finite float "
+            f"P(positive) scores (see `eval_toolkit.protocols.Scorer`); "
+            f"check the scorer for div-by-zero, log(0), missing-data, "
+            f"or unguarded sigmoid-of-large-logit paths."
         )
 
 

@@ -31,7 +31,8 @@ format changes.
 │  gpu_info + leakage_report (NeurIPS-aligned)           │
 ├─ Tier 2 ─ Protocol-based orchestration ────────────────┤
 │  Scorer / SliceAwareScorer / LeakageCheck / Splitter   │
-│  ThresholdSelector / DatasetLoader / SimilarityStrategy│
+│  ThresholdSelector / DatasetLoader / MetricSpec        │
+│  MetaLearner / Probe / TextTransform (9 strict)        │
 │  Versioned (opt-in: per-object versions in manifest)   │
 ├─ Tier 1 ─ Functional core ─────────────────────────────┤
 │  pr_auc / roc_auc / ECE variants / Brier / bootstrap_ci│
@@ -46,69 +47,65 @@ run: capture the manifest.
 
 ## Documentation
 
-- **[Getting started](docs/getting-started.md)** — end-to-end
+- **[Getting started](docs/source/getting-started.md)** — end-to-end
   walkthrough for new users: install, define a Scorer, build slices,
   run `evaluate()`, persist results, add a claim, render a plot.
-- **[Methodology curriculum](docs/methodology/README.md)** — 16
+- **[Methodology curriculum](docs/source/methodology/README.md)** — 16
   chapters on splits, metrics, calibration, evidence gates,
   prediction artifacts, and more.
-- **[Schema reference](docs/schemas.md)** — field-by-field semantics
+- **[Schema reference](docs/source/schemas.md)** — field-by-field semantics
   for `results.v1.json`, `results_full.v1.json`, `manifest.v1.json`.
-- **[Migration guides](docs/MIGRATION.md)** — v0.6→v0.7, v0.7→v0.8,
-  v0.8→v0.9.
-- **[Extending](docs/extending.md)** — Protocol-by-Protocol guide for
+- **[Migration guides](docs/source/MIGRATION.md)** — per-version migration
+  hub (v0.7 onward).
+- **[Extending](docs/source/extending.md)** — Protocol-by-Protocol guide for
   custom Scorers, Splitters, LeakageChecks, ThresholdSelectors,
   DatasetLoaders, EvidenceGates.
-- **[Repo strategy](docs/repo-strategy.md)** — how the package is
-  organized, the 6-bucket target shape, and the checklist that
-  governs when to extract a sub-package into its own repo.
+- **[Repo strategy](docs/source/repo-strategy.md)** — how the package is
+  organized, the flat-module layout per ADR 0001, and the v2.0 trigger
+  criteria for any future subpackage split.
 
 ## Methodology
 
 What good binary-classification evaluation looks like, with each
 concern mapped to the toolkit primitive that operationalizes it.
 
-- [`docs/methodology/`](docs/methodology/README.md) — the curriculum
-  (16 chapters). Recommended reading order:
-  [`leakage`](docs/methodology/leakage.md) →
-  [`splits`](docs/methodology/splits.md) →
-  [`thresholds`](docs/methodology/thresholds.md) →
-  [`calibration`](docs/methodology/calibration.md) →
-  [`comparison`](docs/methodology/comparison.md) →
-  [`bootstrap`](docs/methodology/bootstrap.md) →
-  [`length_stratification`](docs/methodology/length_stratification.md) →
-  [`text_dedup`](docs/methodology/text_dedup.md) →
-  [`versioning`](docs/methodology/versioning.md) →
-  [`fairness`](docs/methodology/fairness.md) →
-  [`reproducibility`](docs/methodology/reproducibility.md) →
-  [`testing`](docs/methodology/testing.md) →
-  [`reading_list`](docs/methodology/reading_list.md).
-- [`docs/MIGRATION.md`](docs/MIGRATION.md) — per-version migration
-  guides (v0.6→v0.7, v0.7→v0.8).
-- [`docs/roadmap.md`](docs/roadmap.md) — forward-looking tracker;
-  v1.0.0 path; consumer gap-doc cross-links.
+- [`docs/source/methodology/`](docs/source/methodology/README.md) — the
+  curriculum (16 chapters). Recommended reading order:
+  [`leakage`](docs/source/methodology/leakage.md) →
+  [`splits`](docs/source/methodology/splits.md) →
+  [`thresholds`](docs/source/methodology/thresholds.md) →
+  [`calibration`](docs/source/methodology/calibration.md) →
+  [`comparison`](docs/source/methodology/comparison.md) →
+  [`bootstrap`](docs/source/methodology/bootstrap.md) →
+  [`length_stratification`](docs/source/methodology/length_stratification.md) →
+  [`text_dedup`](docs/source/methodology/text_dedup.md) →
+  [`versioning`](docs/source/methodology/versioning.md) →
+  [`fairness`](docs/source/methodology/fairness.md) →
+  [`reproducibility`](docs/source/methodology/reproducibility.md) →
+  [`testing`](docs/source/methodology/testing.md) →
+  [`reading_list`](docs/source/methodology/reading_list.md).
+- [`docs/source/MIGRATION.md`](docs/source/MIGRATION.md) — per-version
+  migration guides (v0.7 onward; v0.49 / v0.50 / v0.51 included as of
+  v0.51.0).
+- [`docs/source/roadmap.md`](docs/source/roadmap.md) — forward-looking
+  tracker; v1.0.0 path; consumer gap-doc cross-links.
 
 ## Extending eval-toolkit
 
 How to plug your own scorers / leakage checks / splitters / loaders /
 threshold selectors into the harness.
 
-- [`docs/extending.md`](docs/extending.md) — Protocol-by-Protocol
+- [`docs/source/extending.md`](docs/source/extending.md) — Protocol-by-Protocol
   guide, ~50-line full-harness recipe, project-layout pointer.
 
 ## Worked examples
 
-- [`docs/examples/prompt_injection_walkthrough.md`](docs/examples/prompt_injection_walkthrough.md)
-  — End-to-end prompt-injection eval on a synthetic OWASP LLM01:2025
-  fixture; cross-links to the
-  [showcase repo](https://github.com/brandon-behring/prompt_injection_classifier_showcase)
-  for the real Lakera PINT walkthrough.
-- [`docs/examples/pytorch_scorer_example.md`](docs/examples/pytorch_scorer_example.md)
-  — HuggingFace transformer + LoRA `Scorer` adapter (batched inference,
-  GPU/CPU placement, deterministic-mode setup).
-- [`docs/examples/claims_and_gates.md`](docs/examples/claims_and_gates.md)
-  — Composing reference + custom `EvidenceGate`s into a `ClaimSpec` and
-  running `evaluate_claims()` for release-time go/no-go checks.
+- [`docs/source/examples/`](docs/source/examples/index.md) — Sphinx /
+  MyST-NB executable notebooks covering: the evaluation harness,
+  metrics + bootstrap, calibration, claims-and-gates, leakage
+  detection, cross-corpus contamination scanning, character-injection
+  adversarial sweeps, callable-embedder dedup, and the activation-delta
+  probe.
 
 ## Install
 
@@ -208,7 +205,7 @@ with tempfile.TemporaryDirectory() as run_dir:
 | `eval_toolkit.splits` | `Splitter` Protocol + 5 reference impls (holdout / stratified / group / source-disjoint / time-series) |
 | `eval_toolkit.loaders` | `DatasetLoader` Protocol + 4 reference impls (DataFrame / SingleSlice / ParquetGlob / HF datasets) with Croissant-compatible `describe()` |
 | `eval_toolkit.manifest` | `RunManifest` (NeurIPS-aligned) + source-role / guardrail metadata + `make_manifest` / `write_manifest` |
-| `eval_toolkit.claims` | `EvidenceGate` class (frozen dataclass: name + callable check + severity), reference gate factories (`required_metric_gate`, `minimum_slice_size_gate`, `metric_threshold_gate`, etc.), `evaluate_claims()`, and `ClaimReport` for claim-mode vs exploratory-mode checks. See [`docs/extending.md`](docs/extending.md) for writing custom gates and [`docs/examples/claims_and_gates.md`](docs/examples/claims_and_gates.md) for a worked end-to-end example. |
+| `eval_toolkit.claims` | `EvidenceGate` class (frozen dataclass: name + callable check + severity), reference gate factories (`required_metric_gate`, `minimum_slice_size_gate`, `metric_threshold_gate`, etc.), `evaluate_claims()`, and `ClaimReport` for claim-mode vs exploratory-mode checks. See [`docs/source/extending.md`](docs/source/extending.md) for writing custom gates and [`docs/source/examples/claims_and_gates.md`](docs/source/examples/claims_and_gates.md) for a worked end-to-end example. |
 | `eval_toolkit.text_dedup` | `SimilarityStrategy` Protocol + 5 strategies (TF-IDF / hash / embedding / Jaccard / MinHash-LSH); `near_dedup` / `cross_dedup` orchestrators |
 | `eval_toolkit.plotting` | PR curves, reliability diagrams, confusion matrices, score histograms, lift CIs |
 | `eval_toolkit.provenance` | File hashing, run-directory layout, figure metadata sidecar |

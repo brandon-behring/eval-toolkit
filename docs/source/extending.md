@@ -11,12 +11,14 @@ into eval-toolkit's harness.
 > - **Tier 1 — functional core.** Pure functions on `(y_true, y_score)`
 >   arrays. No model coupling. Use this when you have predictions
 >   already and just want metrics + CIs.
-> - **Tier 2 — protocols.** Implement [`Scorer`](#scorer),
->   [`LeakageCheck`](#leakage-check), [`Splitter`](#splitter),
->   [`ThresholdSelector`](#threshold-selector),
->   [`DatasetLoader`](#dataset-loader),
->   [`SimilarityStrategy`](#similarity-strategy). Use these when you
->   want the harness to orchestrate.
+> - **Tier 2 — protocols.** Implement any of the 9 strict Tier-2
+>   protocols (Scorer, LeakageCheck, Splitter, ThresholdSelector,
+>   DatasetLoader, MetricSpec, MetaLearner, Probe, TextTransform; see
+>   [`docs/source/api/strict_tier2_protocols.md`](api/strict_tier2_protocols.md))
+>   when you want the harness to orchestrate. `SimilarityStrategy`
+>   (documented below for reference) is a pre-v0.7 internal interface
+>   used by `text_dedup`; it is NOT part of the v1.0 strict Tier-2
+>   contract — implementations are free to evolve in v1.x.
 > - **Tier 3 — reproducibility scaffolding.**
 >   [`make_manifest`](api/manifest.md),
 >   [`set_global_seeds`](api/seeds.md),
