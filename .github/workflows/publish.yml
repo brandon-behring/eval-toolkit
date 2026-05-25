@@ -72,7 +72,7 @@ jobs:
       - name: Validate distributions
         run: uv tool run --from twine twine check --strict dist/*
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
