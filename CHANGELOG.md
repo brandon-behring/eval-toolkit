@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1] — 2026-05-25 — audit_citation_alignment + RC4 docs polish
+
+First v1.x patch release. Ships the `audit_citation_alignment` validator
+that's been pre-staged by consumer `prompt-injection-detection-prototype`
+(see #77), plus the smallest #76 cleanup item (RC4).
 
 ### Added
 
@@ -23,6 +27,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ladder). The mis-citation went undetected by lychee (URL-resolves
   check), consumer's `audit_numbers.py` (numeric values), and consumer's
   `audit_adr_count_claims.py` (count claims). Closes #73.
+- **Pre-tag dogfood**: `validate_citations()` exercised against
+  eval-toolkit's own docs (95 files including README + audit_findings +
+  methodology + migration guides) — 0 misalignments found. Validator
+  proven in production use before consumers adopt.
+
+### Fixed
+
+- **RC4** (#76 cleanup) — v0.51 documentation count-tally reconciliation
+  across `docs/source/audit_findings.md`, `docs/source/migration/v0.51.md`,
+  and `CHANGELOG.md` `[0.51.0]` section. Canonical tally now consistent:
+  **13 confirmed → fixed in v0.51 / 3 refuted (R8-G2 + R8-G5 + R8-V1+V2
+  paired) / 2 deferred (R8-G3, R8-G4) = 18 total**. Prior drift was
+  "left 2 undecided" (migration/v0.51) vs "deferred" (CHANGELOG) +
+  ambiguity in the audit_findings ship-status section. Closes RC4 of #76.
 
 ## [1.0.0] — 2026-05-25 — Stability contract activates per ADR 0003
 

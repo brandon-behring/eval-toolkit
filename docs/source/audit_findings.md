@@ -221,7 +221,9 @@ Multi-LLM cross-review fired against the v0.50.0 state. **Codex** returned
 returned 5 findings + 3 positive validations (V1 style, V2 methodology,
 V3 scorer_error safety). Independent verification by Claude
 (`audit-verification-codex-gemini-v0.50.0.md`, 510 lines, untracked
-per `.gitignore`) confirmed 13 of 18 items, refuted 3, left 2 undecided.
+per `.gitignore`) confirmed 13 of 18 items, refuted 3 (R8-G2, R8-G5,
+R8-V1+R8-V2 paired-as-one over-confident Gemini validations), and
+deferred 2 (R8-G3, R8-G4) to v1.x as Tier-2 additive.
 The v0.51.0 release ships fixes for all 13 confirmed items; 2 (G3, G4)
 are deferred to v1.x as Tier-2 additive; 3 refuted entries are recorded
 below for the audit trail.
@@ -269,9 +271,13 @@ tags.
 
 - **13 confirmed findings**: all RESOLVED in v0.51.0 via the
   per-finding commits above (Phase 1 + 2 + 3 + 4 on `release/v0.51.0`).
-- **3 refuted findings + 2 over-confident Gemini validations**:
-  recorded above; no shipped fix needed.
-- **2 deferred findings** (G3 + G4): Tier-2 additive; v1.x or later.
+- **3 refuted findings** (R8-G2 cyclic-import framing, R8-G5
+  cherry-picked weak test, R8-V1+R8-V2 over-confident Gemini
+  validations paired-as-one): recorded above; no shipped fix needed.
+- **2 deferred findings** (R8-G3 custom exceptions, R8-G4 joblib OOM
+  capping): Tier-2 additive; v1.x or later.
+- **Tally**: 13 + 3 + 2 = 18 total (canonical; aligned with
+  CHANGELOG.md v0.51 section + migration/v0.51.md per RC4 reconciliation).
 - **Round 8 STOP-GATE status**: CLOSED via v0.51.0 ship. **Round 9 audit
   STOP-GATE** per Decision Y.2 opens against the v0.51.0 RC before
   `v1.0.0` tag can land.
