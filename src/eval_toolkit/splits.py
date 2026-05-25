@@ -295,7 +295,15 @@ class SourceDisjointKFoldSplitter:
         *,
         groups: np.ndarray | None = None,
     ) -> Iterator[dict[str, EvalSlice]]:
-        """Yield k fold dicts; each fold's test sources are disjoint from train sources.
+        """Yield up to ``min(k, n_sources)`` fold dicts; each test set is source-disjoint.
+
+        When ``self.k > n_sources`` the fold count is CAPPED at
+        ``n_sources`` (matching :meth:`get_n_splits`) and a
+        :class:`UserWarning` is emitted. The pre-v0.51 implementation
+        always looped ``range(self.k)`` and yielded empty test sets for
+        the surplus folds — silently violating the implicit
+        ``len(list(iter_folds())) == get_n_splits()`` invariant. R8-C2
+        audit fix.
 
         Raises
         ------
@@ -308,11 +316,29 @@ class SourceDisjointKFoldSplitter:
             )
         sources = slice_.df[self.source_col].to_numpy()
         unique_sources = np.array(sorted(set(sources.tolist())))
+        n_sources = len(unique_sources)
+        # R8-C2 fix: cap fold count at n_sources. Without this cap,
+        # range(self.k) would yield empty test partitions when k > n_sources
+        # because unique_sources[fold_idx :: self.k] is empty once
+        # fold_idx >= n_sources. The cap matches get_n_splits()'s
+        # already-correct min(self.k, n_sources) return.
+        effective_k = min(self.k, n_sources)
+        if self.k > n_sources:
+            import warnings as _warnings
+
+            _warnings.warn(
+                f"SourceDisjointKFoldSplitter k={self.k} > n_sources={n_sources}; "
+                f"iter_folds capped to {effective_k} folds. Set k explicitly to "
+                "match your data, or accept that fewer folds will be produced "
+                "than requested. R8-C2 audit fix.",
+                UserWarning,
+                stacklevel=2,
+            )
         rng = np.random.default_rng(self.seed)
         rng.shuffle(unique_sources)
-        # Round-robin: bucket i = sources at positions [i, i+k, i+2k, ...].
-        for fold_idx in range(self.k):
-            test_sources = set(unique_sources[fold_idx :: self.k].tolist())
+        # Round-robin: bucket i = sources at positions [i, i+effective_k, ...].
+        for fold_idx in range(effective_k):
+            test_sources = set(unique_sources[fold_idx::effective_k].tolist())
             test_mask = np.array([s in test_sources for s in sources])
             train_idx = np.where(~test_mask)[0]
             test_idx = np.where(test_mask)[0]
@@ -322,7 +348,14 @@ class SourceDisjointKFoldSplitter:
             }
 
     def get_n_splits(self, slice_: EvalSlice) -> int:
-        """Return ``self.k`` (capped at the number of distinct sources)."""
+        """Return ``min(self.k, n_sources)`` — the actual fold count from :meth:`iter_folds`.
+
+        Pre-v0.51 this value DIFFERED from ``len(list(iter_folds()))``
+        when ``k > n_sources`` (the iter_folds loop ran ``range(self.k)``
+        and yielded empty test partitions). v0.51 capped both call sites
+        at ``min(self.k, n_sources)``, restoring the contract that these
+        two methods agree on fold count. R8-C2 audit fix.
+        """
         if self.source_col not in slice_.df.columns:
             return self.k  # caller will hit the KeyError on iter_folds
         n_sources = int(slice_.df[self.source_col].nunique())

@@ -251,6 +251,52 @@ def test_splitter_conformance(
         )
 
 
+@pytest.mark.unit
+def test_source_disjoint_kfold_caps_at_n_sources_when_k_exceeds() -> None:
+    """R8-C2 regression: SourceDisjointKFoldSplitter with k > n_sources caps loop.
+
+    Pre-v0.51: ``iter_folds`` looped ``range(self.k)`` and yielded empty
+    test partitions for the surplus folds when k > n_sources, while
+    ``get_n_splits`` returned ``min(k, n_sources)``. The two methods
+    disagreed on fold count — a silent contract violation. v0.51 caps
+    ``iter_folds`` at the same ``min(k, n_sources)`` value AND emits a
+    UserWarning so the caller knows the cap was applied.
+    """
+    import warnings as _warnings
+
+    import pandas as pd
+
+    df = pd.DataFrame(
+        {
+            "text": [f"row{i}" for i in range(30)],
+            "label": [i % 2 for i in range(30)],
+            "source": ["A"] * 10 + ["B"] * 10 + ["C"] * 10,
+        }
+    )
+    parent = EvalSlice(name="parent", df=df)
+    splitter = SourceDisjointKFoldSplitter(k=5, source_col="source", seed=42)
+
+    # The R8-C2 fix triggers a UserWarning when k > n_sources.
+    with _warnings.catch_warnings(record=True) as ws:
+        _warnings.simplefilter("always")
+        folds = list(splitter.iter_folds(parent))
+    n_splits = splitter.get_n_splits(parent)
+
+    # Contract: len(iter_folds()) == get_n_splits()
+    assert len(folds) == n_splits == 3, (
+        f"iter_folds yielded {len(folds)} but get_n_splits returned "
+        f"{n_splits}; pre-v0.51 this was 5 vs 3 (contract violation)"
+    )
+    # No empty test partitions
+    for f in folds:
+        assert len(f["test"].df) > 0, "every fold must have a non-empty test partition"
+    # UserWarning was emitted
+    user_warnings = [w for w in ws if issubclass(w.category, UserWarning)]
+    assert len(user_warnings) >= 1, "UserWarning must be emitted when k > n_sources"
+    assert "k=5" in str(user_warnings[0].message)
+    assert "n_sources=3" in str(user_warnings[0].message)
+
+
 # ---------------------------------------------------------------------------
 # DatasetLoader
 # ---------------------------------------------------------------------------

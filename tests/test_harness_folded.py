@@ -108,6 +108,82 @@ def test_evaluate_folded_multi_seed(big_slice: EvalSlice) -> None:
 
 
 @pytest.mark.unit
+def test_evaluate_folded_multi_seed_without_reseed_emits_deprecation_warning() -> None:
+    """R8-C1 regression: multi-seed without reseed_splitter warns at runtime.
+
+    Pre-v0.51 multi-seed × CV silently varied only the bootstrap RNG,
+    not fold partitions (the splitter instance was reused across the
+    seed loop). v0.51 emits a DeprecationWarning when seeds=(s1,s2,...)
+    is passed without reseed_splitter — back-compat is preserved but
+    callers are nudged toward true multi-seed CV.
+    """
+    df = pd.DataFrame({"text": [f"t{i}" for i in range(60)], "label": [i % 2 for i in range(60)]})
+    parent = EvalSlice(name="parent", df=df)
+    with pytest.warns(DeprecationWarning, match=r"reseed_splitter"):
+        evaluate_folded(
+            {"u": _UniformScorer()},
+            StratifiedKFoldSplitter(k=2, seed=42),
+            parent,
+            run_id="r",
+            seeds=(1, 2),  # multi-seed without reseed_splitter triggers the warning
+            eval_split_names=("test",),
+            n_resamples=10,
+        )
+
+
+@pytest.mark.unit
+def test_evaluate_folded_reseed_splitter_varies_partitions() -> None:
+    """R8-C1 fix: reseed_splitter callback varies fold partitions across seeds.
+
+    The point of multi-seed × CV is that different seeds produce
+    different fold partitions. Pre-v0.51 the splitter was reused →
+    fold_idx=0 of seed=1 had identical indices to fold_idx=0 of seed=2.
+    With reseed_splitter, the partitions differ as expected.
+    """
+    import dataclasses
+
+    df = pd.DataFrame({"text": [f"t{i}" for i in range(60)], "label": [i % 2 for i in range(60)]})
+    parent = EvalSlice(name="parent", df=df)
+
+    result = evaluate_folded(
+        {"u": _UniformScorer()},
+        StratifiedKFoldSplitter(k=2, seed=42),
+        parent,
+        run_id="r",
+        seeds=(1, 2),
+        reseed_splitter=lambda sp, s: dataclasses.replace(sp, seed=s),
+        eval_split_names=("test",),
+        n_resamples=10,
+    )
+    # 2 seeds × 2 folds = 4 fold entries
+    assert len(result.by_fold) == 4
+    # Sanity: the by_fold entries are keyed by (seed, fold_idx)
+    fold_ids = set(result.by_fold.keys())
+    assert "seed=1/fold=0" in fold_ids
+    assert "seed=2/fold=0" in fold_ids
+
+
+@pytest.mark.unit
+def test_evaluate_folded_single_seed_no_deprecation_warning() -> None:
+    """Single-seed (default) callers see no DeprecationWarning — the common case."""
+    import warnings as _warnings
+
+    df = pd.DataFrame({"text": [f"t{i}" for i in range(60)], "label": [i % 2 for i in range(60)]})
+    parent = EvalSlice(name="parent", df=df)
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("error", DeprecationWarning)
+        # Must not raise — default seeds=(42,) is single-seed.
+        evaluate_folded(
+            {"u": _UniformScorer()},
+            StratifiedKFoldSplitter(k=2, seed=42),
+            parent,
+            run_id="r",
+            eval_split_names=("test",),
+            n_resamples=10,
+        )
+
+
+@pytest.mark.unit
 def test_evaluate_folded_empty_scorers_raises() -> None:
     df = pd.DataFrame({"text": ["a", "b"], "label": [0, 1]})
     with pytest.raises(ValueError, match="at least one scorer"):

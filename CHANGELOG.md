@@ -14,7 +14,43 @@ Y.2 + the staggered-pre-v1.0 plan, v0.51.0 is a BREAKING-allowed
 minor bundling all fixes before v1.0 tags. Round 9 audit runs against
 the v0.51 RC.
 
+### Added
+
+- **R8-C1** — `harness.evaluate_folded(...)` now accepts an optional
+  `reseed_splitter: Callable[[Splitter, int], Splitter] | None`
+  callback. When provided, each seed iteration calls
+  `reseed_splitter(splitter, seed)` to produce a fresh splitter for
+  that seed's fold iteration. Default `None` preserves the historical
+  behavior (the same splitter instance is reused across the seed loop,
+  so multi-seed × CV only varies the bootstrap RNG, not fold
+  partitions) AND emits a `DeprecationWarning` when `len(seeds) > 1`.
+  The warning persists past v1.0 because the pre-v1.0 deprecation
+  window (v0.51 → v1.0) is one minor and ADR 0003 / DEPRECATION.md
+  require ≥2 minors to close a cycle. Migration example::
+
+      from dataclasses import replace
+      evaluate_folded(
+          scorers, splitter, slice_,
+          seeds=(1, 2, 3),
+          reseed_splitter=lambda sp, s: replace(sp, seed=s),
+          ...
+      )
+
+  R8-C1 audit fix.
+
 ### BREAKING
+
+- **R8-C2** — `SourceDisjointKFoldSplitter.iter_folds(...)` now caps
+  the fold count at `min(self.k, n_sources)` (matching
+  `get_n_splits(...)`). Pre-v0.51 the loop ran `range(self.k)` and
+  yielded EMPTY test partitions for the surplus folds when
+  `k > n_sources` while `get_n_splits` returned `min(k, n_sources)`
+  — the two methods silently disagreed on fold count. v0.51 caps both
+  at the same value AND emits a `UserWarning` when `k > n_sources` so
+  the caller knows the cap was applied. Callers that consumed the
+  surplus empty-test folds will see fewer iterations now; that was
+  the bug. (Probe-verified at
+  `audit-verification-codex-gemini-v0.50.0.md`.)
 
 - **R8-C3** — `thresholds.recall_at_fpr(...)` fallback semantics changed
   when no threshold satisfies `target_fpr`. Pre-v0.51 the fallback set
