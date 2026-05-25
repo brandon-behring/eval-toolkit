@@ -80,6 +80,16 @@ def _build_module_class() -> Any:
                 raise ValueError(
                     f"RecallAtLowFPR: fpr_smoothing_beta must be > 0; got {fpr_smoothing_beta}"
                 )
+            # R8-F1 audit fix: pre-v0.51 the constructor validated
+            # fpr_target / fpr_smoothing_beta / reduction but NOT
+            # pos_weight. With pos_weight=0 the recall denominator clamped
+            # to 1e-9 producing loss=1.0 (degenerate-but-bounded); with
+            # pos_weight<0 the denominator-clamp + negative numerator
+            # produced unbounded loss > 1 (nonsensical for a recall-derived
+            # metric). Validate at construction for consistency with
+            # sibling kwargs.
+            if pos_weight <= 0:
+                raise ValueError(f"RecallAtLowFPR: pos_weight must be > 0; got {pos_weight}")
             if reduction not in ("mean", "sum", "none"):
                 raise ValueError(
                     f"RecallAtLowFPR: reduction must be 'mean'|'sum'|'none'; got {reduction!r}"

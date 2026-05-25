@@ -95,6 +95,24 @@ def test_maximum_calibration_error_validates() -> None:
 
 
 @pytest.mark.unit
+def test_reliability_curve_rejects_out_of_range_y_score() -> None:
+    """R8-C6 regression: reliability_curve validates y_score ∈ [0, 1].
+
+    Pre-v0.51 calibration.py forwarded raw logits to sklearn silently;
+    metrics.py-side ECE already used _validate_calibrated_score for the
+    same kind of input. v0.51 brings calibration.py's reliability_curve
+    + maximum_calibration_error to parity.
+    """
+    y = np.array([0, 1, 0, 1])
+    s_bad_high = np.array([0.5, 1.5, 0.3, 0.8])
+    with pytest.raises(ValueError, match=r"must be in \[0, 1\]"):
+        reliability_curve(y, s_bad_high, n_bins=5)
+    s_bad_neg = np.array([0.5, -0.1, 0.3, 0.8])
+    with pytest.raises(ValueError, match=r"must be in \[0, 1\]"):
+        maximum_calibration_error(y, s_bad_neg, n_bins=5)
+
+
+@pytest.mark.unit
 def test_maximum_calibration_error_agrees_with_reliability_curve_max_gap(
     well_separated: tuple[np.ndarray, np.ndarray],
 ) -> None:

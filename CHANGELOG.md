@@ -16,6 +16,38 @@ the v0.51 RC.
 
 ### Added
 
+- **R8-C6** — `calibration.reliability_curve(...)` and
+  `calibration.maximum_calibration_error(...)` now call
+  `_validate_calibrated_score(y_score)` BEFORE the sklearn dispatch.
+  Pre-v0.51 these functions silently accepted raw logits (any range);
+  sibling `metrics.expected_calibration_error*` variants already
+  validated input range via the same helper. Now symmetric — out-of-range
+  scores raise `ValueError` with the same actionable diagnostic. Also,
+  `calibration.fit_temperature(...)` now validates the `bounds` tuple
+  (finiteness, positivity, `lo < hi`) BEFORE forwarding to
+  `scipy.optimize.minimize_scalar` — cryptic optimizer errors replaced
+  with actionable input-validation errors.
+
+- **R8-F1** — `losses.RecallAtLowFPR.__init__(...)` now validates
+  `pos_weight > 0` at construction time, matching the sibling-kwarg
+  validators for `fpr_target` and `fpr_smoothing_beta`. Pre-v0.51
+  non-positive `pos_weight` produced degenerate-but-bounded loss
+  values silently.
+
+- **R8-F2** — `metric_specs.ece(n_bins=, strategy=)` factory now validates
+  `n_bins` eagerly at spec-construction time (matches the eager
+  `strategy` validation already present). Pre-v0.51 `n_bins`
+  validation was deferred to compute time.
+
+- **R8-F3** — `analysis.CsvPredictionReader.read_predictions(...)` now
+  detects missing CSV columns at read time and raises a
+  `ValueError(f"CSV file at {uri!r} is missing required column(s) ...")`
+  with the file path + available columns. Pre-v0.51 missing columns
+  were silently filled with empty strings, causing cryptic
+  `ValueError: invalid literal for int() with base 10: ''` downstream
+  in `load_prediction_arrays`'s dtype conversion. Root cause now
+  surfaces at the boundary.
+
 - **R8-C1** — `harness.evaluate_folded(...)` now accepts an optional
   `reseed_splitter: Callable[[Splitter, int], Splitter] | None`
   callback. When provided, each seed iteration calls

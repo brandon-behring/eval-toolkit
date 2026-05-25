@@ -252,3 +252,23 @@ def test_csv_reader_used_directly(tmp_path: Path) -> None:
     table = reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
     assert table["label"] == ["0", "1"]
     assert table["score"] == ["0.4", "0.7"]
+
+
+@pytest.mark.unit
+def test_csv_reader_raises_actionable_error_on_missing_column(tmp_path: Path) -> None:
+    """R8-F3 regression: missing CSV column → actionable ValueError, not cryptic dtype error.
+
+    Pre-v0.51 the reader filled missing columns with empty strings,
+    causing the downstream ``np.asarray(..., dtype=int)`` in
+    load_prediction_arrays to fail with
+    "invalid literal for int() with base 10: ''". Root cause was
+    obscured. v0.51 detects missing columns at the read boundary and
+    raises with the file path + missing column name.
+    """
+    # CSV has only "label" column, but caller requests "score" too.
+    rows = [{"label": 0}, {"label": 1}]
+    path = tmp_path / "p.csv"
+    _write_csv(path, rows)
+    reader = CsvPredictionReader()
+    with pytest.raises(ValueError, match=r"missing required column"):
+        reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
