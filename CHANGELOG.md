@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] — 2026-05-25 — Stability contract activates per ADR 0003
+
+v1.0 is a **stability-contract activation**, not a code delta from v0.51.
+Every fix that landed at v0.51 is what v1.0 ships; the new thing at v1.0
+is that the [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md)
+Tier 1 / Tier 2 / Tier 3 stability contract becomes load-bearing.
+Breaking changes to Tier-1 surfaces after v1.0 require a major bump (v2.0).
+
+### Contract activation
+
+- **Tier 1 STRICT** — public-API signatures captured in
+  `tests/golden/public_api/snapshot.json`. Any signature drift bumps to v2.0.
+- **Tier 2 ADDITIVE** — the 9 strict Protocols (`Scorer`, `LeakageCheck`,
+  `Splitter`, `ThresholdSelector`, `DatasetLoader`, `MetricSpec`,
+  `MetaLearner`, `Probe`, `TextTransform`) + 1 opt-in (`Versioned`).
+  Method shapes are frozen; additive subprotocols + new Protocols allowed.
+- **Tier 3 FREE** — internal modules (prefixed `_`). Refactors don't
+  bump major.
+
+### Gate 3 audit closure (Rounds 5 → 10)
+
+The multi-LLM cross-review sequence is closed. Per ADR 0003, Gate 3
+substitutes Codex + Gemini + Claude independent reads for external
+academic peer review. Outcomes:
+
+- **Round 8** (against v0.50): 13 confirmed → fixed in v0.51; 3 refuted;
+  2 v1.x-deferred (R8-G3 custom exceptions; R8-G4 joblib OOM capping).
+- **Round 9** (against v0.51 RC): 6 confirmed of 10 source items + 3
+  third-audit findings in modules neither auditor cited. 2 candidate-
+  blocker items fixed in-PR before tag.
+- **Round 10** (micro-audit on R9 follow-on commit): 3 Codex confirmed →
+  fixed in v0.51; 1 accept-as-design (Gemini); 1 refuted (Gemini
+  Pattern-1 violation).
+
+Full ledger at `docs/source/audit_findings.md` Rounds 5 → 10. v1.0.1
+cleanup batch tracked at GH issue #76.
+
+### Carried-over deprecations
+
+The R8-C1 `DeprecationWarning` on multi-seed `evaluate_folded(seeds=...)`
+calls without an explicit `reseed_splitter` callback **persists past v1.0
+by design** (pre-v1.0 deprecation window is one minor; `DEPRECATION.md`
+requires ≥2 minors to close a cycle). Single-seed callers see no change;
+multi-seed callers should pass `reseed_splitter` for true seed variance.
+
+### Migration
+
+If your consumer is on v0.51, nothing changes. If on v0.50 or earlier,
+follow [`docs/source/migration/v0.51.md`](docs/source/migration/v0.51.md)
+for the actual migration steps. Downstream projects should pin
+`eval-toolkit>=1.0,<2.0` to opt into the stability contract.
+
 ## [0.51.0] — 2026-05-24 — Round 8 rectification batch
 
 The 18-item rectification batch following the Round 8 multi-LLM audit
