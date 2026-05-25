@@ -8,7 +8,7 @@ This document is **descriptive of intent, not a commitment**. The
 priorities reflect today's understanding of what consumers need;
 order may change as feedback comes in.
 
-## Currently shipped (as of v0.47.0)
+## Currently shipped (as of v1.0.0)
 
 See [`CHANGELOG.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/CHANGELOG.md) for the full release history.
 Highlights since v0.33:
@@ -82,6 +82,14 @@ Highlights since v0.33:
   Protocol method-shape drift guard, R6-F5 narrow exception catch in
   `_evaluate_spec()`, R6-H `metric_specs.make_spec_name()` helper.
   Migration guide: [`migration/v0.47.md`](migration/v0.47.md).
+- **v0.48 → v0.51 → v1.0** — naming-standards sweep (v0.49), SPEC 7
+  RNG convention (v0.50), Round 8 + Round 9 multi-LLM audit
+  rectification (v0.51), and stability-contract activation (v1.0).
+  Per-version migration guides:
+  [`v0.49.md`](migration/v0.49.md), [`v0.50.md`](migration/v0.50.md),
+  [`v0.51.md`](migration/v0.51.md), [`v1.0.md`](migration/v1.0.md).
+  See [`audit_findings.md`](audit_findings.md) for the full Round
+  5 → Round 9 ledger and `CHANGELOG.md` for per-release details.
 
 State-of-the-toolkit:
 
@@ -115,7 +123,11 @@ State-of-the-toolkit:
   [`migration/v0.8.md`](migration/v0.8.md),
   [`migration/v0.9.md`](migration/v0.9.md),
   [`migration/v0.46.md`](migration/v0.46.md),
-  [`migration/v0.47.md`](migration/v0.47.md))
+  [`migration/v0.47.md`](migration/v0.47.md),
+  [`migration/v0.49.md`](migration/v0.49.md),
+  [`migration/v0.50.md`](migration/v0.50.md),
+  [`migration/v0.51.md`](migration/v0.51.md),
+  [`migration/v1.0.md`](migration/v1.0.md))
   + general [`MIGRATION.md`](MIGRATION.md).
 
 ## Consumer gap docs (input)
@@ -141,13 +153,14 @@ All v0.45 / v0.46 / v0.46.1 / v0.47 tracked candidates closed:
 - Advanced-6 character_injection (v0.43.0 forward-look) — shipped at
   v0.47.0 alongside the sweep consolidation per Decision Q11→11.3.
 
-Remaining roadmap items target v0.48 polish + v1.0 stability:
+Post-v1.0 roadmap is v1.0.1 cleanup-only:
 
-- **v0.48 polish (planned)** — `metrics_at_threshold` key normalization,
-  `BootstrapCI.to_dict()` rewrite, lazy-extras error message audit,
-  docstring example sweep, ADRs 0001 (flat-module) + 0003 (stability
-  contract + Gate 3 governance) finalized.
-- **v1.0** — stability commitment, no new code; all 4 v1.0 gates closed.
+- **v1.0.1 (next minor)** — Round 9 deferred-minors batch: RC2
+  `SimilarityStrategy` contract reconciliation, RC3 reseed_splitter
+  test row-content hardening, RC4 audit-count-tally polish, and 3
+  `brier_score` / ECE docstring precision items (F-metrics-1/3/4).
+  All Tier-2 ADDITIVE or Tier-3 FREE — no Tier-1 changes.
+  See the `v1.0.1 cleanup` GH issue for the live checklist.
 
 The current planning document is
 [`~/.claude/plans/evaluate-all-the-work-twinkly-kite.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/.claude/plans/evaluate-all-the-work-twinkly-kite.md)
@@ -207,8 +220,13 @@ v2.0. Gated on:
    (c) Gemini independent report. Different model training corpora
    provide the "outside eyes" value with predictable cycle time.
    Any reviewer-flagged blocker becomes a `p1-gate3`-labelled issue;
-   must close before v1.0 tag. Gate 3 ⏳ **NOT STARTED** — kicks off
-   in parallel with v0.45 work.
+   must close before v1.0 tag. Gate 3 ✅ **MET** — closed at v1.0
+   via Round 5 → Round 9 multi-LLM cross-review sequence. Round 8
+   (verified at v0.51) confirmed 13 of 18 findings and rectified them;
+   Round 9 (verified at v0.51 RC `edadddc`) confirmed 6 of 10 source
+   items + 3 third-audit findings in modules neither auditor cited,
+   with 2 candidate-blocker items fixed in-PR before tag. Full ledger
+   at [`audit_findings.md`](audit_findings.md) Rounds 5–9.
 4. **Croissant interop verified end-to-end** — ✅ **MET as of v0.41.0**
    (see `tests/test_croissant_e2e.py`). `HFDatasetsLoader.describe()`
    fetches Croissant metadata + per-file `sha256` from HF Hub; the
