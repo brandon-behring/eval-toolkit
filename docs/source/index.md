@@ -112,6 +112,12 @@ api/thresholds
 migration/v0.7
 migration/v0.8
 migration/v0.9
+migration/v0.46
+migration/v0.47
+migration/v0.48
+migration/v0.49
+migration/v0.50
+migration/v0.51
 ```
 
 ## Project

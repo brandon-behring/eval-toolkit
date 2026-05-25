@@ -54,6 +54,12 @@ mutants/
 gate3-audit-prompt.md
 gate3-audit-report.md
 gate3-audit-round-*-report.md
+# R8-C10 audit fix: extend to cover the comprehensive-audit-* and
+# audit-verification-* naming conventions introduced at v0.50/v0.51.
+codex-comprehensive-audit-*-report.md
+audit-gemini.md
+comprehensive-audit-codex.md
+audit-verification-*.md
 
 # Claude Code project settings (machine-local)
 .claude/

@@ -3,6 +3,17 @@
 How `eval-toolkit` is organized today, the target shape, and the
 rules for when to extract a sub-package into its own repo.
 
+> **Status note (v0.51, 2026-05-24, R8-G1 audit fix):** The §4
+> "target shape" 6-sub-package plan below was **deliberately
+> superseded** by
+> [ADR 0001 (flat-module layout)](adr/0001-flat-module-layout.md),
+> which commits to the current flat layout through v1.x and defers any
+> subpackage restructuring to v2.0 trigger criteria. Sections §4–§5
+> below are preserved here for context on the v2.0-and-beyond
+> conversation, not as a planned v1.x execution. Treat this doc as
+> historical for any pre-v2.0 work; consult ADR 0001 first for
+> the v1.0+ module-layout contract.
+
 > **If you're an AI session entering this repo to propose
 > reorganization, extraction, or a new module: read this entire doc
 > before proposing changes.**

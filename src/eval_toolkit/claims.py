@@ -47,7 +47,25 @@ class GateResult:
     evidence: dict[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
-        """JSON-serializable representation."""
+        """Dict representation suitable for downstream structured emission.
+
+        ``evidence`` is passed through unchanged — including any numpy
+        scalars, ``NaN`` values, or other non-strict-JSON types that the
+        caller put there. **This method does NOT promise strict-JSON
+        safety.** To serialize the result via ``json.dumps(...,
+        allow_nan=False)`` or any other strict-JSON path, route through
+        :func:`eval_toolkit.artifacts.write_json_strict` (which calls
+        ``sanitize_for_json`` internally), or call
+        :func:`eval_toolkit.artifacts.sanitize_for_json` explicitly on
+        the returned dict.
+
+        R8-C9 audit note: the v0.51 audit probe
+        ``json.dumps(GateResult(evidence={"x": np.float32(1.2),
+        "bad": float("nan")}).to_dict(), allow_nan=False)`` raises
+        ``TypeError: Object of type float32 is not JSON serializable``.
+        This is by design — ``to_dict()`` is the structured-Python
+        representation; the strict-JSON path is a separate concern.
+        """
         return {
             "name": self.name,
             "passed": self.passed,
