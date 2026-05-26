@@ -527,3 +527,129 @@ Otherwise R11+ is light-touch documentation of the consumer-feedback
 → upstream-validator → consumer-adopt cycle.
 
 ---
+
+## Round 12 (2026-05-26) — schema-extensibility + scope-correctness lesson from #80
+
+**Not a multi-LLM gate-style audit.** Round 12 is the second
+consumer-feedback-driven round, immediately following R11. The R11
+audit-validator family (3/3 shipped) revealed a deeper structural
+gap in `audit_value_bindings` that the v1.0.3 implementation could
+not address: the 2-tuple `(detector, metric)` canonical-identity
+schema collapsed across slices, producing ~95 false positives on
+the consumer's writeup. The fix (v1.1.0) is bigger than the issue's
+literal ask — it surfaces two architectural rules that now govern
+all audit validators (pending ADR 0005).
+
+### Motivating finding (consumer audit origin)
+
+- **Consumer's v1.3.9 run** (2026-05-26, prompt-injection-detection-submission):
+  `scripts/audit_value_bindings.py` against own writeup produced
+  **96 warnings, ~95 false positives**. The one real bug
+  (`WRITEUP_PAPER.md:545` mis-citing 0.971 inside a misleading
+  paragraph context) was correctly flagged but hid in the noise.
+  Consumer caught it via parallel manual audit, **not** via this
+  validator. Filed [#80](https://github.com/brandon-behring/eval-toolkit/issues/80)
+  at 2026-05-26T18:15:45Z proposing a 3-tuple
+  `(detector, metric, slice)` schema extension.
+
+### Upstream response timeline
+
+| Time (UTC) | Event |
+|---|---|
+| 2026-05-26T18:15Z | Consumer files #80 (BINDINGS slice-axis schema) |
+| 2026-05-26T18:30Z | `/exploring-options` Round 1: P0 path for v1.0.4 PyPI gap. Decision: refined bundle (rerun + workflow_dispatch + verify-receipt). |
+| 2026-05-26T19:00Z | `/exploring-options` Round 2: #80 migration shape. Decision: **Option 4 — `BindingKey` structured key + multi-shape adapter** (rejected Option 1 `(d, m, s)` in-place tuple because positional tuples lock in the recur-every-N-months schema-event pattern). |
+| 2026-05-26T19:24Z | **v1.0.5 ships** — infrastructure-only release (publish workflow hardening; dress rehearsal for the new Verify PyPI receipt step). |
+| 2026-05-26T19:30Z | `/exploring-options` Round 3: Step 1 release strategy + verify specs. Decision: v1.0.5 as dress rehearsal; conservative 12×30s PyPI poll. |
+| 2026-05-26T19:45Z | `/exploring-options` Round 4: ADR 0005 scope + deprecation policy. Decision: medium scope (audit validators only); indefinite acceptance of legacy 2-tuple BINDINGS through v1.x. |
+| 2026-05-26T20:00Z | First dogfood of v1.1.0 slice-axis fix: only 22% noise reduction (95 → 74). User pushed back: "what is the right long-term solution?" Triggered the deeper rethink. |
+| 2026-05-26T20:10Z | Identified the **second architectural layer**: scope correctness. ~80% of v1.0.5 residual noise was content-type confusion (CI brackets, table cells, code blocks), not slice-axis confusion. Added `scope='narrative'` filter. |
+| 2026-05-26T20:11Z | **v1.1.0 ships** — `BindingKey` + slice-aware matching + `scope='narrative'` (closes #80). |
+
+End-to-end cycle: #80 filing (18:15Z) → v1.1.0 ship (20:11Z) =
+**~2 hours compressed cycle**. Four `/exploring-options` rounds +
+one user-driven architectural redirect ("ultrathink on what the
+right long-term solution is") produced a coherent two-layer fix
+instead of the issue's narrower literal ask.
+
+### The two-layer correctness lesson (pending ADR 0005)
+
+Audit validators have two correctness layers, not one:
+
+1. **Identity correctness** — canonical measurements have
+   *structured identity* (frozen dataclass with named fields),
+   not positional tuples. Future identity axes (split, ci_kind,
+   source_ref, ...) added as defaulted fields without breaking
+   the dict-key schema. Positional tuples lock the validator
+   into a recur-every-N-months schema-event pattern.
+2. **Scope correctness** — the validator should only scan content
+   *plausibly a binding claim*. Narrative prose sentences are.
+   Markdown table cells aren't (they're structured data,
+   audited differently). Bracketed expressions (`[CI 0.286,
+   0.301]`) aren't (inline expressions, not point estimates).
+   Code blocks aren't.
+
+This mirrors lint-design conventions from `ruff`/`mypy`/`bandit`
+(scope predicates like `# noqa`/`# nosec`/`# type: ignore` are
+first-class, not optional).
+
+### Dogfood evidence
+
+| Configuration | Warnings on consumer HEAD | Reduction vs v1.0.5 baseline |
+|---|---|---|
+| v1.0.5 (legacy 2-tuple) | 95 | — (baseline) |
+| v1.1.0 BindingKey + slice-fix only (scope='all', default `slice_window_chars=120`) | 74 | -22% |
+| v1.1.0 BindingKey + slice-fix + `scope='narrative'` (recommended) | **23** | **-76%** |
+
+The first instinct — "just add a slice axis like the issue asks"
+— would have left the validator practically unusable on dense
+academic prose, requiring a separate v1.2.0 cleanup release. The
+deeper rethink (triggered by the user's redirect) delivered both
+layers in a single coherent v1.1.0.
+
+Residual 23 warnings are pre-existing positional-heuristic
+limitations (sentence-boundary unawareness, multi-detector list
+parsing on dense prose) not addressable without parser-level
+work; deferred to future v1.2.0+ as a narrower issue class.
+
+### Round 12 outcome
+
+- ✅ **v1.1.0 shipped** (commit `911565b`, PyPI live).
+- ✅ **#80 auto-closed** by `closes #80` directive on the v1.1.0 tag.
+- ✅ **0 open issues** on the eval-toolkit repo post-#80.
+- ✅ **Architecture lesson codified** in pending
+  [ADR 0005](adr/0005-structured-keys-for-audit-validators.md):
+  the identity + scope two-layer rule applies to future audit
+  validators.
+- ✅ **Memory entry**: `feedback_validator_identity_plus_scope`
+  captures the "issue body says X is the problem; investigate the
+  dominant noise source before agreeing" discipline.
+
+### Consumer adoption + HARD-gate viability
+
+Consumer (`prompt-injection-detection-submission`) currently pins
+`eval-toolkit>=1.0.3,<2`. Adoption path for v1.1.0:
+
+- Smallest diff: replace 2-tuple `BINDINGS` literal with 3-tuple
+  keys (issue body's proposal; works directly).
+- Recommended: migrate to `BindingKey(detector=..., metric=...,
+  slice=...)` for forward-extensibility.
+- Add `scope="narrative"` to the validator call.
+- Re-run; expect ~76% noise reduction.
+
+HARD-gate promotion at consumer's v1.3.10+ becomes credible at the
+~80% reduction level. Remaining residual false positives can be
+suppressed via consumer-side filtering (excluding lines containing
+"random floor" or "versus") or accepted as known low-frequency
+noise pending v1.2.0+ pairing-rule improvements.
+
+### Multi-LLM audit cadence after R12
+
+Same as R11: no multi-LLM cross-review for consumer-feedback
+rounds; reserved for v2.0 design cycles or major-severity findings
+that single-LLM verification cannot resolve. The R12 fix was
+informed by the user-driven `/exploring-options` discipline
+(4 rounds + a structural redirect), which substitutes for
+multi-LLM dispatch for this class of architectural decision.
+
+---

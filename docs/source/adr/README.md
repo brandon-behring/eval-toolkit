@@ -76,3 +76,5 @@ What would have to change for this decision to be reopened?
 | [0001](0001-flat-module-layout.md) | Flat single-file modules through v1.x | Accepted | 2026-05-21 |
 | [0002](0002-scorecard-as-primary-metric-surface.md) | `scorecard()` as the primary v1.0 metric surface | Accepted | 2026-05-21 |
 | [0003](0003-stability-contract-and-gate3-methodology.md) | v1.0 stability contract + Gate 3 methodology | Accepted | 2026-05-21 |
+| [0004](0004-naming-conventions.md) | Naming conventions for modules, classes, and parameters | Accepted | 2026-05-23 |
+| [0005](0005-structured-keys-for-audit-validators.md) | Structured keys over positional tuples for canonical-identity types in audit validators | Accepted | 2026-05-26 |
