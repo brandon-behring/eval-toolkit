@@ -773,3 +773,114 @@ opens or a major-severity consumer finding requires it.
   v1.1.0 + 8 new for T1–T4 + sentence-boundary unit test).
 
 ---
+
+## Round 14 (2026-05-26) — Layer 3 pairing rules close cross-detector list-grammar (#81)
+
+**Not a multi-LLM gate-style audit.** Fourth consumer-feedback-driven
+round in the post-v1.0 cycle (R11 → R12 → R13 → R14). The v1.2.0 cycle
+(Round 13) reduced consumer noise from 96 → 4 warnings via the T1–T4
+context-aware narrative filters; the residual 4 were all cross-detector
+list-grammar / metric-axis confusion cases that the two-layer
+identity-+-scope model couldn't resolve. Consumer filed
+[#81](https://github.com/brandon-behring/eval-toolkit/issues/81)
+documenting the 3 prose patterns + proposing a `_LIST_CONNECTIVES`
+extension; upstream v1.3.0 ships **Layer 3 (pairing rules)** per
+[ADR 0006](adr/0006-pairing-rules-for-cross-detector-list-grammar.md)
+as the architectural closure.
+
+### Motivating residuals from v1.2.0 dogfood
+
+Consumer's v1.3.12 dogfood (eval-toolkit v1.2.0 adopted; 36 warnings →
+narrowed by their additional SKIP_PATTERNS to 4):
+
+| File:Line | Pattern category | Prose snippet |
+|---|---|---|
+| `WRITEUP_PAPER.md:304` | "for X" postfix (Pattern A) | `"versus 0.364 [...] for the frozen probe and 0.291 [...] for TF-IDF + LR"` |
+| `RESULTS.md:171` (×2) | possessive + metric confusion (Patterns B + D) | `"LoRA's pooled OOD AUROC is 0.383 against frozen probe's 0.515"` |
+| `README.md:71` | group subject (Pattern C) | `"0.38 AUROC, ~0.6 drop for the trained detectors"` |
+
+### Upstream design — `/exploring-options` 2 rounds + Pattern D emerged during dogfood
+
+| Time (UTC) | Event |
+|---|---|
+| ~21:30Z | Consumer files #81 documenting the 3 prose patterns (A/B/C) + proposing `_LIST_CONNECTIVES` design. |
+| ~22:00Z | `/exploring-options` Round 1: scope. Decision: A + B + C-suppress (not C-inference) — closes all 4 residuals at ~130 LOC; rejected A+B-only (leaves 1) and A+B+C-inference (~250 LOC, MODERATE-HIGH risk). |
+| ~22:10Z | `/exploring-options` Round 2: documentation. Decision: new ADR 0006 codifying Layer 3 (pairing rules) as the third correctness layer alongside ADR 0005's identity + scope. |
+| ~22:30Z | Implementation reaches first dogfood: 4 → 2 warnings. **Pattern D emerges**: the residual 2 are metric-axis confusion (`"AUPRC delta suggests: AUROC is 0.383"` — wrong metric picked up by proximity). Added as fourth rule (symmetric to detector-axis pairing). |
+| ~22:45Z | Three tactical calibrations: (a) Pattern A intervening-value check now uses v1.1.0's `excluded_ranges` (CI brackets don't count as intervening); (b) Pattern B refactored to "last possessive within 30 chars" instead of requiring an "is" verb; (c) Pattern C uses v1.2.0's `_crosses_sentence_boundary` to prevent paragraph-crossing suppression bleed. |
+| ~22:55Z | Override-bypass architecture: Pattern A/B now set `pairing_confirmed_pos` to BYPASS the proximity-based detector pairing when they confirm THIS binding's detector (fixed the bug where override + proximity disagreed). |
+| ~23:00Z | **v1.3.0 ships** — commit `4c2742e`. Consumer dogfood: **4 → 0 warnings**. Combined v1.0.5 → v1.3.0: 95 → 0 (-100%). |
+
+End-to-end from #81 filing to v1.3.0 ship: ~1.5 hours.
+
+### Layer 3 architecture (per ADR 0006)
+
+Audit validators now have a three-layer correctness model:
+
+| Layer | Dimension | Mechanism | Release |
+|---|---|---|---|
+| 1 | Identity | `BindingKey` structured keys | v1.1.0 |
+| 2 | Scope | Content-type + context-keyword filters (`scope='narrative'`) | v1.1.0 + v1.2.0 |
+| **3** | **Pairing** | **Override / suppress proximity-based pairing under grammar cues** | **v1.3.0** |
+
+Four Layer 3 rules ship in v1.3.0 (all under `scope='narrative'`, no new public kwargs):
+
+- **Pattern A**: `"for {detector}"` postfix → override detector pairing (with intervening-value guard via v1.1.0 exclusion-ranges).
+- **Pattern B**: `"{detector}'s"` possessive → override detector pairing (last possessive within 30 chars of value).
+- **Pattern C**: `"for the {trained|frozen|baseline|all|both|other} detectors"` group subject → suppress candidate (with sentence-boundary guard via v1.2.0 sentence-positions).
+- **Pattern D**: metric-axis nearest-pairing (symmetric to detector-axis). Pre-collects ALL metric positions across consumer-supplied `metric_aliases` keys, not just binding-derived metrics.
+
+### Dogfood evidence (compounded across the four rounds)
+
+| Release | Configuration | Warnings on consumer HEAD | Reduction vs v1.0.5 |
+|---|---|---|---|
+| v1.0.5 | Legacy 2-tuple, no scope filter | 95 | — (baseline) |
+| v1.1.0 | BindingKey + scope='narrative' content-type | 23 | -76% |
+| v1.2.0 | + T1–T4 context filters | 7 | -93% |
+| **v1.3.0** | + Patterns A/B/C/D pairing rules | **0** | **-100%** |
+
+### Round 14 outcome
+
+- ✅ **v1.3.0 shipped** (commit `4c2742e`, PyPI live).
+- ✅ **#81 auto-closed** by `closes #81` directive on the v1.3.0 tag.
+- ✅ **0 open issues** on the eval-toolkit repo post-#81.
+- ✅ **ADR 0006 committed** — Layer 3 pairing rules formally codified
+  as the third correctness layer.
+- ✅ **Consumer HARD-gate promotion now credible.** With 0 residual
+  warnings, the consumer can promote `audit_value_bindings` from
+  SOFT to HARD bundled with `audit_citation_alignment` per their
+  v1.3.8 plan.
+
+### The post-v1.0 consumer-feedback cycle (R11 → R14)
+
+The four post-v1.0 rounds form a complete consumer-feedback loop:
+
+| Round | Driver | Cycle time | Closure |
+|---|---|---|---|
+| R11 | Consumer adopts v1.0.x audit-validator family | days | v1.0.4 (3 validators shipped) |
+| R12 | Consumer files #80 (BINDINGS slice-axis) | ~2 hours | v1.1.0 + v1.2.0 (`BindingKey` + scope='narrative') |
+| R13 | v1.1.0 dogfood surfaces context-filter gaps | ~1 hour | v1.2.0 (T1–T4 context filters; 95 → 23) |
+| R14 | Consumer files #81 (cross-detector list-grammar) | ~1.5 hours | v1.3.0 (Layer 3 pairing rules; 4 → 0) |
+
+The pattern is consistent: consumer surfaces a structural gap →
+upstream files an ADR-driven design → ships within hours →
+consumer adopts same-day. The 100% noise reduction over four
+rounds validates the iterative consumer-feedback model as a
+substitute for heavyweight multi-LLM gate audits (which closed at
+v1.0 per ADR 0003).
+
+### Multi-LLM audit cadence after R14
+
+Unchanged from R11/R12/R13: no multi-LLM cross-review for
+consumer-feedback rounds. R14's design was informed by
+`/exploring-options` (2 rounds) + Pattern D emergence during dogfood
++ 3 tactical calibrations during implementation. Multi-LLM dispatch
+remains reserved for v2.0 design cycles or major-severity findings.
+
+### Cross-references
+
+- [ADR 0006](adr/0006-pairing-rules-for-cross-detector-list-grammar.md) — Layer 3 codification.
+- v1.3.0 CHANGELOG entry — full per-pattern detail with consumer adoption path.
+- `tests/test_audit_value_bindings.py` — 43 tests (36 from v1.2.0 + 7 for Patterns A/B/C/D + backward-compat + combined dogfood).
+
+---
