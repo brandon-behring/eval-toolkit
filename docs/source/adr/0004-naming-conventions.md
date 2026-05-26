@@ -139,10 +139,12 @@ in the PR description or rename to the canonical name.
 Protocols follow `PascalCase` per PEP 8 and are **named semantically**
 per [ADR 0003](0003-stability-contract-and-gate3-methodology.md) §1.
 There is no forced uniform suffix — the *contract* is the method
-shape, not the name shape. The 9 strict Tier-2 Protocols + 1 opt-in
+shape, not the name shape. The 10 strict Tier-2 Protocols + 1 opt-in
 named per their role: `Scorer`, `LeakageCheck`, `Splitter`,
 `ThresholdSelector`, `DatasetLoader`, `MetricSpec`, `TextTransform`,
-`MetaLearner`, `Probe`, `Versioned`.
+`MetaLearner`, `Probe`, `SimilarityStrategy`, `Versioned`. (Note:
+`SimilarityStrategy` promoted from "pre-v0.7 internal" to strict
+Tier-2 at v1.0.2 per RC2 reconciliation; #76.)
 
 ### D7 — TypeVars
 

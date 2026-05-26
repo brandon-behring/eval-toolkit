@@ -32,7 +32,8 @@ format changes.
 ├─ Tier 2 ─ Protocol-based orchestration ────────────────┤
 │  Scorer / SliceAwareScorer / LeakageCheck / Splitter   │
 │  ThresholdSelector / DatasetLoader / MetricSpec        │
-│  MetaLearner / Probe / TextTransform (9 strict)        │
+│  MetaLearner / Probe / TextTransform /                 │
+│  SimilarityStrategy (10 strict)                        │
 │  Versioned (opt-in: per-object versions in manifest)   │
 ├─ Tier 1 ─ Functional core ─────────────────────────────┤
 │  pr_auc / roc_auc / ECE variants / Brier / bootstrap_ci│

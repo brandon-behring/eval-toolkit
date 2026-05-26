@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-05-26 — #76 cleanup batch closes (RC2 + RC3 + F-metrics-1/3/4)
+
+Closes the GH #76 v1.0.1 cleanup tracker. All 6 items shipped across
+v1.0.1 (RC4) and v1.0.2 (this release). All P3, all NON-BREAKING.
+
+### Changed (Tier-2 ADDITIVE: contract clarification only)
+
+- **RC2** (#76) — `SimilarityStrategy` Protocol promoted from
+  "pre-v0.7 internal interface" (prose framing only) to formal
+  10th strict Tier-2 Protocol per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md).
+  Aligns prose surfaces (README, extending.md, strict_tier2_protocols.md,
+  api/protocols.md, ADR 0004 §D6, roadmap.md) with the contract
+  already locked in `tests/golden/public_api/snapshot.json` +
+  `src/eval_toolkit/__init__.py:_EXPORTS` since v1.0.0. **No code
+  change — documentation-only reconciliation.** Strict-Tier-2 count
+  goes 9 → 10 (+ 1 opt-in `Versioned`).
+
+### Fixed
+
+- **RC3** (#76) — `tests/test_harness_folded.py::test_evaluate_folded_reseed_splitter_varies_partitions`
+  test hardening. Previous assertions covered count + key existence
+  only; a regression silently reusing the splitter (R8-C1 pre-fix
+  behavior) could still pass. v1.0.2 adds row-content comparison:
+  replays `reseed_splitter` against the splitter for `seed=1` vs
+  `seed=2` and asserts fold-0 test partitions differ via feature-text
+  set membership (robust to `_slice_subset`'s `reset_index(drop=True)`
+  via stable text-column identifiers).
+
+- **F-metrics-1** (#76) — `brier_score` docstring input-domain clarity.
+  Added explicit "Input domain" Notes subsection clarifying binary
+  labels in `{0, 1}` + calibrated probabilities in `[0, 1]` are
+  required; raw logits or unbounded ranking scores pass the finiteness
+  check but produce out-of-range MSE that misrepresents calibration
+  quality. Includes calibration-applying recipe pointer.
+
+- **F-metrics-3** (#76) — `expected_calibration_error` docstring
+  uniform-scores note. Added explicit Notes subsection documenting
+  that constant `y_score` returns 0.0 (per-bin formula trivially
+  satisfied) but is semantically misleading — uninformative scorers
+  look "perfectly calibrated" despite zero discriminative power.
+  Callers should filter constant inputs before ECE.
+
+- **F-metrics-4** (#76) — `brier_score` docstring single-class
+  edge-case explicit. Added Notes subsection with closed-form
+  expressions for all-zeros (`BS = mean(p²)`) and all-ones
+  (`BS = mean((1-p)²)`) cases. Explicit confirmation that
+  per-slice degenerate-class evaluation is supported (unlike
+  PR-AUC / ROC-AUC).
+
 ## [1.0.1] — 2026-05-25 — audit_citation_alignment + RC4 docs polish
 
 First v1.x patch release. Ships the `audit_citation_alignment` validator

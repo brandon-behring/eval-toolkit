@@ -162,6 +162,29 @@ def test_evaluate_folded_reseed_splitter_varies_partitions() -> None:
     assert "seed=1/fold=0" in fold_ids
     assert "seed=2/fold=0" in fold_ids
 
+    # R10-RC3 v1.0.2 hardening (#76): the previous assertions covered
+    # COUNT + key existence but did NOT verify the actual partition
+    # indices differ across seeds — a regression that silently reused
+    # the splitter (R8-C1 pre-fix behavior) could still pass. Directly
+    # verify the reseed_splitter callback yields different partitions
+    # by replaying it against the splitter.
+    splitter = StratifiedKFoldSplitter(k=2, seed=42)
+    splits_seed_1 = list(dataclasses.replace(splitter, seed=1).iter_folds(parent, groups=None))
+    splits_seed_2 = list(dataclasses.replace(splitter, seed=2).iter_folds(parent, groups=None))
+    # _slice_subset resets the child df index to [0..n-1], so compare
+    # the underlying text feature values instead (stable across the
+    # reset_index drop). Each child slice's `text` column carries the
+    # original row labels.
+    fold_0_test_texts_seed_1 = set(splits_seed_1[0]["test"].df["text"].tolist())
+    fold_0_test_texts_seed_2 = set(splits_seed_2[0]["test"].df["text"].tolist())
+    # Different seeds → different fold-0 test partitions (the whole
+    # point of reseed_splitter).
+    assert fold_0_test_texts_seed_1 != fold_0_test_texts_seed_2, (
+        "reseed_splitter callback failed to vary partitions: "
+        f"seed=1 fold=0 texts={sorted(fold_0_test_texts_seed_1)[:5]}... "
+        f"seed=2 fold=0 texts={sorted(fold_0_test_texts_seed_2)[:5]}..."
+    )
+
 
 @pytest.mark.unit
 def test_evaluate_folded_single_seed_no_deprecation_warning() -> None:

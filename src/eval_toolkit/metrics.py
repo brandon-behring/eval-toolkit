@@ -792,6 +792,20 @@ def expected_calibration_error(
     empirical positive rate in the bin, and :math:`\\mathrm{conf}` is the
     mean predicted score.
 
+    **Uniform / uninformative scores** (F-metrics-3 v1.0.2 clarity pass):
+    when ``y_score`` is constant (e.g., ``[0.5] * n`` — an uninformative
+    detector), this function returns ``0.0`` regardless of the true label
+    distribution. That's technically correct per the formula —
+    :math:`|\\mathrm{acc}(B_m) - \\mathrm{conf}(B_m)|` measures bin-level
+    calibration, and a single occupied bin with ``conf = base rate``
+    achieves perfect calibration locally. But it is semantically
+    misleading: an uninformative scorer looks "perfectly calibrated"
+    even though it has zero discriminative power. **Callers should
+    detect and filter uninformative inputs before passing to ECE** —
+    e.g., reject when ``np.unique(y_score).size == 1`` or when the
+    score variance is below a domain-specific threshold. Use
+    :func:`brier_score` or :func:`pr_auc` for resolution-aware metrics.
+
     References
     ----------
     .. [1] DeGroot, M. H. & Fienberg, S. E. "The comparison and evaluation of
@@ -1239,6 +1253,30 @@ def brier_score(
     Notes
     -----
     .. math:: \mathrm{BS} = \frac{1}{n} \sum_i (p_i - y_i)^2
+
+    **Input domain** (F-metrics-1 v1.0.2 clarity pass): ``y_true`` must
+    be binary labels in ``{0, 1}`` (other label values raise
+    ``ValueError``). ``y_score`` must be calibrated probabilities in
+    ``[0, 1]`` — raw logits or unbounded ranking scores will pass the
+    finiteness check but produce an out-of-range MSE that misrepresents
+    calibration quality. If your scorer produces logits, apply
+    sigmoid / softmax / a fitted calibrator (see
+    :mod:`eval_toolkit.calibration`) before passing to ``brier_score``.
+
+    **Single-class behavior** (F-metrics-4 v1.0.2 clarity pass): unlike
+    PR-AUC / ROC-AUC, ``brier_score`` is well-defined when ``y_true``
+    is all-zeros or all-ones — it degenerates to the MSE around the
+    constant class label. Specifically:
+
+    - All-zeros: :math:`\mathrm{BS} = \frac{1}{n} \sum_i p_i^2` —
+      forecasting any positive probability incurs squared-error loss.
+    - All-ones: :math:`\mathrm{BS} = \frac{1}{n} \sum_i (1 - p_i)^2`
+      — forecasting low probability incurs squared-error loss.
+
+    This is the deliberate Brier-as-strict-proper-scoring-rule behavior
+    (Brier 1950). Per-slice degenerate-class evaluation is supported
+    via the ``empty_strategy`` parameter for ``n=0`` only; non-empty
+    single-class slices score normally.
 
     See Also
     --------

@@ -93,7 +93,7 @@ Highlights since v0.33:
 
 State-of-the-toolkit:
 
-- 9 strict Tier-2 Protocols (`Scorer`, `LeakageCheck`, `Splitter`,
+- 10 strict Tier-2 Protocols (`Scorer`, `LeakageCheck`, `Splitter`,
   `ThresholdSelector`, `DatasetLoader`, `MetricSpec`, `MetaLearner`,
   `Probe`, `TextTransform`) + 1 opt-in (`Versioned`). The
   `tests/test_public_api.py` drift guard captures Protocol method

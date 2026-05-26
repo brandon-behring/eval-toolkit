@@ -11,14 +11,14 @@ into eval-toolkit's harness.
 > - **Tier 1 — functional core.** Pure functions on `(y_true, y_score)`
 >   arrays. No model coupling. Use this when you have predictions
 >   already and just want metrics + CIs.
-> - **Tier 2 — protocols.** Implement any of the 9 strict Tier-2
+> - **Tier 2 — protocols.** Implement any of the 10 strict Tier-2
 >   protocols (Scorer, LeakageCheck, Splitter, ThresholdSelector,
->   DatasetLoader, MetricSpec, MetaLearner, Probe, TextTransform; see
+>   DatasetLoader, MetricSpec, MetaLearner, Probe, TextTransform,
+>   SimilarityStrategy; see
 >   [`docs/source/api/strict_tier2_protocols.md`](api/strict_tier2_protocols.md))
->   when you want the harness to orchestrate. `SimilarityStrategy`
->   (documented below for reference) is a pre-v0.7 internal interface
->   used by `text_dedup`; it is NOT part of the v1.0 strict Tier-2
->   contract — implementations are free to evolve in v1.x.
+>   when you want the harness to orchestrate. Method shapes are frozen
+>   under the v1.x stability contract (per ADR 0003); additive
+>   subprotocols + new Protocols are permitted in v1.x minors.
 > - **Tier 3 — reproducibility scaffolding.**
 >   [`make_manifest`](api/manifest.md),
 >   [`set_global_seeds`](api/seeds.md),
@@ -339,12 +339,15 @@ print(f"keys={list(splits.keys())}  describe.name={loader.describe()['name']}")
 
 (similarity-strategy)=
 ## Implementing a `SimilarityStrategy`
-This Protocol predates v0.7.0; see
-[`text_dedup.py`](api/text_dedup.md)'s docstring and
-the existing reference impls (TfidfCosineStrategy,
-ExactNormalizedHashStrategy, EmbeddingCosineStrategy,
-JaccardNgramStrategy, MinHashLSHStrategy). The shape:
-`pairs_within(texts, k_neighbors)` → similarity / index arrays. Pluggable
+
+The 10th strict Tier-2 Protocol (RC2 v1.0.2 reconciliation; pre-v0.7
+vintage stabilized under the v1.x contract). See
+[`text_dedup.py`](api/text_dedup.md)'s docstring and the existing
+reference impls (`TfidfCosineStrategy`, `ExactNormalizedHashStrategy`,
+`EmbeddingCosineStrategy`, `JaccardNgramStrategy`, `MinHashLSHStrategy`).
+The shape: `pairs_within(texts, k_neighbors)` →
+`(similarities, indices)` arrays; `pairs_across(query, reference,
+k_neighbors)` for cross-corpus comparison. Pluggable
 backend for `near_dedup` and `cross_dedup` and (transitively)
 `NearDuplicateCheck` / `CrossSplitLeakageCheck`.
 

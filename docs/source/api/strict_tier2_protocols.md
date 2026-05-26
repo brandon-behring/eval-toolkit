@@ -1,6 +1,6 @@
 # Strict Tier-2 Protocols at v1.0
 
-This page enumerates the 9 strict Tier-2 Protocols + 1 opt-in Protocol
+This page enumerates the 10 strict Tier-2 Protocols + 1 opt-in Protocol
 that make up the v1.0 stability contract per
 [ADR 0003 — Stability contract and Gate 3 methodology](../adr/0003-stability-contract-and-gate3-methodology.md)
 §1. Method-signature changes on any of these require a SemVer-major
@@ -20,7 +20,7 @@ lives but are an internal detail; users should not depend on them
 unless they explicitly need a typing-only import in a constrained
 dependency-surface context.
 
-## The 9 strict Tier-2 Protocols (+ 1 opt-in)
+## The 10 strict Tier-2 Protocols (+ 1 opt-in)
 
 | Protocol | Canonical import | Source module | Concrete implementations |
 |---|---|---|---|
@@ -33,6 +33,7 @@ dependency-surface context.
 | {class}`~eval_toolkit.TextTransform` | `from eval_toolkit import TextTransform` | {mod}`eval_toolkit.protocols` | All 12 adversarial dataclasses (`ZeroWidthSpaceInjection`, `HomoglyphSubstitution`, `DiacriticInjection`, `WhitespaceInjection`, `CaseInjection`, `PunctuationInjection`, `BidiRTLInjection`, `TagStrippingInjection`, `SynonymSubstitution`, `TokenSplittingInjection`, `UnicodeNormalizationInjection`, `InvisibleCharsInjection`) + 3 preprocessing variants (`DelimitVariant`, `DatamarkVariant`, `EncodeVariant`) |
 | {class}`~eval_toolkit.MetaLearner` | `from eval_toolkit import MetaLearner` | {mod}`eval_toolkit.stacking` | `LogisticStacker` |
 | {class}`~eval_toolkit.Probe` | `from eval_toolkit import Probe` | {mod}`eval_toolkit.probes` | `ActivationDeltaProbe` |
+| {class}`~eval_toolkit.SimilarityStrategy` | `from eval_toolkit import SimilarityStrategy` | {mod}`eval_toolkit.text_dedup` | `ExactNormalizedHashStrategy`, `EmbeddingCosineStrategy`, `JaccardNgramStrategy`, `MinHashLSHStrategy`, `TfidfCosineStrategy` |
 
 **Opt-in Protocol** (additive on top of Tier-2):
 
@@ -46,7 +47,7 @@ The {mod}`eval_toolkit.protocols` module intentionally stays
 lightweight — it imports nothing heavy (no pandas, sklearn,
 matplotlib, or filesystem-oriented helpers), so consumers can type
 adapters in a constrained dependency-surface context. If
-{mod}`eval_toolkit.protocols` re-exported all 9 strict Tier-2
+{mod}`eval_toolkit.protocols` re-exported all 10 strict Tier-2
 Protocols, importing it would transitively pull in every heavy
 implementation module. The current design preserves the lightweight
 intent.
