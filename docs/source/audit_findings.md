@@ -884,3 +884,131 @@ remains reserved for v2.0 design cycles or major-severity findings.
 - `tests/test_audit_value_bindings.py` — 43 tests (36 from v1.2.0 + 7 for Patterns A/B/C/D + backward-compat + combined dogfood).
 
 ---
+
+## Round 15 (2026-05-26) — audit_citation_alignment Layer 2 + Layer 3 + ADR 0007 family-wide architecture
+
+**Not a multi-LLM gate-style audit.** Fifth consumer-feedback-driven
+round, opening the equivalent cycle for `audit_citation_alignment`
+that R11→R14 closed for `audit_value_bindings`. Consumer filed
+[eval-toolkit#82](https://github.com/brandon-behring/eval-toolkit/issues/82)
+concurrent with their v1.3.13 adoption: 188 residual warnings on
+`audit_citation_alignment`, same architectural-class gap (Layer 2 +
+Layer 3 context-awareness) that audit_value_bindings worked through
+across three releases.
+
+### Architectural insight: ADR 0007 generalizes the model
+
+ADR 0005 (Layer 1 + 2) and ADR 0006 (Layer 3) were originally
+framed as audit_value_bindings-specific. The v1.4.0 cycle adopting
+the same architecture for `audit_citation_alignment` revealed that
+the three-layer model is the canonical architecture for the
+audit-validator family — not just one validator. ADR 0007 codifies
+this family-wide.
+
+The v1.4.0 release also extracted shared narrative-prose helpers
+into private flat module `eval_toolkit/_narrative.py` (consistent
+with ADR 0001's `_rng.py`/`_parallel.py`/`_sweep.py` precedent).
+Both validators import from this module; future audit validators
+inherit the same primitives.
+
+### Three-layer model applied to audit_citation_alignment
+
+| Pattern | Layer | Mechanism |
+|---|---|---|
+| **β** | Layer 2 | Exclude citations inside markdown table rows, bracketed expressions, fenced code blocks (reuses v1.1.0 `_build_exclusion_ranges`). |
+| **γ** | Layer 3 | Category-keyword extraction window bounded by the SENTENCE containing the citation (reuses v1.2.0 `_sentence_boundary_positions`). |
+| **α** | Layer 3 | Multi-category set membership: when the sentence matches multiple category keywords (multi-topic prose), accept the citation if the ADR's actual category is in the set. |
+| **None-skip** | Layer 2 refinement | Defer (skip the citation) when `subject.category is None` — the consumer's category map can't classify the ADR. Symmetric to the existing `claim_category is None` skip from v1.0.1. |
+
+### Upstream design — `/exploring-options` 3 rounds + Pattern α generalization + None-skip emerged during dogfood
+
+| Time (UTC) | Event |
+|---|---|
+| ~21:30Z | Consumer files #82 documenting 3 prose patterns (α/β/γ) + 188-warning baseline. |
+| ~22:00Z | `/exploring-options` Round 1: scope. Decision: bundle Path A + Path B in v1.4.0 (one coherent release; patterns established). |
+| ~22:10Z | `/exploring-options` Round 2: helper sharing. Decision: extract to private flat module `_narrative.py`. |
+| ~22:20Z | `/exploring-options` Round 3: documentation. Decision: write ADR 0007 generalizing three-layer model to family. |
+| ~22:30Z | Implementation reaches first dogfood: 188 → 101 (46% reduction). Pattern β + γ + initial α (multi-citation only) firing. |
+| ~22:40Z | **Symmetric-None skip emerges**: dominant residual is `actual=None` cases (ADRs the consumer's category map can't classify). Symmetric to existing `claim=None` skip from v1.0.1. Added under `scope='narrative'` → 101 → 44. |
+| ~22:50Z | **Pattern α generalized**: extend from "multi-citation sentences only" to "any multi-topic sentence" (any sentence matching ≥2 category keywords). 44 → 37. |
+| ~22:55Z | Decision: ship at 37 rather than over-engineer. Above the #82 ≤20 target but a 5× reduction; residual 37 includes real misalignments worth consumer-triage + edge cases requiring parser-level understanding. |
+| ~23:00Z | **v1.4.0 ships** — commit `7c40490`. ADR 0007 codifies family-wide architecture. |
+
+End-to-end from #82 filing to v1.4.0 ship: ~1.5 hours.
+
+### Dogfood evidence (audit_citation_alignment cycle)
+
+| Release | Configuration | Warnings on consumer HEAD | Reduction vs v1.3.0 baseline |
+|---|---|---|---|
+| v1.3.0 (audit_citation_alignment with scope='all') | 188 | — | (baseline) |
+| **v1.4.0 (`scope='narrative'`)** | **37** | **-80%** | |
+
+The residual 37 is above the original #82 acceptance criterion
+(≤20) but represents a 5× reduction. Categorized:
+
+- **Real misalignments** consumer should triage (e.g., `ADR-025`
+  cited for a threshold claim when ADR-025 is the cost ADR —
+  could be a wrong-ADR bug or a multi-topic ADR not captured by
+  the consumer's category-keyword map).
+- **Single-topic-sentence edge cases**: Pattern α only fires for
+  multi-topic sentences (≥2 category keywords matched). Sentences
+  with one dominant topic + a cross-category ADR cite stay on the
+  legacy first-match check.
+- **Multi-topic ADRs** where the consumer's category map assigns
+  a single category but the ADR genuinely covers multiple
+  topics. Consumer-side category-map expansion would address
+  these.
+
+### Round 15 outcome
+
+- ✅ **v1.4.0 shipped** (commit `7c40490`, PyPI live).
+- ✅ **#82 auto-closed** by `closes #82` directive on the v1.4.0 tag.
+- ✅ **0 open issues** on the eval-toolkit repo post-#82.
+- ✅ **ADR 0007 committed** — three-layer architecture (identity +
+  scope + pairing) codified as canonical for ALL audit_*
+  validators. ADRs 0005/0006 now framed as family-wide via 0007.
+- ✅ **`_narrative.py` extracted** — shared narrative-prose
+  helpers; both validators import from one canonical location.
+  Signature-preserving refactor; all v1.3.0 tests pass unchanged.
+- ⚠ **Consumer HARD-gate promotion**: still a judgment call. The
+  residual 37 includes some real misalignments worth fixing in
+  consumer prose; HARD-gating now would block commits on those
+  lines. Consumer's v1.3.8 bundled-promotion plan should
+  proceed only after triaging the 37.
+
+### The post-v1.0 consumer-feedback cycle (R11 → R15)
+
+The five rounds form a complete library-first cycle for the
+audit-validator family:
+
+| Round | Driver | Cycle time | Closure |
+|---|---|---|---|
+| R11 | Consumer adopts v1.0.x audit-validator family | days | v1.0.4 (3 validators shipped) |
+| R12 | Consumer files #80 (BINDINGS slice-axis) | ~2h | v1.1.0 + v1.2.0 |
+| R13 | v1.1.0 dogfood surfaces context-filter gaps | ~1h | v1.2.0 |
+| R14 | Consumer files #81 (audit_value_bindings list-grammar) | ~1.5h | v1.3.0 (Layer 3) |
+| **R15** (this) | **Consumer files #82 (audit_citation_alignment scope+pairing)** | ~1.5h | **v1.4.0 (Layer 2 + 3 + ADR 0007)** |
+
+R11→R15 demonstrates the iterative consumer-feedback model as a
+substitute for heavyweight multi-LLM gate audits (closed at v1.0
+per ADR 0003). Each round delivered closure within hours of the
+consumer filing, with same-day adoption. ADR 0007 captures the
+architectural template; future audit validators inherit the
+three-layer model and ship in fewer cycles.
+
+### Multi-LLM audit cadence after R15
+
+Unchanged from R11–R14: no multi-LLM cross-review for
+consumer-feedback rounds. R15's design was informed by
+`/exploring-options` (3 rounds) + 2 dogfood-driven refinements
+(Pattern α generalization + symmetric-None skip). Multi-LLM
+dispatch remains reserved for v2.0 design cycles or major-
+severity findings.
+
+### Cross-references
+
+- [ADR 0007](adr/0007-three-layer-architecture-for-audit-validators.md) — family-wide three-layer codification.
+- v1.4.0 CHANGELOG entry — full per-pattern detail with consumer adoption path.
+- `tests/test_audit_citation_alignment.py` — 18 tests (12 from v1.0.1 + 6 for v1.4.0 Patterns α/β/γ + backward-compat + shared-helpers + combined dogfood).
+
+---
