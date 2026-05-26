@@ -67,6 +67,14 @@ _EXPORTS: dict[str, str] = {
     "ValueBindingsReport": "eval_toolkit.audit_value_bindings",
     "Violation": "eval_toolkit.audit_value_bindings",
     "validate_reader_value_bindings": "eval_toolkit.audit_value_bindings",
+    # --- audit_sister_doc_concept_drift ---
+    # Flat-module per ADR 0001. Closes #72. Motivated by consumer T1
+    # definition contradiction across sister reproducibility docs.
+    # Requires [embeddings] extra (lazy resolution; embedder kwarg
+    # lets consumers swap in any callable).
+    "DriftCluster": "eval_toolkit.audit_sister_doc_concept_drift",
+    "SisterDocDriftReport": "eval_toolkit.audit_sister_doc_concept_drift",
+    "validate_sister_doc_concept_drift": "eval_toolkit.audit_sister_doc_concept_drift",
     # --- losses ---
     "RecallAtLowFPR": "eval_toolkit.losses",
     # --- preprocessing ---

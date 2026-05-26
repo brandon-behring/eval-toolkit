@@ -41,6 +41,7 @@
     "DedupReport",
     "DelimitVariant",
     "DiacriticInjection",
+    "DriftCluster",
     "EmbeddingCosineStrategy",
     "EncodeVariant",
     "EvalSlice",
@@ -106,6 +107,7 @@
     "SimilarityAuditReport",
     "SimilarityStrategy",
     "SingleSliceLoader",
+    "SisterDocDriftReport",
     "SliceAwareScorer",
     "SourceDisjointKFoldSplitter",
     "SourceRoleRecord",
@@ -247,6 +249,7 @@
     "validate_prediction_artifact_ref",
     "validate_reader_value_bindings",
     "validate_results",
+    "validate_sister_doc_concept_drift",
     "validate_source_roles",
     "walk_path",
     "wilson_interval",
@@ -574,6 +577,14 @@
       "doc_first_line": "Insert combining diacritic marks after random characters.",
       "kind": "class",
       "signature": "(ratio: 'float' = 0.3, seed: 'int' = 42, name: 'str' = 'diacritic') -> None"
+    },
+    "DriftCluster": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "A concept token whose occurrences split into >1 semantic cluster.",
+      "kind": "class",
+      "signature": "(token: 'str', sentences: 'tuple[tuple[Path, int, str], ...]', divergence_score: 'float') -> None"
     },
     "EmbeddingCosineStrategy": {
       "bases": [
@@ -1152,6 +1163,14 @@
       "kind": "class",
       "signature": "(slice_: 'EvalSlice', name: 'str' = '', description: 'str' = '') -> None"
     },
+    "SisterDocDriftReport": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Result of :func:`validate_sister_doc_concept_drift`.",
+      "kind": "class",
+      "signature": "(drift_clusters: 'tuple[DriftCluster, ...]', consistent_tokens: 'tuple[str, ...]', coverage: 'float') -> None"
+    },
     "SliceAwareScorer": {
       "bases": [
         "Scorer",
@@ -1401,7 +1420,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'1.0.3'"
+      "value": "'1.0.4'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1957,6 +1976,11 @@
       "doc_first_line": "Validate a serialized ``RunResult`` payload against ``results.v1.json``.",
       "kind": "function",
       "signature": "(payload: 'Mapping[str, object]') -> 'None'"
+    },
+    "validate_sister_doc_concept_drift": {
+      "doc_first_line": "Validate cross-doc semantic consistency of concept token definitions.",
+      "kind": "function",
+      "signature": "(*, files: 'Sequence[Path | str]', concept_tokens: 'Sequence[str]', embedder: 'Callable[[Sequence[str]], np.ndarray] | None' = None, similarity_threshold: 'float' = 0.7, context_window_sentences: 'int' = 1) -> 'SisterDocDriftReport'"
     },
     "validate_source_roles": {
       "doc_first_line": "Return validation errors for generic source-role records.",

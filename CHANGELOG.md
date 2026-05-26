@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] — 2026-05-26 — `audit_sister_doc_concept_drift` module (closes #72)
+
+Tier-2 ADDITIVE — third (and final) member of the audit-validator
+family. Flat-module per [ADR 0001](docs/source/adr/0001-flat-module-layout.md).
+Family complete: `audit_citation_alignment` (v1.0.1) + `audit_value_bindings`
+(v1.0.3) + `audit_sister_doc_concept_drift` (this release).
+
+### Added
+
+- **`audit_sister_doc_concept_drift` module** exporting
+  `validate_sister_doc_concept_drift()` + `DriftCluster` +
+  `SisterDocDriftReport` as Tier 1 STRICT (per
+  [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md)).
+  Catches the bug class where two linked sister docs reference the
+  same concept token (e.g., `T1`, `manifest v3`) but the
+  surrounding-sentence definitions semantically disagree.
+  Cross-doc semantic drift survives lychee (links resolve), anchor
+  audits (anchors exist), and numeric audits (qualitative prose).
+- Algorithm: per concept_token, scan all files for occurrences;
+  extract surrounding-sentence context (`context_window_sentences`);
+  embed each snippet via the supplied `embedder` (default lazily
+  routes to `make_minilm_embedder()` — requires `[embeddings]`
+  optional extra); cluster via single-linkage cosine similarity at
+  `similarity_threshold` (default 0.7); tokens with >1 cluster are
+  flagged as `DriftCluster`.
+- The `embedder: Callable[[Sequence[str]], np.ndarray] | None`
+  parameter matches the existing
+  `EmbeddingCosineStrategy.embedder` Protocol — consumers can pass
+  any embedder (BGE, E5, OpenAI, or a mock for tests). Default
+  `None` defers `sentence_transformers` import to call-time
+  (`[embeddings]` extra is required only when caller doesn't supply
+  their own embedder).
+- Motivating bug class: consumer audit found
+  `docs/REPRODUCIBILITY.md:85` defines `T1` as "full canonical
+  re-eval (GPU; A100 80GB)" while `WRITEUP/reproducibility.md:33`
+  defines `T1` as "smoke (laptop, $0, ~10 min)" — the two docs
+  cross-link as "Aggregator docs" so a reviewer following the link
+  lands on contradictory definitions.
+- 13 tests at `tests/test_audit_sister_doc_concept_drift.py` using a
+  deterministic mock embedder (no `sentence_transformers` dependency
+  for unit tests). Covers: seed-case T1 drift, consistent definition
+  across files, single-occurrence consistency, unreferenced-token
+  coverage tracking, multi-token mixed (T0 + T1 + T3), threshold
+  sensitivity, whole-word boundary (`T1` vs `T10` vs `t1`), context
+  window scope, empty inputs, 3-way drift, frozen-dataclass
+  invariants, lazy default-embedder import. Closes #72.
+
+### Audit-validator family complete
+
+| Validator | Released | Issue |
+|---|---|---|
+| `audit_citation_alignment` | v1.0.1 | #73 |
+| `audit_value_bindings` | v1.0.3 | #71 |
+| `audit_sister_doc_concept_drift` | v1.0.4 (this release) | #72 |
+
+All three follow the flat-module convention (ADR 0001), closed-config
+pattern (consumer supplies the auditable surface; validator owns the
+parsing+matching logic; ADR 0002), and Tier 1 STRICT top-level
+exports per ADR 0003. Consumer adoption pattern is the same across
+all three: thin `scripts/audit_<name>.py` CLI wrapper invoking the
+upstream validator.
+
 ## [1.0.3] — 2026-05-26 — `audit_value_bindings` module (closes #71)
 
 Tier-2 ADDITIVE — second member of the audit-validator family
