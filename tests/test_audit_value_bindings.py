@@ -991,3 +991,269 @@ def test_sentence_boundary_helper_respects_abbreviations(tmp_path: Path) -> None
     text2 = "Score 0.5 is the floor. Under it lies LoRA."
     pos2 = _sentence_boundary_positions(text2)
     assert len(pos2) == 2  # "Score 0.5 is the floor." and "Under it..."
+
+
+# ---------------------------------------------------------------------------
+# v1.3.0: Layer 3 pairing rules per ADR 0006 (Patterns A/B/C/D).
+# Closes issue #81 — cross-detector list-grammar + metric-axis
+# nearest-pairing. All four rules activate ONLY when scope="narrative".
+# Consumer dogfood acceptance: 4 → 0 warnings on
+# prompt-injection-detection-submission HEAD.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_pattern_a_for_postfix_overrides_proximity(tmp_path: Path) -> None:
+    """Pattern A: 'for {detector}' postfix re-pairs value to that detector.
+
+    Catches consumer's WRITEUP_PAPER.md:304 pattern: 'versus 0.364 [...]
+    for the frozen probe and 0.291 [...] for TF-IDF + LR' — under
+    proximity-only pairing, 0.291 would attribute to frozen probe
+    (nearer prior mention), but the 'for TF-IDF + LR' postfix is
+    authoritative. Synthetic prose mirrors the consumer's structure:
+    the postfix is the dominant binding signal; no delta keywords
+    immediately adjacent to the value (which would otherwise be
+    handled by T1 or T3).
+    """
+    file = _write(
+        tmp_path,
+        "POSTFIX.md",
+        # Two values introduced by parallel postfix constructs. Under
+        # proximity-only pairing, 0.293 attributes to TF-IDF (the
+        # earlier detector mention). Pattern A's postfix override
+        # re-pairs it to LoRA via "for the LoRA model".
+        "Pooled OOD AUPRC: 0.364 for the TF-IDF baseline and 0.293 for the LoRA model.",
+    )
+    bindings = {
+        BindingKey("tf-idf + lr", "direct_val_auprc", "any"): 0.364,
+        BindingKey("lora", "direct_val_auprc", "any"): 0.293,
+    }
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases={"tf-idf + lr": [r"TF-IDF"], "lora": [r"LoRA"]},
+        metric_aliases={"direct_val_auprc": [r"AUPRC"]},
+        scope="narrative",
+    )
+    # Both values match their correct detectors via Pattern A override.
+    assert r_nar.violations == ()
+    matched_by_detector = {(m.detector, m.value) for m in r_nar.matched}
+    assert ("tf-idf + lr", 0.364) in matched_by_detector
+    assert ("lora", 0.293) in matched_by_detector
+
+
+@pytest.mark.unit
+def test_pattern_b_possessive_overrides_proximity(tmp_path: Path) -> None:
+    """Pattern B: "{detector}'s" possessive re-pairs value to possessor.
+
+    Catches consumer's RESULTS.md:171 pattern: "LoRA's pooled OOD AUROC
+    is 0.383 against frozen probe's 0.515" — both possessives
+    immediately precede their values; without Pattern B, the proximity
+    rule would mis-attribute under cross-detector confusion.
+    """
+    file = _write(
+        tmp_path,
+        "POSSESSIVE.md",
+        "LoRA's pooled OOD AUROC is 0.383 against frozen probe's 0.515.",
+    )
+    bindings = {
+        BindingKey("LoRA", "AUROC", "pooled_ood"): 0.383,
+        BindingKey("frozen_probe", "AUROC", "pooled_ood"): 0.515,
+    }
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases={"LoRA": [r"LoRA"], "frozen_probe": [r"frozen probe"]},
+        metric_aliases={"AUROC": [r"AUROC"]},
+        slice_aliases={"pooled_ood": [r"pooled OOD"]},
+        scope="narrative",
+    )
+    assert r_nar.violations == ()
+    matched_by_detector = {(m.detector, m.value) for m in r_nar.matched}
+    assert ("LoRA", 0.383) in matched_by_detector
+    assert ("frozen_probe", 0.515) in matched_by_detector
+
+
+@pytest.mark.unit
+def test_pattern_c_group_subject_suppresses(tmp_path: Path) -> None:
+    """Pattern C: "for the {trained|frozen|...} detectors" suppresses the value.
+
+    Catches consumer's README.md:71 pattern: '0.38 AUROC for the trained
+    detectors' — the value belongs to a multi-detector group, not a
+    single canonical binding. v1.3.0 suppresses the candidate (v1.4.0+
+    may attempt multi-detector inference per ADR 0006).
+    """
+    file = _write(
+        tmp_path,
+        "GROUP.md",
+        # 0.38 follows "for the trained detectors" group-subject phrase.
+        # The frozen probe binding (0.515) shouldn't be flagged against
+        # 0.38 even though frozen probe is mentioned nearby.
+        "Generalization gap: 0.38 AUROC for the trained detectors; frozen probe sits higher.",
+    )
+    bindings = {BindingKey("frozen_probe", "AUROC", "pooled_ood"): 0.515}
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases={"frozen_probe": [r"frozen probe"]},
+        metric_aliases={"AUROC": [r"AUROC"]},
+        slice_aliases={"pooled_ood": [r"pooled OOD", r"cross-family"]},
+        scope="narrative",
+    )
+    # No violations: 0.38 was suppressed by Pattern C.
+    assert r_nar.violations == ()
+
+
+@pytest.mark.unit
+def test_pattern_d_metric_nearest_pairing(tmp_path: Path) -> None:
+    """Pattern D: nearest metric mention overrides window-based metric proximity.
+
+    Catches consumer's RESULTS.md:171 pattern: "than the AUPRC delta
+    suggests: ... AUROC is 0.383" — AUPRC appears in the window but
+    AUROC is the metric semantically owning 0.383. Pattern D pairs
+    each value with the nearest metric mention by text-order.
+    """
+    file = _write(
+        tmp_path,
+        "METRIC.md",
+        # The AUPRC binding (0.293) should NOT be flagged against 0.383
+        # because the nearest metric to 0.383 is AUROC, not AUPRC.
+        "Sharper than the AUPRC delta suggests: LoRA's pooled OOD AUROC is 0.383.",
+    )
+    bindings = {BindingKey("LoRA", "AUPRC", "pooled_ood"): 0.293}
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases={"LoRA": [r"LoRA"]},
+        metric_aliases={"AUPRC": [r"AUPRC"], "AUROC": [r"AUROC"]},
+        slice_aliases={"pooled_ood": [r"pooled OOD"]},
+        scope="narrative",
+    )
+    # No violation: 0.383's nearest metric is AUROC, not AUPRC.
+    # Pattern D filters this out before the value comparison.
+    assert r_nar.violations == ()
+
+
+@pytest.mark.unit
+def test_pattern_a_unknown_alias_falls_through(tmp_path: Path) -> None:
+    """Pattern A regression: "for X" where X isn't a known detector → no override.
+
+    The validator must fall back to proximity-based pairing when the
+    postfix names an unknown alias. Confirms the override is opt-in
+    via the alias dict, not blanket suppression.
+    """
+    file = _write(
+        tmp_path,
+        "UNKNOWN.md",
+        "TF-IDF reaches 0.974 AUPRC for the calibration check.",
+    )
+    bindings = {BindingKey("tf-idf + lr", "direct_val_auprc", "any"): 0.971}
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases={"tf-idf + lr": [r"TF-IDF"]},
+        metric_aliases={"direct_val_auprc": [r"AUPRC"]},
+        scope="narrative",
+    )
+    # "calibration check" isn't a detector → Pattern A doesn't fire.
+    # Proximity rule pairs 0.974 with TF-IDF → flagged as violation.
+    assert len(r_nar.violations) == 1
+    assert r_nar.violations[0].found_value == 0.974
+    assert r_nar.violations[0].detector == "tf-idf + lr"
+
+
+@pytest.mark.unit
+def test_v130_pairing_rules_scope_all_unchanged(tmp_path: Path) -> None:
+    """scope='all' regression: Layer 3 pairing rules MUST be inactive.
+
+    Backward-compat assertion: a consumer on legacy scope='all' sees
+    the same false-positive behavior they saw on v1.2.0. Uses the
+    consumer's actual RESULTS.md:171 prose verbatim (cross-detector
+    list-grammar + metric-axis confusion) — under scope='narrative'
+    the v1.3.0 rules suppress the false positives; under scope='all'
+    they fire.
+    """
+    file = _write(
+        tmp_path,
+        "ALL_MODE.md",
+        # Verbatim consumer prose excerpt. Under scope='all', the
+        # validator wrongly pairs 0.515 (frozen probe's AUROC) with the
+        # frozen_probe AUPRC binding because metric proximity finds
+        # "AUPRC" earlier in the line.
+        (
+            "Sharper than the AUPRC delta suggests: LoRA's pooled OOD AUROC "
+            "is 0.383 against frozen probe's 0.515."
+        ),
+    )
+    bindings = {BindingKey("frozen_probe", "AUPRC", "pooled_ood"): 0.364}
+    r_all = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases={"frozen_probe": [r"frozen probe"]},
+        metric_aliases={"AUPRC": [r"AUPRC"], "AUROC": [r"AUROC"]},
+        slice_aliases={"pooled_ood": [r"pooled OOD"]},
+        scope="all",
+    )
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases={"frozen_probe": [r"frozen probe"]},
+        metric_aliases={"AUPRC": [r"AUPRC"], "AUROC": [r"AUROC"]},
+        slice_aliases={"pooled_ood": [r"pooled OOD"]},
+        scope="narrative",
+    )
+    # Under scope='all': layer-3 OFF — the validator's AUPRC alias
+    # match (from "AUPRC delta") pairs 0.515 with the AUPRC binding,
+    # producing a violation. Backward compat: same as v1.2.0.
+    assert len(r_all.violations) > len(r_nar.violations)
+    # Under scope='narrative': Pattern D (metric-axis nearest-pairing)
+    # correctly identifies AUROC as the nearest metric for 0.515, so
+    # the AUPRC binding doesn't flag.
+    assert r_nar.violations == ()
+
+
+@pytest.mark.unit
+def test_combined_consumer_residuals_resolve(tmp_path: Path) -> None:
+    """Combined dogfood: all 3 of #81's documented residual patterns resolve under v1.3.0.
+
+    Synthesized excerpts from the consumer's HEAD prose; under
+    scope='narrative' with the v1.3.0 Layer 3 rules, all canonical
+    bindings should MATCH (not flag) the correct values.
+    """
+    file = _write(
+        tmp_path,
+        "DOGFOOD.md",
+        (
+            # Pattern A — "for X" postfix
+            "Pooled OOD AUPRC: 0.364 for the frozen probe and 0.291 for TF-IDF + LR.\n\n"
+            # Pattern B + D — possessive + metric-axis confusion
+            "LoRA's pooled OOD AUROC is 0.383 against frozen probe's 0.515.\n\n"
+            # Pattern C — group subject
+            "Cross-family AUROC: 0.38 for the trained detectors; frozen probe gap is 0.91.\n"
+        ),
+    )
+    bindings = {
+        BindingKey("tf-idf + lr", "AUPRC", "pooled_ood"): 0.291,
+        BindingKey("frozen_probe", "AUPRC", "pooled_ood"): 0.364,
+        BindingKey("LoRA", "AUROC", "pooled_ood"): 0.383,
+        BindingKey("frozen_probe", "AUROC", "pooled_ood"): 0.515,
+    }
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases={
+            "tf-idf + lr": [r"TF-IDF \+ LR", r"TF-IDF"],
+            "LoRA": [r"LoRA"],
+            "frozen_probe": [r"frozen probe"],
+        },
+        metric_aliases={"AUPRC": [r"AUPRC"], "AUROC": [r"AUROC"]},
+        slice_aliases={"pooled_ood": [r"pooled OOD", r"cross-family", r"Cross-family"]},
+        scope="narrative",
+    )
+    # All 4 binding values should match cleanly with zero violations.
+    matched_vals = {m.value for m in r_nar.matched}
+    assert r_nar.violations == ()
+    assert 0.291 in matched_vals
+    assert 0.364 in matched_vals
+    assert 0.383 in matched_vals
+    assert 0.515 in matched_vals

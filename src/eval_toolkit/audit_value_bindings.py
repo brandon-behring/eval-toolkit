@@ -154,6 +154,51 @@ _DELTA_PATTERN: re.Pattern[str] = _compile_keyword_pattern(_DELTA_KEYWORDS)
 _FLOOR_PATTERN: re.Pattern[str] = _compile_keyword_pattern(_FLOOR_KEYWORDS)
 
 
+# v1.3.0 Layer 3 (pairing rules) per ADR 0006. Three rules that
+# override or suppress the proximity-based detector pairing under
+# explicit grammar cues:
+#
+# - Pattern A: "for {detector}" postfix → re-pair value to that
+#   detector (override). Built per-call via _build_postfix_pattern
+#   since it depends on the consumer's detector_aliases dict.
+# - Pattern B: "{detector}'s ... is {value}" possessive → re-pair
+#   value to the possessor (override). Built per-call via
+#   _build_possessive_pattern.
+# - Pattern C: "for the {trained|frozen|baseline|all|both|other}
+#   detectors" group subject → suppress the candidate value entirely
+#   (it's a group statement that doesn't bind to a single detector).
+#   Pattern is detector-independent so it compiles once at module
+#   load.
+
+# Group-subject adjectives that introduce a multi-detector statement.
+# When prose says "for the trained detectors", the following value
+# refers to a GROUP (LoRA + TF-IDF + ... whatever bindings exist),
+# not a single canonical detector. The validator can't infer which
+# specific detectors own the group value with positional heuristics,
+# so v1.3.0 suppresses the candidate rather than attempting multi-
+# detector inference (a v1.4.0+ candidate per ADR 0006).
+_GROUP_SUBJECT_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "trained",
+        "frozen",
+        "baseline",
+        "all",
+        "both",
+        "other",
+    }
+)
+
+# Module-level: detector-independent group-subject regex. Matches
+# "for the {trained|frozen|...} detectors" (with optional "the"; both
+# singular and plural "detector"/"detectors" tolerated).
+_GROUP_SUBJECT_PATTERN: re.Pattern[str] = re.compile(
+    r"\bfor\s+(?:the\s+)?(?:"
+    + "|".join(sorted(re.escape(kw) for kw in _GROUP_SUBJECT_KEYWORDS))
+    + r")\s+detectors?\b",
+    re.IGNORECASE,
+)
+
+
 @dataclass(frozen=True)
 class BindingKey:
     """Canonical identity for a `(detector, metric, slice)` measurement.
@@ -469,7 +514,13 @@ def validate_reader_value_bindings(
     slice_aliases_dict: dict[str, Sequence[str]] = dict(slice_aliases) if slice_aliases else {}
 
     detector_keys = sorted({k.detector for k in canonical_bindings})
-    metric_keys = sorted({k.metric for k in canonical_bindings})
+    # v1.3.0 Pattern D (metric-axis nearest-pairing) requires knowing
+    # ALL metrics that might appear in prose, not just bound metrics —
+    # e.g., when prose mentions AUROC near a value but only AUPRC is
+    # bound, Pattern D needs the AUROC pattern to correctly pair the
+    # value with the right metric. Union of binding metrics +
+    # consumer-supplied metric_aliases keys.
+    metric_keys = sorted({k.metric for k in canonical_bindings} | set(metric_aliases_dict.keys()))
     # Only compile slice patterns for non-"any" slice keys; "any"
     # signals legacy 2-tuple semantics (no slice scoping).
     slice_keys = sorted({k.slice for k in canonical_bindings if k.slice != "any"})
@@ -487,6 +538,43 @@ def validate_reader_value_bindings(
         for s in slice_keys
     }
     value_re = re.compile(value_pattern)
+
+    # v1.3.0 Layer 3 pairing rules (per ADR 0006). Built per-call
+    # because Patterns A and B depend on the consumer's detector
+    # aliases. `None` when scope="all" (legacy; rules don't fire).
+    postfix_pat: re.Pattern[str] | None = (
+        _build_postfix_pattern(detector_aliases_dict, detector_keys)
+        if scope == "narrative"
+        else None
+    )
+    possessive_pat: re.Pattern[str] | None = (
+        _build_possessive_pattern(detector_aliases_dict, detector_keys)
+        if scope == "narrative"
+        else None
+    )
+
+    # Inverse-alias index: alias-regex (string form) → canonical key.
+    # Used to resolve a matched postfix/possessive alias-group back to
+    # the canonical detector for override resolution. Each alias regex
+    # is keyed verbatim; the resolution path tries each canonical key's
+    # alias list + canonical-name fallback.
+    def _resolve_canonical_from_alias_match(alias_text: str) -> str | None:
+        """Return the canonical detector key whose pattern matched ``alias_text``.
+
+        Iterates the per-detector patterns and tries to match the
+        alias_text. Uses re.IGNORECASE for consistency with the
+        outer postfix/possessive patterns. First-match wins (the
+        OR-build above means there's only one canonical key per
+        match anyway in practice).
+        """
+        for det_key in detector_keys:
+            det_pat = detector_patterns[det_key]
+            # det_pat is the alias OR pattern from _build_pattern,
+            # case-insensitive. fullmatch on the alias_text checks
+            # whether this alias belongs to det_key's set.
+            if det_pat.fullmatch(alias_text):
+                return det_key
+        return None
 
     violations: list[Violation] = []
     matched: list[Match] = []
@@ -541,6 +629,19 @@ def validate_reader_value_bindings(
             for s_match in s_re.finditer(text):
                 slice_positions.append((s_match.start(), s_key))
         slice_positions.sort()
+
+        # v1.3.0 Pattern D — metric-axis nearest-pairing (Layer 3 per
+        # ADR 0006, narrative-scope only). Pre-collect ALL metric
+        # positions so each value can be paired with its NEAREST
+        # metric mention (text-order). Catches the case where prose
+        # mentions BOTH metrics ("AUPRC delta suggests: AUROC 0.383")
+        # and the validator's window-based metric proximity check
+        # picks up the wrong metric. Symmetric to detector pairing.
+        metric_positions: list[tuple[int, str]] = []  # (position, canonical_metric)
+        for m_key, m_re in metric_patterns.items():
+            for m_match in m_re.finditer(text):
+                metric_positions.append((m_match.start(), m_key))
+        metric_positions.sort()
 
         # For each canonical binding, look in each file for triples.
         for canonical_key, expected in canonical_bindings.items():
@@ -615,18 +716,110 @@ def validate_reader_value_bindings(
                     ):
                         continue
 
-                    # Cross-detector disambiguation: require the current
-                    # det_key to be the detector paired with this value
-                    # by the text-order rule (last detector before; else
-                    # first detector after). Avoids cross-contamination
-                    # on multi-detector prose like "TF-IDF achieves
-                    # 0.971, while LoRA reaches 0.974".
-                    detector_match = _nearest_canonical_key(
-                        detector_positions, val_start_in_full, max_distance_chars
-                    )
-                    if detector_match is None or detector_match[0] != det_key:
-                        continue
-                    paired_det_pos = detector_match[1]
+                    # v1.3.0 Pattern C — group-subject suppression
+                    # (narrative-scope only). When prose says "for the
+                    # {trained|frozen|baseline|all|both|other}
+                    # detectors" within ±60 chars of the value AND on
+                    # the same side of any sentence boundary, the
+                    # value refers to a multi-detector group statement
+                    # that doesn't bind to a single canonical detector.
+                    # Suppress the candidate (v1.4.0+ may attempt
+                    # multi-detector inference per ADR 0006).
+                    if scope == "narrative":
+                        gs_start = max(0, val_start_in_full - 60)
+                        gs_end = min(len(text), val_start_in_full + len(val_str) + 60)
+                        gs_match = _GROUP_SUBJECT_PATTERN.search(text, gs_start, gs_end)
+                        if gs_match is not None and not _crosses_sentence_boundary(
+                            gs_match.start(), val_start_in_full, sentence_positions
+                        ):
+                            continue
+
+                    # v1.3.0 Pattern A / B — Layer 3 pairing-rule
+                    # OVERRIDES (narrative-scope only). When a postfix
+                    # or possessive explicitly names a detector, the
+                    # override is AUTHORITATIVE — it confirms or
+                    # rejects the binding without falling through to
+                    # the proximity-based detector pairing below.
+                    #
+                    # - postfix_confirmed_pos / possessive_confirmed_pos:
+                    #   the character position of the override match,
+                    #   used as the effective "paired detector
+                    #   position" for downstream T4 (sentence-
+                    #   boundary) check.
+                    # - If postfix/possessive_canonical == det_key:
+                    #   confirmed; bypass proximity.
+                    # - If != det_key AND is in bindings: skip (the
+                    #   other detector's loop iteration claims it).
+                    # - If doesn't resolve / no match: fall through
+                    #   to proximity-based pairing.
+                    pairing_confirmed_pos: int | None = None
+
+                    # Pattern A — "for {detector}" postfix
+                    if postfix_pat is not None:
+                        val_end = val_start_in_full + len(val_str)
+                        pf_match = postfix_pat.search(text, val_end, min(len(text), val_end + 50))
+                        if pf_match is not None:
+                            # Intervening-value guard: prose like
+                            # "X 0.971 versus 0.293 for LoRA" — the
+                            # "for LoRA" postfix belongs to 0.293,
+                            # not 0.971. CI brackets like `[0.283,
+                            # 0.298]` are excluded from intervening
+                            # consideration via the existing
+                            # excluded_ranges (v1.1.0 scope filter):
+                            # values inside brackets aren't real
+                            # binding-candidate intervening values.
+                            intervening: re.Match[str] | None = None
+                            for m in value_re.finditer(text, val_end, pf_match.start()):
+                                if not (
+                                    excluded_ranges and _is_excluded(m.start(), excluded_ranges)
+                                ):
+                                    intervening = m
+                                    break
+                            if intervening is None:
+                                postfix_canonical = _resolve_canonical_from_alias_match(
+                                    pf_match.group(1)
+                                )
+                                if postfix_canonical is not None:
+                                    if postfix_canonical != det_key:
+                                        continue
+                                    pairing_confirmed_pos = pf_match.start()
+
+                    # Pattern B — possessive `'s` (only if Pattern A
+                    # didn't already confirm). Find the LAST possessive
+                    # in the −80 char pre-window; if its end is within
+                    # 30 chars of the value start, apply override.
+                    if pairing_confirmed_pos is None and possessive_pat is not None:
+                        ps_matches = list(
+                            possessive_pat.finditer(
+                                text, max(0, val_start_in_full - 80), val_start_in_full
+                            )
+                        )
+                        if ps_matches:
+                            ps_match = ps_matches[-1]
+                            if val_start_in_full - ps_match.end() <= 30:
+                                possessive_canonical = _resolve_canonical_from_alias_match(
+                                    ps_match.group(1)
+                                )
+                                if possessive_canonical is not None:
+                                    if possessive_canonical != det_key:
+                                        continue
+                                    pairing_confirmed_pos = ps_match.start()
+
+                    # Detector pairing: when a Layer 3 override
+                    # confirmed the binding (pairing_confirmed_pos
+                    # set), skip the proximity check — the postfix /
+                    # possessive is authoritative. Otherwise, fall
+                    # back to the text-order proximity rule (last
+                    # detector before; else first detector after).
+                    if pairing_confirmed_pos is not None:
+                        paired_det_pos = pairing_confirmed_pos
+                    else:
+                        detector_match = _nearest_canonical_key(
+                            detector_positions, val_start_in_full, max_distance_chars
+                        )
+                        if detector_match is None or detector_match[0] != det_key:
+                            continue
+                        paired_det_pos = detector_match[1]
 
                     # v1.2.0 T4 (narrative-scope only): reject the
                     # detector-value pair if a sentence boundary lies
@@ -645,6 +838,22 @@ def validate_reader_value_bindings(
                     )
                     if not met_close:
                         continue
+
+                    # v1.3.0 Pattern D — metric-axis nearest-pairing
+                    # (narrative-scope only). Require the NEAREST
+                    # metric mention to the value (by text-order
+                    # last-before-first-after) to be THIS binding's
+                    # canonical metric. Catches prose like "than the
+                    # AUPRC delta suggests: LoRA's pooled OOD AUROC
+                    # is 0.383" where the AUPRC mention from the
+                    # delta clause is within window of 0.383 but
+                    # AUROC is the metric semantically owning it.
+                    if scope == "narrative":
+                        metric_match = _nearest_canonical_key(
+                            metric_positions, val_start_in_full, max_distance_chars
+                        )
+                        if metric_match is not None and metric_match[0] != met_key:
+                            continue
 
                     # Slice disambiguation: when the canonical key is
                     # slice-scoped (slice != "any"), pair the value
@@ -1017,6 +1226,79 @@ def _has_keyword_in_window(
     start = max(0, val_start - before_chars)
     end = min(len(text), val_start + after_chars)
     return bool(pattern.search(text, start, end))
+
+
+def _build_postfix_pattern(
+    detector_aliases: Mapping[str, Sequence[str]],
+    detector_keys: Sequence[str],
+) -> re.Pattern[str] | None:
+    """Build a regex matching `"for {detector_alias}"` postfix constructs.
+
+    v1.3.0 Pattern A (Layer 3 pairing rule per ADR 0006). Used to
+    re-pair a candidate value with the detector named in a "for X"
+    postfix (e.g., ``"0.291 [...] for TF-IDF + LR"`` binds 0.291 to
+    TF-IDF + LR via the postfix, overriding proximity-based pairing).
+
+    Each alias is paired with its canonical key in a single named-group
+    OR pattern; the capture group reveals which detector matched. The
+    canonical-key-as-fallback ensures the canonical name itself is
+    matched even if no alias regex is provided for that detector.
+
+    Returns None if there are no detectors to build patterns for
+    (empty bindings).
+    """
+    if not detector_keys:
+        return None
+    alts: list[str] = []
+    for det_key in detector_keys:
+        # Canonical name as a literal alternative + all alias regexes
+        # (which may themselves contain regex syntax like `\+`).
+        parts = [re.escape(det_key)] + list(detector_aliases.get(det_key, ()))
+        # Each detector's parts collapse into a non-capturing group.
+        alts.append("(?:" + "|".join(parts) + ")")
+    # The outer capture group reveals which detector token matched.
+    # The text-order rule means the first alternative wins per Python
+    # re semantics, which is fine for our use case.
+    return re.compile(
+        r"\bfor\s+(?:the\s+)?(" + "|".join(alts) + r")(?=[\s,;.)\]]|$)",
+        re.IGNORECASE,
+    )
+
+
+def _build_possessive_pattern(
+    detector_aliases: Mapping[str, Sequence[str]],
+    detector_keys: Sequence[str],
+) -> re.Pattern[str] | None:
+    """Build a regex matching `"{detector_alias}'s"` possessive markers.
+
+    v1.3.0 Pattern B (Layer 3 pairing rule per ADR 0006). The
+    possessive ``'s`` construction is a strong binding signal that
+    isn't captured by detector-alias regex matching directly (alias
+    patterns don't typically include the apostrophe). Re-pairs the
+    candidate value with the possessor detector.
+
+    The pattern matches JUST the possessive marker (``{alias}'s``);
+    binding-claim proximity is enforced at the call site (the
+    inner loop's Pattern B block requires the LAST possessive
+    in the pre-window to END within 30 chars of the value, which
+    covers both `"frozen probe's 0.515"` (immediate) and
+    `"LoRA's pooled OOD AUROC is 0.383"` (5-token clause).
+
+    Returns None if there are no detectors (empty bindings).
+    """
+    if not detector_keys:
+        return None
+    alts: list[str] = []
+    for det_key in detector_keys:
+        parts = [re.escape(det_key)] + list(detector_aliases.get(det_key, ()))
+        alts.append("(?:" + "|".join(parts) + ")")
+    # Match `{alias}'s` (ASCII apostrophe or typographic ’s). Tight
+    # — proximity to the value is enforced at the call site via
+    # `match.end()` against the value position.
+    return re.compile(
+        r"(" + "|".join(alts) + r")[’']s\b",
+        re.IGNORECASE,
+    )
 
 
 def _build_pattern(

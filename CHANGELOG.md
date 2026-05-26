@@ -5,6 +5,120 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-05-26 — `audit_value_bindings` cross-detector list-grammar pairing rules (closes #81)
+
+Tier-1 ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md).
+Closes [#81](https://github.com/brandon-behring/eval-toolkit/issues/81)
+— consumer-feedback follow-on after v1.2.0's adoption at
+`prompt-injection-detection-submission@v1.3.12` (4 residual
+warnings, all cross-detector list-grammar or metric-axis
+confusion). Introduces **Layer 3 — pairing rules** as the third
+correctness layer alongside ADR 0005's identity + scope model
+(see new [ADR 0006](docs/source/adr/0006-pairing-rules-for-cross-detector-list-grammar.md)).
+
+Consumer-side dogfood result: **4 → 0 warnings**. Combined with
+v1.1.0 + v1.2.0, **100% reduction vs the pre-fix v1.0.5 baseline**
+on the consumer's writeup (95 → 0).
+
+### Added — `audit_value_bindings.py` Layer 3 pairing rules
+
+All four rules activate ONLY when `scope="narrative"`. Legacy
+`scope="all"` callers see zero behavior change. No new public
+kwargs; keyword sets are hardcoded module-level `frozenset`
+constants.
+
+- **Pattern A — `"for {detector}"` postfix override.** When a
+  candidate value is followed (within +50 chars) by `"for
+  {detector_alias}"` AND no other value lies between, the
+  postfix is authoritative: confirms pairing for this binding
+  OR skips if it names a different canonical detector.
+  Intervening-value check uses the v1.1.0 exclusion-ranges
+  infrastructure (CI brackets like `[0.286, 0.301]` don't count
+  as intervening values).
+- **Pattern B — `"{detector}'s"` possessive override.** Same
+  mechanics; scans −80 chars before the value. Last possessive
+  in the pre-window is authoritative if its end is within 30
+  chars of the value start. Catches both immediate `"frozen
+  probe's 0.515"` and short-clause `"LoRA's ... AUROC is 0.383"`.
+- **Pattern C — group-subject suppression.** When prose contains
+  `"for the {trained|frozen|baseline|all|both|other} detectors"`
+  within ±60 chars of the value AND on the same side of any
+  sentence boundary, the value is suppressed (it refers to a
+  multi-detector group statement that doesn't bind to a single
+  canonical detector). Multi-detector inference deferred to v1.4.0+
+  per ADR 0006.
+- **Pattern D — metric-axis nearest-pairing.** Symmetric to
+  detector-axis pairing. Pre-collects ALL metric positions per
+  file (across `metric_aliases` keys, not just binding-derived
+  metrics). Requires the NEAREST metric to the value to be THIS
+  binding's metric. Catches prose like `"AUPRC delta suggests:
+  ... AUROC is 0.383"` where the wider window-based metric
+  proximity check picks up the wrong metric.
+
+### Internal changes (no public API impact)
+
+- New module-level constants:
+  - `_GROUP_SUBJECT_KEYWORDS: frozenset[str]` — group adjectives.
+  - `_GROUP_SUBJECT_PATTERN: re.Pattern[str]` — compiled regex
+    matching `"for the {kw} detectors?"`.
+- New private helpers:
+  - `_build_postfix_pattern(detector_aliases, detector_keys)` —
+    per-call regex builder for Pattern A.
+  - `_build_possessive_pattern(detector_aliases, detector_keys)` —
+    per-call regex builder for Pattern B.
+- `metric_patterns` build extended to use the union of
+  `binding-derived` and `metric_aliases.keys()` so Pattern D can
+  pair against unbound-but-aliased metrics.
+- Inner loop reordered to apply C-suppress → Pattern A → Pattern B
+  before proximity-based detector pairing. Pattern A/B record a
+  `pairing_confirmed_pos` that BYPASSES proximity when the override
+  confirms THIS binding's detector.
+- Pattern D added as a separate check after the existing
+  metric_close proximity test.
+
+### Dogfood evidence (compounded across the cycle)
+
+| Release | Configuration | Warnings on consumer HEAD | Reduction vs v1.0.5 |
+|---|---|---|---|
+| v1.0.5 | Legacy 2-tuple, no scope | 95 | — |
+| v1.1.0 | BindingKey + scope='narrative' content-type | 23 | -76% |
+| v1.2.0 | + T1–T4 context filters | 7 | -93% |
+| **v1.3.0** | + Pattern A/B/C/D pairing rules | **0** | **-100%** |
+
+### Consumer adoption path
+
+`prompt-injection-detection-submission` and other consumers using
+`scope="narrative"` get the v1.3.0 pairing rules automatically with
+no code change. Recommended migration:
+
+1. Re-pin `eval-toolkit>=1.3.0,<2` (additive; no consumer code
+   change required).
+2. **HARD-gate promotion is now credible.** With 0 residual
+   warnings, `audit_value_bindings` can be promoted from SOFT to
+   HARD (failing CI on violations) bundled with
+   `audit_citation_alignment` per the consumer's v1.3.8
+   bundled-promotion plan.
+
+### Tests
+
+43 in `tests/test_audit_value_bindings.py` (36 from v1.2.0 + 7
+new for Pattern A/B/C/D + unknown-alias fall-through + scope='all'
+backward-compat + combined dogfood). All pass. Public API
+snapshot regenerated for `__version__` bump only (no signature
+changes).
+
+### Out of scope (deferred)
+
+- **Multi-detector inference for Pattern C** — replace
+  suppression with explicit iteration over implied group
+  detectors. ~250 LOC; v1.4.0+ candidate if consumer demand
+  emerges.
+- **Enumeration parsing** — `"X scored Y, Z, W for A, B, C
+  respectively"` patterns. Not in #81; v1.4.0+ if needed.
+- **Markdown AST parsing** (ADR 0005 §A4) — v2.0 territory.
+- **Public kwargs for pairing-rule keyword extension** — YAGNI;
+  add in v1.3.x patch if demand emerges.
+
 ## [1.2.0] — 2026-05-26 — `audit_value_bindings` context-aware noise reduction (consumer-feedback follow-on to #80)
 
 Tier-1 ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md).
