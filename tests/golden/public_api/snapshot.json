@@ -1429,7 +1429,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'1.3.0'"
+      "value": "'1.4.0'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1959,7 +1959,7 @@
     "validate_citations": {
       "doc_first_line": "Find \"per ADR-NNN\" citations whose category doesn't match the cited ADR.",
       "kind": "function",
-      "signature": "(*, markdown_text: 'str', markdown_path: 'Path', adr_subjects: 'dict[str, ADRSubject]', category_keywords: 'dict[str, list[str]]', citation_pattern: 'str' = '(?i)(?:per|via|by|under)\\\\s+ADR-(\\\\d{3})', context_lines: 'int' = 2, known_exempt_citations: 'Sequence[tuple[Path, int, str]]' = ()) -> 'list[CitationMisalignment]'"
+      "signature": "(*, markdown_text: 'str', markdown_path: 'Path', adr_subjects: 'dict[str, ADRSubject]', category_keywords: 'dict[str, list[str]]', citation_pattern: 'str' = '(?i)(?:per|via|by|under)\\\\s+ADR-(\\\\d{3})', context_lines: 'int' = 2, known_exempt_citations: 'Sequence[tuple[Path, int, str]]' = (), scope: \"Literal['all', 'narrative']\" = 'all') -> 'list[CitationMisalignment]'"
     },
     "validate_manifest": {
       "doc_first_line": "Validate a serialized ``RunManifest`` payload.",

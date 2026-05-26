@@ -79,3 +79,4 @@ What would have to change for this decision to be reopened?
 | [0004](0004-naming-conventions.md) | Naming conventions for modules, classes, and parameters | Accepted | 2026-05-23 |
 | [0005](0005-structured-keys-for-audit-validators.md) | Structured keys over positional tuples for canonical-identity types in audit validators | Accepted | 2026-05-26 |
 | [0006](0006-pairing-rules-for-cross-detector-list-grammar.md) | Pairing rules for cross-detector list-grammar in audit validators | Accepted | 2026-05-26 |
+| [0007](0007-three-layer-architecture-for-audit-validators.md) | Three-layer architecture for audit validators (family-wide) | Accepted | 2026-05-26 |

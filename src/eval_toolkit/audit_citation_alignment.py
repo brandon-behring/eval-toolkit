@@ -35,11 +35,22 @@ References
 
 from __future__ import annotations
 
+import bisect
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
+
+# v1.4.0 (ADR 0007): shared narrative-prose helpers extracted in the
+# v1.4.0 refactor. Same module used by audit_value_bindings for
+# Layer 2 (scope='narrative') content-type filtering + Layer 3
+# sentence-boundary respect.
+from eval_toolkit._narrative import (
+    _build_exclusion_ranges,
+    _is_excluded,
+    _sentence_boundary_positions,
+)
 
 # Default citation pattern: matches "per ADR-NNN", "via ADR-NNN", "by ADR-NNN",
 # "under ADR-NNN" — case-insensitive on the citation phrase; ADR-NNN is
@@ -180,6 +191,72 @@ def _infer_claim_category(
     return None
 
 
+def _line_starts(text: str) -> list[int]:
+    """Return character positions where each line starts."""
+    starts = [0]
+    for i, ch in enumerate(text):
+        if ch == "\n":
+            starts.append(i + 1)
+    return starts
+
+
+def _extract_sentence_context(
+    text: str,
+    citation_pos: int,
+    sentence_positions: Sequence[int],
+) -> str:
+    """Return the sentence containing ``citation_pos``, ≤300 chars.
+
+    v1.4.0 Layer 3 rule γ per ADR 0007: the category-keyword
+    extraction window for an ADR citation must not cross sentence
+    boundaries. Uses :func:`_narrative._sentence_boundary_positions`
+    (paragraph-aware, abbreviation-guarded).
+
+    Replaces ``_extract_context_text``'s ±N-line window when
+    ``scope="narrative"``. The ±2-line window is too wide for
+    multi-topic prose (e.g., the consumer's
+    ``"per ADR-025 + ADR-021 + ADR-034 + ADR-045"`` Pattern α case)
+    because it pulls in keywords from previous sentences that don't
+    semantically apply to the citation.
+    """
+    if not sentence_positions:
+        return text[max(0, citation_pos - 120) : citation_pos + 120].strip()[:300]
+    sent_idx = max(0, bisect.bisect_right(sentence_positions, citation_pos) - 1)
+    sent_start = sentence_positions[sent_idx] if sent_idx < len(sentence_positions) else 0
+    next_idx = sent_idx + 1
+    sent_end = sentence_positions[next_idx] if next_idx < len(sentence_positions) else len(text)
+    return text[sent_start:sent_end].strip()[:300]
+
+
+def _infer_claim_categories_multi(
+    context: str,
+    category_keywords: dict[str, list[str]],
+) -> set[str]:
+    """Return the SET of all categories whose keywords appear in context.
+
+    v1.4.0 Layer 3 rule α per ADR 0007: when prose surrounding a
+    multi-ADR-citation list (e.g.,
+    ``"per ADR-025 + ADR-021 + ADR-034 + ADR-045"``) contains MULTIPLE
+    topic keywords, each ADR can legitimately address a DIFFERENT
+    topic. Instead of first-match-wins (which incorrectly flags the
+    other ADRs against the dominant topic), return the full set of
+    matched categories; the validator then accepts the citation if
+    the ADR's actual category is IN the set.
+
+    First-match-wins per category (so categories don't double-count
+    on multi-keyword matches), but multi-category aggregation across
+    the context.
+    """
+    haystack = context.lower()
+    matches: set[str] = set()
+    for category, keywords in category_keywords.items():
+        for keyword in keywords:
+            if keyword.lower() in haystack:
+                matches.add(category)
+                break
+    return matches
+
+
 def validate_citations(
     *,
     markdown_text: str,
@@ -189,6 +266,7 @@ def validate_citations(
     citation_pattern: str = DEFAULT_CITATION_PATTERN,
     context_lines: int = DEFAULT_CONTEXT_LINES,
     known_exempt_citations: Sequence[tuple[Path, int, str]] = (),
+    scope: Literal["all", "narrative"] = "all",
 ) -> list[CitationMisalignment]:
     """Find "per ADR-NNN" citations whose category doesn't match the cited ADR.
 
@@ -220,6 +298,33 @@ def validate_citations(
         consumers with known historical drift that's been accepted by
         policy (e.g., immutable ADR bodies with frozen-in errors that
         a superseding ADR has already addressed).
+    scope : {"all", "narrative"}, optional
+        v1.4.0 Layer 2 + Layer 3 opt-in (per ADR 0007). Default
+        ``"all"`` preserves v1.0.1 / v1.3.0 behavior exactly
+        (legacy line-window context, first-match category). Setting
+        ``scope="narrative"`` activates:
+
+        - **Layer 2 (Pattern β)**: skip citations inside markdown
+          table rows, bracketed expressions, and fenced code blocks
+          (the same content-type filter from v1.1.0
+          ``audit_value_bindings``). Catches dense per-row ADR
+          citations in spec tables (SPEC_SHEET.md and similar).
+        - **Layer 3 rule γ**: extract the category-keyword window
+          from the SENTENCE containing the citation (paragraph-aware
+          abbreviation-guarded boundaries), not from a fixed
+          ±line-window. Prevents the validator from pulling
+          keywords across sentence boundaries.
+        - **Layer 3 rule α**: when MULTIPLE ADR citations appear in
+          the same sentence (e.g.,
+          ``"per ADR-A + ADR-B + ADR-C + ADR-D"``), each ADR is
+          checked against the SET of all categories matched in the
+          sentence (not just first-match). Accepts the citation if
+          the ADR's actual category is in the set. Catches the
+          dense multi-ADR list pattern where each ADR addresses a
+          different topic in multi-topic prose.
+
+        Tier-1 ADDITIVE per ADR 0003; ``scope="all"`` (the default)
+        guarantees byte-identical behavior to v1.3.x.
 
     Returns
     -------
@@ -270,6 +375,23 @@ def validate_citations(
     lines = markdown_text.splitlines()
     citation_re = re.compile(citation_pattern)
 
+    # v1.4.0 narrative-scope precomputations (Layer 2 + Layer 3 per
+    # ADR 0007). Empty / no-op when scope="all".
+    line_starts_arr = _line_starts(markdown_text) if scope == "narrative" else []
+    excluded_ranges = (
+        _build_exclusion_ranges(markdown_text, line_starts_arr) if scope == "narrative" else []
+    )
+    sentence_positions = _sentence_boundary_positions(markdown_text) if scope == "narrative" else []
+
+    # v1.4.0 Layer 3 rule α: collect citation positions per sentence so
+    # the inner loop can detect multi-ADR-citation sentences and switch
+    # to multi-category matching.
+    citations_per_sentence: dict[int, int] = {}
+    if scope == "narrative":
+        for match in citation_re.finditer(markdown_text):
+            sent_id = max(0, bisect.bisect_right(sentence_positions, match.start()) - 1)
+            citations_per_sentence[sent_id] = citations_per_sentence.get(sent_id, 0) + 1
+
     for line_no, line in enumerate(lines, start=1):
         for match in citation_re.finditer(line):
             adr_id = match.group(1)
@@ -281,13 +403,71 @@ def validate_citations(
                 # this validator (a different validator should check
                 # "does ADR-NNN exist"). Skip.
                 continue
-            context = _extract_context_text(lines, line_no, context_lines)
-            claim_category = _infer_claim_category(context, category_keywords)
-            if claim_category is None:
-                # No category basis for comparison; skip per the deferral above.
-                continue
-            if claim_category == subject.category:
-                continue
+
+            if scope == "narrative":
+                # v1.4.0 narrative-scope filters per ADR 0007.
+                abs_pos = line_starts_arr[line_no - 1] + match.start()
+
+                # Pattern β (Layer 2): skip citations inside markdown
+                # table rows, bracketed expressions, or fenced code
+                # blocks.
+                if _is_excluded(abs_pos, excluded_ranges):
+                    continue
+
+                # v1.4.0 Layer 2 symmetric-None skip (narrative-scope
+                # only): if the cited ADR's subject category is None
+                # (the consumer's category_keywords map doesn't
+                # classify this ADR's title/slug), defer per the same
+                # "no basis for comparison" principle that already
+                # skips when claim_category is None. Symmetrizes the
+                # existing v1.0.1 behavior; closes the dominant
+                # residual under #82 dogfood where ADRs about
+                # categories not in the consumer's map (e.g.,
+                # "contamination", "training", "evaluation") get
+                # flagged against every claim-side keyword match.
+                if subject.category is None:
+                    continue
+
+                # Pattern γ (Layer 3): sentence-bounded context.
+                context = _extract_sentence_context(markdown_text, abs_pos, sentence_positions)
+
+                # Pattern α (Layer 3): multi-category-set membership
+                # check. If the sentence containing the citation
+                # matches MULTIPLE category keywords (multi-topic
+                # prose), defer to the consumer's category map by
+                # accepting the citation when the ADR's actual
+                # category is in the set. Single-topic sentences
+                # still use first-match-wins.
+                #
+                # v1.4.0 design refinement: extends Pattern α from
+                # "multi-citation sentences only" (initial framing)
+                # to "any multi-topic sentence." The underlying
+                # principle — that single-keyword first-match is
+                # wrong in multi-topic prose — applies regardless
+                # of citation count.
+                matched_set = _infer_claim_categories_multi(context, category_keywords)
+                if not matched_set:
+                    continue  # no category basis
+                if len(matched_set) > 1:
+                    # Multi-topic: accept if ADR's category is in set
+                    if subject.category in matched_set:
+                        continue
+                    # Else flag with first-match for diagnostic display
+                    claim_category = _infer_claim_category(context, category_keywords)
+                else:
+                    # Single-topic: first-match-wins (legacy semantics)
+                    claim_category = next(iter(matched_set))
+                    if claim_category == subject.category:
+                        continue
+            else:
+                # Legacy scope='all' behavior (v1.3.x and prior).
+                context = _extract_context_text(lines, line_no, context_lines)
+                claim_category = _infer_claim_category(context, category_keywords)
+                if claim_category is None:
+                    continue
+                if claim_category == subject.category:
+                    continue
+
             misalignments.append(
                 CitationMisalignment(
                     file=markdown_path,

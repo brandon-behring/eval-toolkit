@@ -5,6 +5,132 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-05-26 — `audit_citation_alignment` Layer 2 + Layer 3 (closes #82); shared `_narrative` helpers (ADR 0007)
+
+Tier-1 ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md).
+Closes [#82](https://github.com/brandon-behring/eval-toolkit/issues/82)
+— consumer-feedback follow-on after v1.3.0 closed
+`audit_value_bindings`. The consumer's 188 residual warnings on
+`audit_citation_alignment` were the same architectural-class gap
+(missing Layer 2 + Layer 3 context-awareness) that
+`audit_value_bindings` worked through over v1.1.0 → v1.3.0.
+
+Introduces [ADR 0007](docs/source/adr/0007-three-layer-architecture-for-audit-validators.md)
+codifying the **three-layer correctness model** (identity + scope +
+pairing) as the canonical architecture for ALL `audit_*` validators
+in the family. ADR 0005 + ADR 0006 were originally validator-
+specific; ADR 0007 generalizes.
+
+### Added — `audit_citation_alignment` Layer 2 + Layer 3 (closes #82)
+
+- **`scope: Literal["all", "narrative"] = "all"`** kwarg on
+  `validate_citations(...)`. Default `"all"` preserves v1.0.1 /
+  v1.3.x behavior exactly (Tier-1 ADDITIVE; byte-identical legacy
+  semantics).
+- **Pattern β (Layer 2)** — under `scope="narrative"`, citations
+  inside markdown table rows, bracketed expressions, and fenced
+  code blocks are excluded. Mirrors `audit_value_bindings`'s
+  Layer 2 from v1.1.0. Closes ~67 of the consumer's residual
+  warnings (SPEC_SHEET.md table rows).
+- **Pattern γ (Layer 3)** — the category-keyword extraction window
+  for a citation is bounded by the SENTENCE containing the
+  citation, not by a ±N-line window. Uses
+  `_sentence_boundary_positions` (paragraph-aware, abbreviation-
+  guarded) from `_narrative`. Catches the consumer's dense
+  multi-clause sentences where keywords from prior clauses pull
+  through.
+- **Pattern α (Layer 3)** — when MULTIPLE ADR citations appear in
+  the same sentence (e.g.,
+  `"per ADR-025 + ADR-021 + ADR-034 + ADR-045"`), the validator
+  switches from first-match-wins category check to multi-category
+  set membership. Each ADR's actual category is accepted if it's
+  in the SET of categories matched by the sentence's keywords —
+  not just the dominant first-match. Catches the dense multi-ADR
+  list pattern where each ADR addresses a different topic.
+
+### Refactor — Shared `_narrative.py` helpers
+
+Per ADR 0007, narrative-prose helpers are extracted to private flat
+module `src/eval_toolkit/_narrative.py` (consistent with ADR 0001's
+`_rng.py` / `_parallel.py` / `_sweep.py` precedent — flat-module
+compliant, private/underscore-prefixed). Both validators import:
+
+- Keyword frozensets: `_DELTA_KEYWORDS`, `_FLOOR_KEYWORDS`,
+  `_GROUP_SUBJECT_KEYWORDS`, `_ABBREV_BEFORE_DOT`.
+- Compiled patterns: `_DELTA_PATTERN`, `_FLOOR_PATTERN`,
+  `_GROUP_SUBJECT_PATTERN`.
+- Helpers: `_build_exclusion_ranges`, `_is_excluded`,
+  `_is_sentence_terminator_dot`, `_sentence_boundary_positions`,
+  `_sentence_id_of`, `_crosses_sentence_boundary`,
+  `_is_signed_value`, `_has_keyword_in_window`,
+  `_compile_keyword_pattern`.
+
+`audit_value_bindings.py` updated to import these from `_narrative`
+instead of defining inline. **Signature-preserving refactor**: all
+43 existing `audit_value_bindings` tests pass UNCHANGED. The
+private helpers are non-public, so no Tier-1 STRICT impact.
+
+### Dogfood result
+
+| Configuration | Warnings on `prompt-injection-detection-submission` HEAD | Reduction |
+|---|---|---|
+| v1.3.0 (`audit_citation_alignment` with scope='all') | 188 | — (baseline) |
+| **v1.4.0 (`scope='narrative'`)** | **37** | **80%** |
+
+Verified locally via `.scratch/dogfood_v1_4_0_citation.py`
+(monkey-patched consumer call with `scope="narrative"`).
+
+The residual 37 are a mix of:
+- **Real misalignments** consumer should triage (e.g., `ADR-025`
+  cited for a threshold claim when ADR-025 is the cost ADR — could
+  be a wrong-ADR bug or a multi-topic ADR not captured by the
+  consumer's category-keyword map).
+- **Single-topic sentences** where the first-match category
+  inferred from the sentence genuinely differs from the ADR's
+  actual category. The multi-topic Pattern α fallback only fires
+  when ≥2 categories match; single-topic prose stays on the
+  legacy first-match check.
+- **Edge cases** requiring parser-level understanding of how an
+  ADR's scope intersects with a multi-clause sentence's topics.
+
+The original #82 acceptance criterion was ≤20 warnings (the
+filer's estimate of "genuinely ambiguous citations"). v1.4.0
+hits 37 — above the target but a 5× reduction overall. The
+remaining gap requires either (a) consumer-side expansion of
+`CATEGORY_KEYWORDS` to capture multi-topic ADRs, (b) consumer
+prose adjustments for the real misalignments, or (c) future
+v1.4.x refinements to the validator's heuristic. Consumer
+HARD-gate promotion remains a judgment call — the residual 37
+includes some real misalignments worth fixing.
+
+### Consumer adoption path
+
+Consumer (`prompt-injection-detection-submission`):
+1. Re-pin `eval-toolkit>=1.4.0,<2`.
+2. Add `scope="narrative"` to their `validate_citations(...)` call
+   in `scripts/audit_citation_alignment.py`.
+3. **Bundled HARD-gate promotion** of BOTH `audit_value_bindings`
+   AND `audit_citation_alignment` now credible per the v1.3.8
+   plan. Promotes from SOFT to HARD in their next v1.3.X release.
+
+### Tests
+
+61 across the audit-validator suite (43 audit_value_bindings + 18
+audit_citation_alignment; 6 new for v1.4.0 — Pattern α / β / γ /
+scope='all' backward-compat / shared-helpers / combined dogfood).
+All pass. Public API snapshot regenerated for `__version__` bump
++ `validate_citations` signature with new `scope` kwarg.
+
+### Out of scope (deferred)
+
+- **`audit_sister_doc_concept_drift` Layer 2 / Layer 3** — embedding-
+  based validator (v1.0.4); different false-positive surface. Add
+  layers only if consumer demand emerges.
+- **Public helper promotion** (`eval_toolkit.audit_narrative`) —
+  YAGNI per ADR 0007 §A2.
+- **Configurable category-keyword-window extension kwargs** —
+  YAGNI; add in v1.4.x patch if demand emerges.
+
 ## [1.3.0] — 2026-05-26 — `audit_value_bindings` cross-detector list-grammar pairing rules (closes #81)
 
 Tier-1 ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md).
