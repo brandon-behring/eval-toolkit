@@ -971,8 +971,12 @@ def test_narrative_combined_filters_dogfood_pattern(tmp_path: Path) -> None:
 
 @pytest.mark.unit
 def test_sentence_boundary_helper_respects_abbreviations(tmp_path: Path) -> None:
-    """Direct unit test for the sentence-boundary helper's abbreviation guard."""
-    from eval_toolkit.audit_value_bindings import (
+    """Direct unit test for the sentence-boundary helper's abbreviation guard.
+
+    v1.4.0 (ADR 0007): helpers live in eval_toolkit._narrative (private
+    flat module); the import path moved during the refactor.
+    """
+    from eval_toolkit._narrative import (
         _is_sentence_terminator_dot,
         _sentence_boundary_positions,
     )
