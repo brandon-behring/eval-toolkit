@@ -60,6 +60,13 @@ _EXPORTS: dict[str, str] = {
     "CitationMisalignment": "eval_toolkit.audit_citation_alignment",
     "extract_adr_subject_category": "eval_toolkit.audit_citation_alignment",
     "validate_citations": "eval_toolkit.audit_citation_alignment",
+    # --- audit_value_bindings ---
+    # Flat-module per ADR 0001. Closes #71. Motivated by consumer V1.3.1
+    # ADR-080 audit-fix finding (TF-IDF / LoRA 0.974 value mis-binding).
+    "Match": "eval_toolkit.audit_value_bindings",
+    "ValueBindingsReport": "eval_toolkit.audit_value_bindings",
+    "Violation": "eval_toolkit.audit_value_bindings",
+    "validate_reader_value_bindings": "eval_toolkit.audit_value_bindings",
     # --- losses ---
     "RecallAtLowFPR": "eval_toolkit.losses",
     # --- preprocessing ---

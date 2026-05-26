@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-05-26 — `audit_value_bindings` module (closes #71)
+
+Tier-2 ADDITIVE — second member of the audit-validator family
+following `audit_citation_alignment` (v1.0.1). Flat-module per
+[ADR 0001](docs/source/adr/0001-flat-module-layout.md).
+
+### Added
+
+- **`audit_value_bindings` module** exporting
+  `validate_reader_value_bindings()` + `Match` + `Violation` +
+  `ValueBindingsReport` as Tier 1 STRICT (per
+  [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md)).
+  Catches the bug class where a markdown surface pairs a detector name
+  with the **wrong** canonical value — both values exist in the
+  source-of-truth table but the binding is misordered. Motivated by
+  the consumer V1.3.1 ADR-080 audit-fix patch closure (2026-05-22)
+  where `WRITEUP_NARRATIVE.md:38` said "TF-IDF + logistic regression
+  baseline reaches 0.974 AUPRC" but canonical TF-IDF direct val AUPRC
+  is 0.971 (0.974 was LoRA's value). The existing `audit_numbers.py`
+  validates VALUES against source data but not BINDINGS — this
+  validator closes that gap.
+- Cross-detector disambiguation: when multiple detectors and values
+  appear in the same paragraph (e.g., "TF-IDF achieves 0.971, while
+  LoRA reaches 0.974"), each value pairs with the LAST detector
+  appearing before it in text order (falling back to first detector
+  after if no before-detector is in range). Avoids false-positive
+  bindings across closely-spaced detector mentions.
+- Coverage metric: `ValueBindingsReport.coverage` reports the fraction
+  of `(detector, metric)` keys in the canonical `bindings` dict that
+  produced at least one `Match` — useful for detecting stale or
+  unreferenced bindings in reader prose.
+- 13 tests at `tests/test_audit_value_bindings.py` including the
+  verbatim WRITEUP_NARRATIVE seed-case regression, alias resolution
+  (detector + metric), distance-window edge, value-without-metric
+  skip, coverage fraction, tolerance band, multi-detector
+  disambiguation, frozen-dataclass invariants. Closes #71.
+
 ## [1.0.2] — 2026-05-26 — #76 cleanup batch closes (RC2 + RC3 + F-metrics-1/3/4)
 
 Closes the GH #76 v1.0.1 cleanup tracker. All 6 items shipped across

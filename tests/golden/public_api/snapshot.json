@@ -68,6 +68,7 @@
     "LogisticStacker",
     "MANIFEST_SCHEMA_VERSION",
     "MDEEstimate",
+    "Match",
     "MaxF1Selector",
     "MetaLearner",
     "MetricFn",
@@ -127,7 +128,9 @@
     "TokenSplittingInjection",
     "TokenizationLeakageCheck",
     "UnicodeNormalizationInjection",
+    "ValueBindingsReport",
     "Versioned",
+    "Violation",
     "WhitespaceInjection",
     "WilsonInterval",
     "YoudenJSelector",
@@ -242,6 +245,7 @@
     "validate_manifest",
     "validate_payload",
     "validate_prediction_artifact_ref",
+    "validate_reader_value_bindings",
     "validate_results",
     "validate_source_roles",
     "walk_path",
@@ -795,6 +799,14 @@
       "kind": "class",
       "signature": "(mde: 'float', sigma_delta: 'float', delta_observed: 'float', alpha: 'float', power: 'float', n_resamples: 'int', n: 'int') -> None"
     },
+    "Match": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "A reader-prose (detector, metric, value) triple that matches the canonical binding.",
+      "kind": "class",
+      "signature": "(file: 'Path', line: 'int', detector: 'str', metric: 'str', value: 'float') -> None"
+    },
     "MaxF1Selector": {
       "bases": [
         "object"
@@ -1326,6 +1338,14 @@
       "kind": "class",
       "signature": "(form: 'str' = 'NFKC', name: 'str' = 'unicode_normalize') -> None"
     },
+    "ValueBindingsReport": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Result of :func:`validate_reader_value_bindings`.",
+      "kind": "class",
+      "signature": "(violations: 'tuple[Violation, ...]', matched: 'tuple[Match, ...]', coverage: 'float') -> None"
+    },
     "Versioned": {
       "bases": [
         "Protocol"
@@ -1336,6 +1356,14 @@
         "version": "<property>"
       },
       "signature": "(*args, **kwargs)"
+    },
+    "Violation": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "A reader-prose (detector, metric, value) triple where the value disagrees with the canonical binding.",
+      "kind": "class",
+      "signature": "(file: 'Path', line: 'int', detector: 'str', metric: 'str', found_value: 'float', expected_value: 'float', surrounding_text: 'str') -> None"
     },
     "WhitespaceInjection": {
       "bases": [
@@ -1373,7 +1401,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'1.0.2'"
+      "value": "'1.0.3'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1919,6 +1947,11 @@
       "doc_first_line": "Validate a single serialized :class:`PredictionArtifactRef` payload.",
       "kind": "function",
       "signature": "(payload: 'Mapping[str, object]') -> 'None'"
+    },
+    "validate_reader_value_bindings": {
+      "doc_first_line": "Validate (detector, metric, value) bindings in reader-prose markdown.",
+      "kind": "function",
+      "signature": "(*, files: 'Sequence[Path | str]', bindings: 'Mapping[tuple[str, str], float]', value_pattern: 'str' = '\\\\d+\\\\.\\\\d{2,4}', max_distance_chars: 'int' = 80, metric_aliases: 'Mapping[str, Sequence[str]]' = mappingproxy({}), detector_aliases: 'Mapping[str, Sequence[str]]' = mappingproxy({}), tolerance: 'float' = 0.0001) -> 'ValueBindingsReport'"
     },
     "validate_results": {
       "doc_first_line": "Validate a serialized ``RunResult`` payload against ``results.v1.json``.",

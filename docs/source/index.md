@@ -73,6 +73,7 @@ api/adversarial
 api/analysis
 api/artifacts
 api/audit_citation_alignment
+api/audit_value_bindings
 api/bootstrap
 api/calibration
 api/claims
