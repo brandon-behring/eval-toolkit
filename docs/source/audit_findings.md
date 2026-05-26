@@ -419,3 +419,111 @@ archived locally at `codex-microaudit-edadddc-report.md` +
 - **Round 10 STOP-GATE status**: **CLOSED with mitigations** — 3 Codex confirmed findings fixed in this RC; 1 Gemini accept-as-design; 1 Gemini refuted. v1.0 can tag from the R10 follow-on commit post-CI-green.
 
 ---
+
+## Round 11 (2026-05-26) — consumer-feedback-driven validator adoption
+
+**Not a multi-LLM gate-style audit.** Round 11 is the first
+consumer-feedback-driven round: consumer-side audit findings → upstream
+validator shipped → consumer adopts. Multi-LLM cross-review (Rounds
+5–10) was the v1.0 stability-contract activation discipline; Round 11
+is the v1.x ongoing consumer-feedback loop. Future Round 12+ would
+resume multi-LLM dispatch only if v2.0 work or a major audit cycle
+re-opens. This is flagged so readers don't confuse R11 with the
+heavyweight gate-style rounds.
+
+### Motivating findings (consumer audit origin)
+
+- **V1.3.1 ADR-080 audit-fix** (2026-05-22, consumer
+  `prompt-injection-detection-prototype`): `WRITEUP_NARRATIVE.md:38`
+  said "TF-IDF + LR reaches 0.974 AUPRC" but canonical TF-IDF direct
+  val AUPRC = 0.971 (0.974 is LoRA's value). The existing
+  `audit_numbers.py` validates VALUES against source data but not
+  BINDINGS — both 0.971 AND 0.974 exist in the expected set; the bug
+  is the wrong pairing.
+- **V1.3.2 P1-2 Part 2** (2026-05-23, consumer same repo):
+  `docs/REPRODUCIBILITY.md:76` cited "(locked at Phase 0-07 via
+  ADR-029)" — ADR-029 is the test-marker-strategy ADR, not the
+  reproducibility tier-lock ADR (which is ADR-034). 5-digit-off
+  citation; lychee resolves it (ADR-029 exists), `audit_numbers.py`
+  validates values, but neither catches semantic mis-citation.
+
+### Upstream response timeline
+
+| Time (UTC) | Event |
+|---|---|
+| 2026-05-24 | Consumer files #71 (value_bindings), #72 (concept_drift), #73 (citation_alignment) at v1.3.3 |
+| 2026-05-24 (later) | PR #74 opens with audit subpackage skeleton + `validate_citations` |
+| 2026-05-25 17:01Z | v1.0.0 tag (stability contract activates per ADR 0003) |
+| 2026-05-25 17:08Z | v1.0 snapshot regen hotfix (`eb94d26`) |
+| 2026-05-25 22:51Z | PR #74 merged (`audit_citation_alignment` flat-module per ADR 0001; restructured from initial subpackage shape) |
+| 2026-05-25 23:48Z | **v1.0.1 ships** — `audit_citation_alignment` + RC4 docs polish |
+| 2026-05-26 01:02Z | v1.0.2 ships — #76 cleanup batch (RC2 SimilarityStrategy promoted to 10th strict Tier-2; RC3 test row-content hardening; F-metrics docstring polish) |
+| 2026-05-26 01:48Z | **Consumer PR #10 merged** at v1.3.7 — consumer-side `audit_citation_alignment` adoption complete |
+| 2026-05-26 02:35Z | **v1.0.3 ships** — `audit_value_bindings` + closes #71 |
+
+End-to-end cycle: V1.3.2 P1-2 origin (2026-05-23) → consumer
+adoption (2026-05-26 01:48Z) = ~3 days. Upstream-side v1.0.0 → v1.0.3
+(audit-validator family of 2): ~10h compressed cycle. Consumer's
+v1.3.7 PR opened against `audit_citation_alignment` (the v1.0.1
+deliverable); subsequent v1.0.3 `audit_value_bindings` adoption will
+happen on consumer's own cadence.
+
+### Audit-validator family status
+
+| Validator | Module | Released | Issue | Status |
+|---|---|---|---|---|
+| Citation alignment | `audit_citation_alignment` | v1.0.1 (`067d4b0`) | #73 | ✅ shipped + consumer-adopted (consumer PR #10 v1.3.7) |
+| Value bindings | `audit_value_bindings` | v1.0.3 (`775f3da`) | #71 | ✅ shipped; consumer adoption pending |
+| Concept drift (embedding-clustering) | `audit_sister_doc_concept_drift` (proposed) | future | #72 | open; requires MiniLM (already vendored for leakage) + clustering design |
+
+### Pre-tag + post-v1.0.3 dogfood summary
+
+The validators were dogfooded against eval-toolkit's own markdown
+surface to prove they work in production before consumer adoption:
+
+- **v1.0.1 pre-tag dogfood** (`validate_citations`): 95 files
+  (README + docs/source/**/*.md ex-ADRs ex-Sphinx-generated); 0
+  misalignments. Helper `_build_adr_subjects_from_repo()` exercised.
+- **Post-v1.0.3 dogfood** (re-run + synthetic `validate_reader_value_bindings`):
+  - Part 1 (citation_alignment expanded): 96 files; 0 misalignments
+    (sanity preserved after audit_value_bindings.md + R10 + R11
+    additions to docs/source).
+  - Part 2 (value_bindings synthetic): bindings derived from Round 8
+    RC4-reconciled tally (`("Round 8", "confirmed_count") -> 13` etc).
+    Validator processed `audit_findings.md` + `migration/v0.51.md` +
+    `CHANGELOG.md` without crashing; surfaced 216 pattern-matches +
+    82 matches. **The high false-positive count is expected** — the
+    synthetic bindings dict has very loose detector ("Round 8") +
+    metric (numeric-count) patterns, and any number near a "Round 8"
+    mention triggers. **NOT real bugs in eval-toolkit's docs** —
+    just the validator successfully exercising the regex+window
+    pipeline at production-scale markdown.
+
+The dogfood script is preserved at `.scratch/dogfood_v1_0_x.py`
+(gitignored) for future re-runs.
+
+### Round 11 outcome
+
+- ✅ Action 1 (consumer adoption): consumer PR #10 merged 2026-05-26 01:48Z. Consumer-side dogfood + adoption complete for `validate_citations`.
+- ✅ Action 2 (this ledger entry): R11 section recorded.
+- ✅ Action 3 (dogfood expansion): validators exercised on eval-toolkit's own surface; no upstream-side findings.
+
+GH issue #77 closed with state_reason=completed.
+
+### Multi-LLM audit cadence after R11
+
+The Gate 3 audit chain (R5–R10) closed at v1.0 per ADR 0003. R11+ is
+the post-v1.0 consumer-feedback loop and uses NO multi-LLM cross-review
+by default. Multi-LLM dispatch resumes only if:
+
+1. A v2.0 design cycle opens (would require a Gate 3-equivalent
+   re-audit per ADR 0003 §"v2.0 re-audit triggers").
+2. A consumer files a major-severity finding that single-LLM
+   verification (Claude only) leaves uncertain — in which case Codex
+   + Gemini dispatch via the `audit-prompt.md` template re-engages
+   for that specific question.
+
+Otherwise R11+ is light-touch documentation of the consumer-feedback
+→ upstream-validator → consumer-adopt cycle.
+
+---
