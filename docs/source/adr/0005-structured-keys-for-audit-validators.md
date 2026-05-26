@@ -212,19 +212,42 @@ them to migrate would be scope creep.
 ### Future work (deferred)
 
 The v1.1.0 dogfood revealed two non-identity, non-scope failure
-modes that fall outside ADR 0005:
+modes that fall outside the original ADR 0005 scope:
 
 1. **Sentence-boundary unawareness** — prose like "X scored 0.291.
    The pooled OOD random floor is 0.374" pairs 0.374 with detector
-   X across a `.` boundary. Future work: respect sentence
-   terminators in the detector/slice pairing rules.
+   X across a `.` boundary.
 2. **Multi-detector list parsing in dense prose** — prose like
    "LoRA scored 0.293, versus 0.364 for the frozen probe and 0.291
    for TF-IDF + LR" over-credits the second detector in a list
-   construction. Future work: list-aware pairing.
+   construction.
 
-These are pairing-rule problems, not identity or scope problems.
-Track as v1.2.0+ candidates with their own narrower issues.
+**v1.2.0 partial closure** (2026-05-26 follow-up release): the
+first item is **resolved** via T4 (sentence-boundary
+detector-pair reject); a related set of context-aware filters
+T1–T3 was added under the same `scope="narrative"` opt-in:
+
+| Filter | Failure mode addressed |
+|---|---|
+| T1 | Delta-magnitude values (signed or near `delta`/`drop`/`vs`/`below` keywords) |
+| T2 | Random-floor / chance-baseline values (near `random`/`floor`/`chance`/`trivial`) |
+| T3 | Same-binding duplicate flags within one sentence (catches "0.556 vs 0.519" enumerations from the same detector context) |
+| T4 | Detector-value pairs spanning a sentence boundary |
+
+Combined dogfood result: consumer's residual 36 (v1.1.0) → 7
+(v1.2.0); 93% total reduction vs the pre-fix v1.0.5 baseline.
+
+**Still deferred** (post-v1.2.0): the cross-detector
+list-grammar problem proper — prose where a single
+detector mention precedes multiple values that belong to
+DIFFERENT detectors via list connectives ("and", "for X", "vs").
+T3 only deduplicates the SAME binding within one sentence; it
+doesn't infer that subsequent values belong to other detectors.
+The 7 v1.2.0 residuals are all this shape. Track as v1.3.0+
+with its own ADR design review; the path forward is either
+shallow list-grammar parsing (~250 LOC, MODERATE-HIGH risk per
+the Round 12 Explore agent's analysis) or markdown AST parsing
+(ADR 0005 A4; v2.0 territory).
 
 ## Alternatives considered
 

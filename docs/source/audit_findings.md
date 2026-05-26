@@ -653,3 +653,123 @@ informed by the user-driven `/exploring-options` discipline
 multi-LLM dispatch for this class of architectural decision.
 
 ---
+
+## Round 13 (2026-05-26) — `audit_value_bindings` v1.2.0 context-aware noise reduction
+
+**Not a multi-LLM gate-style audit.** Third consumer-feedback-driven
+round, immediately following R12. R12 closed the slice-axis
+schema-extensibility gap (BindingKey + scope='narrative' content-type
+filter) and reduced the consumer's noise floor from 96 → 36 warnings
+(62%). R13 addresses the residual 36 — the positional-heuristic
+limitations ADR 0005 named as "Future work (deferred)" — via four
+context-aware extensions to `scope='narrative'` shipped as v1.2.0.
+
+### Motivating evidence (consumer-side, post-v1.3.11)
+
+Consumer (`prompt-injection-detection-submission@v1.3.11`) ran the
+v1.1.0 `audit_value_bindings` against their writeup and produced 36
+residual false positives. Consumer-side categorization in
+`decisions/upstream_issues.md:92`:
+
+| Category | Count | Discriminating prose pattern |
+|---|---|---|
+| Random-floor / sub-clause mentions | ~10 | "random floor of 0.374", "baseline of 0.374" |
+| Delta with sign / keyword | ~9 | "-0.071 AUPRC", "drops -0.132 below" |
+| Multi-detector "vs"/"versus" enumeration | ~8 | "AUPRC 0.556 vs 0.519" (same binding double-flagged) |
+| Sentence-boundary cross-pairing | ~5 | "X scored 0.291. The floor is 0.374" |
+| Genuinely ambiguous (cross-detector list constructions) | ~4 | "0.293 versus 0.364 for the frozen probe and 0.291 for TF-IDF" |
+
+The first four categories share a structural property: they're
+narrative-prose context cues that the v1.1.0 positional heuristic
+can't read. ADR 0005's "Future work (deferred)" section named them
+explicitly. The fifth category (cross-detector list grammar) is a
+deeper parser-level problem.
+
+### Upstream design — `/exploring-options` 4 rounds + ultrathink redirect
+
+| Time (UTC) | Event |
+|---|---|
+| ~20:30Z | `/exploring-options` Round 1: which categories to address in v1.2.0? Decision: **Full T1+T2+T3+T4** over the Explore agent's recommended T1+T2-only. T3 and T4 are cheap (~70 LOC combined) and address ADR 0005-named deferred work. |
+| ~20:45Z | `/exploring-options` Round 2: API placement. Decision: **all four filters bundled under `scope='narrative'`**; backward compat for `scope='all'` preserved exactly. |
+| ~21:00Z | `/exploring-options` Round 3: sentence-boundary detection rigor. Decision: **paragraph-aware abbreviation guard** (vs./e.g./i.e./etc./cf./fig./eq./pp./viz./ca. excluded; single `\n` soft, `\n\n` hard; decimal + letter-dot-letter patterns guarded). Rejected naive `α`/`β` (over-splits multi-line academic prose); rejected `γ` library-based (nltk/spacy too heavy). |
+| ~21:10Z | `/exploring-options` Round 4: keyword list configurability. Decision: **hardcoded module-level `frozenset` constants** (`_DELTA_KEYWORDS`, `_FLOOR_KEYWORDS`). No new public kwargs. |
+| ~21:20Z | **v1.2.0 ships** — commit `40b3741`, PyPI live, GH release published, `Verify PyPI receipt` step ✓. End-to-end from R12 closure to v1.2.0 ship: ~1 hour. |
+
+### Dogfood evidence (compounded across the cycle)
+
+| Release | Configuration | Warnings on consumer HEAD | Reduction vs v1.0.5 |
+|---|---|---|---|
+| v1.0.5 | Legacy 2-tuple, no scope filter | 95 | — (baseline) |
+| v1.1.0 | `BindingKey` + `scope='narrative'` content-type filter | 23 | -76% |
+| **v1.2.0** | + T1–T4 context filters | **7** | **-93%** |
+
+The 7 v1.2.0 residuals are all in the "cross-detector list
+construction" category — prose where the validator can't infer
+that subsequent values belong to OTHER detectors via list
+connectives ("and", "for X", "vs"). T3 only deduplicates the SAME
+binding within one sentence; cross-detector list inference is a
+parser-level problem.
+
+### Tactical refinements during implementation
+
+Three calibration adjustments emerged from running the test suite +
+dogfood:
+
+1. **`_FLOOR_KEYWORDS` narrowed** — initial draft included
+   "baseline", "prior", "majority"; removed after the existing
+   `test_detector_with_no_nearby_value_skipped` failed on prose
+   `"The TF-IDF baseline performs well"` (where "baseline" was a
+   detector descriptor, not a floor reference). Replacement
+   coverage for the legitimate floor cases is provided by T1's
+   "below" keyword (e.g., "below the prevalence baseline of 0.374"
+   is caught by "below").
+2. **T1 keyword window changed to before-only** — initial draft
+   used symmetric ±30 chars; the combined-dogfood test failed on
+   `"frozen probe's 0.515 (delta -0.132)"` because "delta" (AFTER
+   0.515) suppressed 0.515. Before-only window correctly fires
+   T1 on `-0.132` (preceded by "delta") and leaves 0.515 alone.
+3. **`_DELTA_KEYWORDS` calibrated** — dropped "against"
+   (suppressed legitimate "LoRA's AUROC is 0.383 against frozen
+   probe's 0.515" matches). Kept "vs"/"versus" (canonical delta
+   separator). Excluded "above"/"ahead"/"behind" (too ambiguous).
+
+These calibrations are captured in the keyword-list comments in
+`audit_value_bindings.py` so future maintainers see the rationale.
+
+### Round 13 outcome
+
+- ✅ **v1.2.0 shipped** (commit `40b3741`, PyPI live).
+- ✅ **ADR 0005 amended**: "Future work (deferred)" section notes
+  the v1.2.0 partial closure; sentence-boundary + 3 related
+  context-aware filters resolved; cross-detector list grammar
+  remains v1.3.0+ territory.
+- ✅ **Consumer adoption path clear**: re-pin
+  `eval-toolkit>=1.2.0,<2`; HARD-gate promotion of
+  `audit_value_bindings` becomes credible (7 residual < 10
+  actionable threshold).
+- ✅ **Memory entry updated**: `feedback_validator_identity_plus_scope`
+  extended with the v1.2.0 sequel — the same "identity + scope"
+  framing accommodates the new context-aware filters as scope
+  extensions, vindicating the original two-layer architecture
+  decision.
+
+### Multi-LLM audit cadence after R13
+
+Unchanged from R11/R12: no multi-LLM cross-review for
+consumer-feedback rounds. The R13 design was informed by the
+user-driven `/exploring-options` discipline (4 rounds + tactical
+calibration during implementation), substituting for multi-LLM
+dispatch for this class of incremental refinement. Future Round 14+
+would re-engage multi-LLM dispatch only if a v2.0 design cycle
+opens or a major-severity consumer finding requires it.
+
+### Cross-references
+
+- ADR 0005 — "Future work (deferred)" section now reflects v1.2.0
+  closure status.
+- v1.2.0 CHANGELOG entry — full per-filter detail (T1–T4 keyword
+  lists, window calibration, dogfood numbers).
+- `tests/test_audit_value_bindings.py` — 36 tests (28 from
+  v1.1.0 + 8 new for T1–T4 + sentence-boundary unit test).
+
+---
