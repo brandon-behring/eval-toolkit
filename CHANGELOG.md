@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] — 2026-05-26 — publish workflow hardening (infrastructure-only)
+
+Tier-3 / infrastructure-only release. **No library code or public API
+changes.** Hardens the release pipeline against the failure mode
+observed at v1.0.4, where a documented GitHub Actions CRITICAL
+incident (codeload action download failure across the platform) left
+the v1.0.4 wheel un-published on PyPI despite a successful tag and
+GitHub release. The wheel for v1.0.5 is functionally identical to
+v1.0.4; this release exists primarily as a dress rehearsal for the
+new verification step.
+
+### Added — `.github/workflows/publish.yml`
+
+- **`workflow_dispatch:` trigger** — recovery path for failed
+  tag-triggered runs. Manually re-trigger via
+  `gh workflow run publish.yml --ref vX.Y.Z` or the Actions UI
+  "Run workflow" dropdown. Always uses the workflow file from main
+  HEAD, so workflow patches take effect immediately for recovery.
+- **Post-publish `Verify PyPI receipt` step** — polls
+  `pypi.org/pypi/eval-toolkit/<version>/json` for HTTP 200 over a
+  6-minute window (12 × 30s backoff); fails loudly if the wheel
+  never lands. Catches silent half-releases where
+  `pypa/gh-action-pypi-publish` returns success but PyPI never
+  receives the wheel.
+
+### Added — `docs/source/RELEASING.md`
+
+- **"Tag-triggered publish failed; need to re-publish to PyPI"**
+  recovery recipe under Known gotchas. Documents both the
+  `gh run rerun` path (when the original run can be retried) and
+  the `workflow_dispatch` path (when the workflow has been patched
+  on main since the original tag). References the v1.0.4 incident
+  as the canonical example.
+
+### Notes
+
+- `setup-uv@v8.1.0` pin is intentionally unchanged. The v1.0.4
+  failure was a documented GitHub Actions/codeload incident, not
+  an action-specific issue; replacing setup-uv with a curl-install
+  would lose the cache layer + Python integration + version-from-
+  pyproject detection it provides, and would not have prevented the
+  observed failure (actions/checkout downloaded successfully in the
+  same failing run; codeload was the SPOF, not setup-uv).
+- The other 5 workflows (ci/codeql/docs/nightly-benchmarks/
+  nightly-mc) are not patched because they self-heal on the next
+  push; the SPOF only matters for one-shot tag-triggered runs.
+
 ## [1.0.4] — 2026-05-26 — `audit_sister_doc_concept_drift` module (closes #72)
 
 Tier-2 ADDITIVE — third (and final) member of the audit-validator

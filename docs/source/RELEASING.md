@@ -293,6 +293,62 @@ workflow patch is at `b7946d4`.
 (not a prerelease string). The workflow handles the prerelease
 suffix at build time.
 
+### "Tag-triggered publish failed; need to re-publish to PyPI"
+
+**Symptom:** A `v*` tag was pushed, the `Publish to PyPI` workflow ran
+once and failed (commonly: GitHub Actions/codeload outage, transient
+OIDC blip, or PyPA action returning an error), and PyPI does **not**
+show the version. The tag and GitHub release exist, but the wheel
+never landed. Re-pushing the tag is not an option (PyPI rejects
+duplicate filenames; the historic anti-pattern of tag-rewriting is
+also discouraged).
+
+**Cause:** Tag-triggered workflows run exactly once per tag. There is
+no automatic retry; a transient failure leaves the tag in a
+"half-released" state (git/GH-release present, PyPI absent).
+
+**Recovery — two paths:**
+
+1. **Re-run the failed workflow** (preferred when the root cause was
+   transient infrastructure):
+   ```bash
+   # Find the failed run id
+   gh run list --workflow=publish.yml --status=failure --limit 5
+   # Re-run
+   gh run rerun <RUN_ID>
+   ```
+   The workflow re-executes from the original tag commit. ~2-5 min.
+   Verify with the post-publish step's signal or manually:
+   ```bash
+   curl -sf "https://pypi.org/pypi/eval-toolkit/X.Y.Z/json" \
+     -o /dev/null -w "HTTP %{http_code}\n"
+   # 200 = published; 404 = still missing
+   ```
+
+2. **Manual dispatch via `workflow_dispatch`** (when re-running the
+   original run isn't possible — e.g., it's been deleted, or you
+   need to publish from a different ref):
+   ```bash
+   gh workflow run publish.yml --ref vX.Y.Z
+   ```
+   This runs the publish workflow's *current* (main HEAD) version
+   against the tag's ref. Use this when the publish workflow has
+   been patched on main and you want the patched version to run.
+   Or via the Actions UI: "Run workflow" → select the tag from
+   the "Use workflow from" dropdown.
+
+The workflow's post-publish `Verify PyPI receipt` step polls the
+per-version PyPI JSON endpoint for 6 minutes (12 × 30s) and fails
+loudly if the wheel never appears. This catches silent half-releases
+where the PyPA publish action returns success but the wheel is not
+actually on PyPI.
+
+**Historic example:** v1.0.4 (2026-05-26) failed during a documented
+GitHub Actions CRITICAL incident (codeload action download returned
+404 across the platform). `gh run rerun` was sufficient once the
+incident was resolved; the `workflow_dispatch` fallback was added in
+v1.0.5 against future variants of this failure mode.
+
 ## Rollback policy
 
 **PyPI does NOT allow re-uploading the same filename.** If a release

@@ -1,9 +1,20 @@
 name: Publish to PyPI
 
-# Triggered by pushing a `v*` tag.
+# Triggered by pushing a `v*` tag, OR manually via workflow_dispatch
+# (recovery path for failed tag-triggered runs; see RELEASING.md).
+#
 # Routing:
 #   v*rc* / v*a* / v*b* / v*dev*  -> TestPyPI (rehearsal)
 #   any other v*                  -> PyPI (real publish)
+#
+# Recovery path (workflow_dispatch):
+#   When a tag-triggered run fails (e.g., GitHub Actions outage), this
+#   workflow can be re-triggered manually. Use one of:
+#     gh workflow run publish.yml --ref vX.Y.Z
+#   OR via the Actions UI: 'Run workflow' -> select the tag from the
+#   'Use workflow from' dropdown. The workflow always uses the file from
+#   the default branch (main); the selected ref determines github.ref_name
+#   and thus which version gets built/published.
 #
 # Uses PyPI Trusted Publishing (OIDC, no API tokens). Bound to the `pypi`
 # and `testpypi` GitHub Environments — both must exist and have a matching
@@ -11,11 +22,14 @@ name: Publish to PyPI
 #
 # The CI gate is upstream: branch-protection on `main` requires the `CI`
 # workflow green before merge, so any tagged commit is already CI-validated.
-# This workflow runs `twine check --strict` plus a version-tag-match guard.
+# This workflow runs `twine check --strict` plus a version-tag-match guard
+# AND a post-publish PyPI-receipt verification (catches silent half-releases
+# where the publish step succeeds but PyPI never receives the wheel).
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -113,3 +127,27 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           attestations: true
+
+      # Verify that PyPI actually received the wheel for this tag.
+      # Catches the failure mode where the publish step exits 0 but PyPI
+      # never registers the version (CDN propagation lag, OIDC blip, or
+      # PyPA action returning success on a partial upload). 12 × 30s =
+      # 6-minute window matches PyPI's observed propagation under incident
+      # conditions; fail-loud so the silent half-release is surfaced as a
+      # workflow failure rather than a stuck tag.
+      - name: Verify PyPI receipt
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          URL="https://pypi.org/pypi/eval-toolkit/${TAG}/json"
+          for i in $(seq 1 12); do
+            CODE=$(curl -sf "$URL" -o /dev/null -w "%{http_code}" || echo "000")
+            if [ "$CODE" = "200" ]; then
+              echo "PyPI confirms version $TAG (${URL} returned 200)"
+              exit 0
+            fi
+            echo "Attempt $i/12: ${URL} returned $CODE, waiting 30s..."
+            sleep 30
+          done
+          echo "::error::PyPI did not receive $TAG within 6 minutes (last status: $CODE). See RELEASING.md 'Recovering a failed publish' for next steps." >&2
+          exit 1
