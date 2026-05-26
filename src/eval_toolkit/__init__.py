@@ -63,6 +63,9 @@ _EXPORTS: dict[str, str] = {
     # --- audit_value_bindings ---
     # Flat-module per ADR 0001. Closes #71. Motivated by consumer V1.3.1
     # ADR-080 audit-fix finding (TF-IDF / LoRA 0.974 value mis-binding).
+    # BindingKey + slice-aware matching added v1.1.0 (closes #80;
+    # consumer-feedback structural fix per pending ADR 0005).
+    "BindingKey": "eval_toolkit.audit_value_bindings",
     "Match": "eval_toolkit.audit_value_bindings",
     "ValueBindingsReport": "eval_toolkit.audit_value_bindings",
     "Violation": "eval_toolkit.audit_value_bindings",

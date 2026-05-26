@@ -8,6 +8,7 @@
     "ActivationExtractor",
     "AggregateEvidence",
     "BidiRTLInjection",
+    "BindingKey",
     "BootstrapCI",
     "CISafeThresholdSelector",
     "CORE_TECHNIQUES",
@@ -318,6 +319,14 @@
       "doc_first_line": "Wrap the input in a Unicode bidi-RTL override block.",
       "kind": "class",
       "signature": "(name: 'str' = 'bidi_rtl') -> None"
+    },
+    "BindingKey": {
+      "bases": [
+        "object"
+      ],
+      "doc_first_line": "Canonical identity for a `(detector, metric, slice)` measurement.",
+      "kind": "class",
+      "signature": "(detector: 'str', metric: 'str', slice: 'str' = 'any') -> None"
     },
     "BootstrapCI": {
       "bases": [
@@ -1363,7 +1372,7 @@
       ],
       "doc_first_line": "Result of :func:`validate_reader_value_bindings`.",
       "kind": "class",
-      "signature": "(violations: 'tuple[Violation, ...]', matched: 'tuple[Match, ...]', coverage: 'float') -> None"
+      "signature": "(violations: 'tuple[Violation, ...]', matched: 'tuple[Match, ...]', coverage: 'float', unmatched_slice_count: 'int' = 0) -> None"
     },
     "Versioned": {
       "bases": [
@@ -1420,7 +1429,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'1.0.5'"
+      "value": "'1.1.0'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1970,7 +1979,7 @@
     "validate_reader_value_bindings": {
       "doc_first_line": "Validate (detector, metric, value) bindings in reader-prose markdown.",
       "kind": "function",
-      "signature": "(*, files: 'Sequence[Path | str]', bindings: 'Mapping[tuple[str, str], float]', value_pattern: 'str' = '\\\\d+\\\\.\\\\d{2,4}', max_distance_chars: 'int' = 80, metric_aliases: 'Mapping[str, Sequence[str]]' = mappingproxy({}), detector_aliases: 'Mapping[str, Sequence[str]]' = mappingproxy({}), tolerance: 'float' = 0.0001) -> 'ValueBindingsReport'"
+      "signature": "(*, files: 'Sequence[Path | str]', bindings: \"Mapping['BindingKey | tuple[str, str] | tuple[str, str, str]', float]\", value_pattern: 'str' = '\\\\d+\\\\.\\\\d{2,4}', max_distance_chars: 'int' = 80, metric_aliases: 'Mapping[str, Sequence[str]]' = mappingproxy({}), detector_aliases: 'Mapping[str, Sequence[str]]' = mappingproxy({}), slice_aliases: 'Mapping[str, Sequence[str]] | None' = None, slice_window_chars: 'int' = 120, scope: \"Literal['all', 'narrative']\" = 'all', tolerance: 'float' = 0.0001) -> 'ValueBindingsReport'"
     },
     "validate_results": {
       "doc_first_line": "Validate a serialized ``RunResult`` payload against ``results.v1.json``.",

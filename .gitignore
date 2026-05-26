@@ -62,6 +62,15 @@ gemini-microaudit-*.md
 audit-gemini.md
 comprehensive-audit-codex.md
 audit-verification-*.md
+# v1.1.0 (#80 cycle): broaden codex-comprehensive-audit-* to cover
+# non-suffixed briefing variants (e.g., codex-comprehensive-audit-v0.50.0.md);
+# the earlier pattern only covered the *-report.md form.
+codex-comprehensive-audit-*.md
+
+# Local scratch directory: ad-hoc dogfood scripts, pre-tag validation
+# runs, draft PR bodies, audit prompts. Intentionally untracked.
+# Contents have historical value but are not part of any release.
+.scratch/
 
 # Claude Code project settings (machine-local)
 .claude/

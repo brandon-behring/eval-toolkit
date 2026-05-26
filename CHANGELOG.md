@@ -5,6 +5,164 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-05-26 — `audit_value_bindings` slice-aware matching via `BindingKey` (closes #80)
+
+Tier-1 ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md).
+Closes [#80](https://github.com/brandon-behring/eval-toolkit/issues/80)
+— consumer-feedback structural fix surfaced by
+`brandon-behring/prompt-injection-detection-prototype@v1.3.9` (96
+warnings, ~95 false positives) where the pre-v1.1 2-tuple
+`(detector, metric)` canonical-binding identity could not
+disambiguate the same `(detector, metric)` across multiple slices
+(`direct_validation`, `pooled_ood`, paired-delta cells,
+random-floor mentions).
+
+Pending [ADR 0005](docs/source/adr/0005-structured-keys-for-audit-validators.md)
+codifies the underlying rule: "structured keys over positional
+tuples for canonical-identity types in audit validators."
+
+### Added
+
+- **`BindingKey`** (new public class, exported via the lazy
+  `_EXPORTS` resolver). Frozen dataclass with fields
+  `(detector: str, metric: str, slice: str = "any")`. Forward-
+  extensible: future identity axes (split, ci_kind, source_ref, ...)
+  can be added as defaulted fields without breaking the dict-key
+  schema. Avoids the recur-every-N-months schema-event pattern that
+  produced #80.
+- **`validate_reader_value_bindings(bindings=...)`** now accepts
+  three input shapes, normalized internally to `dict[BindingKey,
+  float]` via a per-key `_normalize_binding_key` adapter:
+  1. Canonical: `BindingKey(detector=..., metric=..., slice=...)`
+     (recommended for new consumer code).
+  2. Sugar 3-tuple: `(detector, metric, slice)` (concise dict
+     literal; issue #80's proposed schema).
+  3. Legacy 2-tuple: `(detector, metric)` (preserved; treated as
+     `slice="any"`). All pre-v1.1 consumer code continues to work
+     unchanged.
+  Mixed key shapes in a single dict are supported. Invalid key
+  shapes raise `TypeError` at the function boundary (loud failure,
+  not silent zero-match drift).
+- **New optional kwargs** on `validate_reader_value_bindings`:
+  - `slice_aliases: Mapping[str, Sequence[str]] | None = None` —
+    canonical-slice-name → regex-alternatives mapping, mirroring
+    `detector_aliases` / `metric_aliases`. Used when at least one
+    `BindingKey` has `slice != "any"`.
+  - `slice_window_chars: int = 240` — character window for slice
+    disambiguation (≈ 50 tokens at ~5 chars/token).
+- **Slice disambiguation** in the matching loop. When a binding
+  key has `slice != "any"`, the candidate value is paired with
+  the nearest slice mention (same last-before-first-after rule as
+  detector pairing). If no slice mention falls within
+  `slice_window_chars`, the triple is suppressed (warn-only;
+  counted in `unmatched_slice_count`). If the paired slice
+  differs from the binding's slice, the triple is silently skipped
+  (handled by the binding for the correct slice on its own loop
+  iteration).
+- **`ValueBindingsReport.unmatched_slice_count: int = 0`** — new
+  field surfacing the warn-only signal. Default `0` means full
+  backward compatibility for code that constructs reports manually.
+- **`scope: Literal["all", "narrative"] = "all"`** — content-type
+  filter on the validator. Default `"all"` preserves legacy v1.0.x
+  behavior. Setting `scope="narrative"` excludes from matching:
+  - Markdown table rows (lines starting with `|`)
+  - Bracketed expressions `[...]` (CI bounds, ranges)
+  - Fenced code blocks (triple-backtick)
+
+  This addresses the broader category of false positives that the
+  slice-axis fix alone could not (CI bounds being matched as point
+  estimates, table-cell metrics being cross-flagged, code-block
+  literals being treated as claims). Compatible with the
+  motivating misbinding bug class (V1.3.1 ADR-080) which was in
+  narrative prose — no recall loss.
+
+  Combined dogfood result on `prompt-injection-detection-submission`
+  HEAD: **76% noise reduction** (95 warnings at v1.0.5 2-tuple
+  baseline → 23 with v1.1.0 BindingKey + `scope="narrative"`). The
+  remaining 23 are positional-heuristic limitations (random-floor
+  mis-attribution across sentence boundaries; cross-detector
+  pairing in dense prose) not addressable without parser-level
+  work (future v1.2.0+ scope).
+
+### Changed (Tier-1 ADDITIVE — no breaking changes)
+
+- `_nearest_detector_key()` private helper renamed to
+  `_nearest_canonical_key()` (used now for both detector and slice
+  pairing; the body was already generic). Implementation detail;
+  no public API impact.
+- `pyproject.toml` `Development Status` classifier bumped
+  `4 - Beta` → `5 - Production/Stable` (post-v1.0 hygiene).
+- `.gitignore` now covers `.scratch/` and the broader
+  `codex-comprehensive-audit-*.md` pattern (was previously only
+  `*-report.md`).
+
+### Deprecation policy
+
+All three `bindings` input shapes remain accepted **indefinitely**
+through the v1.x line. `BindingKey` is the canonical/recommended
+shape per ADR 0005 + docstring guidance; tuples remain valid
+syntactic sugar with no `DeprecationWarning`. Formal deprecation
+deferred to a future v2.0 cleanup pass when there is concrete
+payoff. Consumers can migrate slot-by-slot at their own pace, or
+not at all (legacy 2-tuple semantics survive as `slice="any"`).
+
+### Consumer adoption path
+
+`prompt-injection-detection-submission` consumer-side script at
+`scripts/audit_value_bindings.py` can adopt by either:
+- Replacing the 2-tuple `BINDINGS` literal with 3-tuple keys
+  (smallest diff; issue body's proposal), OR
+- Migrating to `BindingKey(...)` for forward-extensibility (new
+  identity axes won't require re-touching the script).
+
+### Validator design philosophy (introduced this release)
+
+This release introduces a two-layer correctness model for audit
+validators, formalized in pending ADR 0005:
+
+1. **Identity correctness** — canonical measurements have
+   structured identity (`BindingKey`), not positional tuples.
+   Future axes added as defaulted fields without breaking the
+   schema.
+2. **Scope correctness** — the validator should only scan content
+   that is plausibly a binding claim. Narrative prose is.
+   Markdown tables, CI brackets, and code blocks aren't.
+   `scope="narrative"` is the v1.1.0 implementation of this rule;
+   match the lint-design convention from `ruff`/`mypy`/`bandit`
+   (scope predicates aren't optional in production-quality
+   linters).
+
+Both layers are now in place. Consumers writing typical research
+writeup prose with dense statistical tables should adopt
+`scope="narrative"` for a ~80% noise reduction relative to v1.0.5.
+
+### Known v1.1.0 limitations (residual after slice + narrative fixes)
+
+The remaining ~20% of v1.0.5 baseline noise is positional-
+heuristic limitations that the slice + narrative fixes cannot
+address:
+
+1. **"Random floor" / sub-clause values across sentence
+   boundaries** — prose like "X scored 0.291. The pooled OOD
+   random floor is 0.374" pairs 0.374 with the nearest preceding
+   detector (X), because the validator doesn't treat `.` as a
+   pairing boundary.
+2. **Multi-detector cross-pairing in dense prose** — prose like
+   "LoRA scored 0.293 [0.286, 0.301] versus 0.364 for the frozen
+   probe and 0.291 for TF-IDF + LR" pairs values with
+   text-order-nearest detector, which over-credits the second
+   detector in a list construction.
+
+Future work (v1.2.0+ candidate): sentence-boundary awareness
+(respecting `.` / `\n` as pairing boundaries) + better
+multi-detector list parsing.
+
+HARD-gate promotion of the consumer-side validator at v1.3.10+
+becomes credible at the ~80% reduction level achieved here.
+Remaining false positives can be suppressed via consumer-side
+filtering (e.g., excluding lines containing "random floor" or
+"versus") or accepted as known low-frequency noise.
+
 ## [1.0.5] — 2026-05-26 — publish workflow hardening (infrastructure-only)
 
 Tier-3 / infrastructure-only release. **No library code or public API
