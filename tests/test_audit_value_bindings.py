@@ -723,3 +723,271 @@ def test_3tuple_keys_coverage_counts_each_slice_independently(tmp_path: Path) ->
     assert report.violations == ()
     # 2 of 3 binding keys produced matches → coverage = 2/3.
     assert report.coverage == pytest.approx(2.0 / 3.0)
+
+
+# ---------------------------------------------------------------------------
+# v1.2.0: context-aware narrative filters (T1, T2, T3, T4).
+# All four activate ONLY when scope="narrative". scope="all" preserves
+# legacy v1.1.0 behavior (proves backward compat).
+# Closes the residual 36 from the consumer's v1.3.11 dogfood per the
+# pending Round 13 ledger. ADR 0005 §4 governs the design.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_t1_delta_filter_suppresses_signed_values_in_narrative(tmp_path: Path) -> None:
+    """T1 (narrative): values immediately preceded by + or - are deltas, not bindings."""
+    file = _write(
+        tmp_path,
+        "DELTA_SIGN.md",
+        # Three delta-magnitude mentions; all should be suppressed under narrative.
+        "LoRA drops -0.071 AUPRC below frozen probe; gap is +0.073 AUPRC over tfidf-lr.",
+    )
+    bindings = {("lora", "direct_val_auprc"): 0.293}
+    aliases = {"lora": ["LoRA"]}
+    metric_aliases = {"direct_val_auprc": ["AUPRC"]}
+    r_all = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases=aliases,
+        metric_aliases=metric_aliases,
+        scope="all",
+    )
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases=aliases,
+        metric_aliases=metric_aliases,
+        scope="narrative",
+    )
+    # Legacy 'all' flags the signed deltas; narrative scope suppresses them.
+    assert len(r_all.violations) >= 1
+    assert r_nar.violations == ()
+
+
+@pytest.mark.unit
+def test_t1_delta_keyword_filter_suppresses_comparative_magnitudes(tmp_path: Path) -> None:
+    """T1 (narrative): values near delta-keyword tokens (delta/drop/below/vs) are suppressed."""
+    file = _write(
+        tmp_path,
+        "DELTA_KW.md",
+        # "delta" keyword nearby; value is the magnitude of a comparison.
+        "Frozen probe's pooled OOD AUROC delta is 0.132 relative to LoRA.",
+    )
+    bindings = {("frozen probe", "pooled_ood_auroc"): 0.515}
+    aliases = {"frozen probe": ["frozen probe"]}
+    metric_aliases = {"pooled_ood_auroc": ["AUROC"]}
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases=aliases,
+        metric_aliases=metric_aliases,
+        scope="narrative",
+    )
+    # The 0.132 value should NOT be flagged as a (frozen probe, AUROC) violation
+    # — the "delta" keyword nearby identifies it as a comparative magnitude.
+    assert r_nar.violations == ()
+
+
+@pytest.mark.unit
+def test_t2_floor_filter_suppresses_random_baseline_values(tmp_path: Path) -> None:
+    """T2 (narrative): values near floor-keyword tokens (random/floor/chance) are suppressed."""
+    file = _write(
+        tmp_path,
+        "FLOOR.md",
+        # The 0.374 IS the random floor, not a frozen probe binding claim.
+        "For pooled OOD, the random AUPRC floor is 0.374. The frozen probe scored above it.",
+    )
+    bindings = {("frozen probe", "pooled_ood_auprc"): 0.364}
+    aliases = {"frozen probe": ["frozen probe"]}
+    metric_aliases = {"pooled_ood_auprc": ["AUPRC"]}
+    r_all = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases=aliases,
+        metric_aliases=metric_aliases,
+        scope="all",
+    )
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases=aliases,
+        metric_aliases=metric_aliases,
+        scope="narrative",
+    )
+    # 'all' flags 0.374 against the 0.364 binding (false positive).
+    # narrative suppresses because "random" and "floor" are within window.
+    assert any(v.found_value == 0.374 for v in r_all.violations)
+    assert r_nar.violations == ()
+
+
+@pytest.mark.unit
+def test_t3_consume_on_match_suppresses_duplicate_in_same_sentence(tmp_path: Path) -> None:
+    """T3 (narrative): once a binding matches in a sentence, subsequent same-binding values are skipped.
+
+    Catches dense multi-detector enumerations like "ProtectAI v2 improves
+    over v1 on JBB: AUPRC 0.556 vs 0.519." — the 0.519 is implicitly v1's
+    value, not v2's, but T3 only needs to suppress the duplicate-binding
+    flag (cross-detector inference is out of scope per ADR 0005).
+    """
+    file = _write(
+        tmp_path,
+        "VS.md",
+        # First value matches v2; second value (after "vs") is implicitly v1.
+        "ProtectAI v2 improves over v1 on JBB-Behaviors: AUPRC 0.556 vs 0.519.",
+    )
+    bindings = {
+        BindingKey("ProtectAI-v2", "AUPRC", "jbb"): 0.556,
+    }
+    detector_aliases = {"ProtectAI-v2": [r"ProtectAI v2"]}
+    metric_aliases = {"AUPRC": [r"AUPRC"]}
+    slice_aliases = {"jbb": [r"JBB-Behaviors", r"JBB"]}
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases=detector_aliases,
+        metric_aliases=metric_aliases,
+        slice_aliases=slice_aliases,
+        scope="narrative",
+    )
+    # T3 suppresses the second-value flag (0.519 != 0.556) once 0.556 matches.
+    assert len(r_nar.matched) == 1
+    assert r_nar.matched[0].value == 0.556
+    assert r_nar.violations == ()
+
+
+@pytest.mark.unit
+def test_t4_sentence_boundary_rejects_cross_sentence_pairing(tmp_path: Path) -> None:
+    """T4 (narrative): detector and value in different sentences should not pair.
+
+    Catches the consumer's "X scored 0.291. The random floor is 0.374"
+    pattern where 0.374 was being paired with X across the `.` boundary.
+    """
+    file = _write(
+        tmp_path,
+        "CROSS.md",
+        # First sentence: frozen probe with its own value (matches).
+        # Second sentence: 0.374 is the floor value, NOT a frozen-probe binding.
+        # T4 rejects the cross-sentence detector pairing for 0.374.
+        # T2 would also catch it via "floor" keyword — this test asserts T4
+        # is the relevant filter via a prose that doesn't trip T2.
+        "Frozen probe achieved AUPRC 0.364 on the eval. Under direct val, LoRA reached 0.974 AUPRC.",
+    )
+    bindings = {
+        ("frozen probe", "direct_val_auprc"): 0.653,
+    }
+    detector_aliases = {"frozen probe": ["frozen probe"]}
+    metric_aliases = {"direct_val_auprc": ["AUPRC", "direct val"]}
+    r_all = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases=detector_aliases,
+        metric_aliases=metric_aliases,
+        scope="all",
+    )
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases=detector_aliases,
+        metric_aliases=metric_aliases,
+        scope="narrative",
+    )
+    # 'all' pairs 0.974 (in sentence 2) with "frozen probe" (in sentence 1)
+    # — only detector aliased — and flags it as a violation (expected
+    # 0.653, found 0.974). narrative scope T4 rejects the
+    # cross-sentence pair entirely.
+    assert any(v.found_value == 0.974 for v in r_all.violations)
+    assert not any(v.found_value == 0.974 for v in r_nar.violations)
+
+
+@pytest.mark.unit
+def test_t4_same_sentence_still_matches(tmp_path: Path) -> None:
+    """T4 regression: detector and value in the SAME sentence must still match.
+
+    Asserts T4 doesn't over-reject when the legitimate detector mention
+    is in the same sentence as the value.
+    """
+    file = _write(
+        tmp_path,
+        "SAME.md",
+        "The TF-IDF + LR baseline reaches 0.971 AUPRC on direct validation.",
+    )
+    bindings = {("tf-idf + lr", "direct_val_auprc"): 0.971}
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases={"tf-idf + lr": ["TF-IDF \\+ LR"]},
+        metric_aliases={"direct_val_auprc": ["direct validation", "AUPRC"]},
+        scope="narrative",
+    )
+    assert len(r_nar.matched) == 1
+    assert r_nar.matched[0].value == 0.971
+    assert r_nar.violations == ()
+
+
+@pytest.mark.unit
+def test_narrative_combined_filters_dogfood_pattern(tmp_path: Path) -> None:
+    """Combined: a prose pattern from the consumer's v1.3.11 dogfood.
+
+    Real-world snippet (paraphrased from RESULTS.md:171) that exercises
+    multiple filters: cross-sentence pairing, delta language, paired-CI
+    brackets. Under narrative, none of these should produce a violation
+    against the canonical (frozen probe, AUROC, pooled_ood) = 0.515
+    binding.
+    """
+    file = _write(
+        tmp_path,
+        "DOGFOOD.md",
+        # Multi-clause sentence with delta, CI bracket, and cross-sentence values.
+        # The 0.132 is a delta magnitude (T1 via "delta" keyword);
+        # the 0.286 / 0.301 are inside brackets (v1.1.0 scope filter);
+        # the 0.515 IS the legitimate match.
+        "LoRA's pooled OOD AUROC is 0.383 against frozen probe's 0.515 (delta -0.132; CI [0.286, 0.301]).",
+    )
+    bindings = {
+        BindingKey("frozen_probe", "AUROC", "pooled_ood"): 0.515,
+        BindingKey("LoRA", "AUROC", "pooled_ood"): 0.383,
+    }
+    detector_aliases = {
+        "frozen_probe": ["frozen probe"],
+        "LoRA": ["LoRA"],
+    }
+    metric_aliases = {"AUROC": ["AUROC"]}
+    slice_aliases = {"pooled_ood": [r"pooled OOD"]}
+    r_nar = validate_reader_value_bindings(
+        files=[file],
+        bindings=bindings,
+        detector_aliases=detector_aliases,
+        metric_aliases=metric_aliases,
+        slice_aliases=slice_aliases,
+        scope="narrative",
+    )
+    # Expect 2 matches (0.515 and 0.383), 0 violations.
+    matched_values = {m.value for m in r_nar.matched}
+    assert 0.515 in matched_values
+    assert 0.383 in matched_values
+    assert r_nar.violations == ()
+
+
+@pytest.mark.unit
+def test_sentence_boundary_helper_respects_abbreviations(tmp_path: Path) -> None:
+    """Direct unit test for the sentence-boundary helper's abbreviation guard."""
+    from eval_toolkit.audit_value_bindings import (
+        _is_sentence_terminator_dot,
+        _sentence_boundary_positions,
+    )
+
+    # "e.g." and "i.e." should NOT split sentences.
+    text = "Consider X, e.g. its variant. Now Y."
+    positions = _sentence_boundary_positions(text)
+    # Expected: 2 sentences: "Consider X, e.g. its variant." and "Now Y."
+    # So positions = [0, 30] (start of "Now")
+    assert len(positions) == 2
+    # The first sentence INCLUDES "e.g." and ends at "variant."
+    # Verify by checking _is_sentence_terminator_dot at the dot of "e.g."
+    eg_dot_pos = text.find("e.g.") + 1  # the dot after "e"
+    assert not _is_sentence_terminator_dot(text, eg_dot_pos)
+    # Decimal numbers also don't split
+    text2 = "Score 0.5 is the floor. Under it lies LoRA."
+    pos2 = _sentence_boundary_positions(text2)
+    assert len(pos2) == 2  # "Score 0.5 is the floor." and "Under it..."

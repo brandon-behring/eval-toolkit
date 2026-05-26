@@ -35,6 +35,7 @@ Closes upstream issue #71. v1.0.3.
 
 from __future__ import annotations
 
+import bisect
 import logging
 import re
 from collections.abc import Mapping, Sequence
@@ -59,6 +60,98 @@ DEFAULT_VALUE_PATTERN: str = r"\d+\.\d{2,4}"
 DEFAULT_MAX_DISTANCE_CHARS: int = 80
 DEFAULT_SLICE_WINDOW_CHARS: int = 120
 DEFAULT_TOLERANCE: float = 1e-4
+
+
+# v1.2.0 context-aware narrative filters. Keyword lists are hardcoded
+# module-level frozensets (per ADR 0005 §4: Tier-1 ADDITIVE — no new
+# public kwargs; consumers can file an issue to extend the default
+# lists if their prose surfaces missed patterns).
+#
+# _DELTA_KEYWORDS: case-insensitive whole-token markers indicating a
+# value is a paired-delta or comparative magnitude, not a binding claim.
+# T1 filter suppresses candidate values when any of these appears within
+# ±30 chars of the value position (under scope="narrative").
+_DELTA_KEYWORDS: frozenset[str] = frozenset(
+    {
+        # Unambiguous delta nouns/verbs (consumer prose patterns):
+        "delta",
+        "drop",
+        "drops",
+        "lift",
+        "lifts",
+        "gap",
+        "margin",
+        # Comparison verbs that signal "this is a relative magnitude":
+        "regresses",
+        "improves",
+        "beats",
+        "exceeds",
+        "trails",
+        "underperforms",
+        # "vs"/"versus" intentionally INCLUDED — they're the canonical
+        # delta separator in consumer prose ("AUPRC 0.556 vs 0.519").
+        # The before-only window keeps these tight: "X vs Y" fires on
+        # Y (preceded by "vs"), not X. T3 also catches the same-sentence
+        # duplicate-binding flag separately.
+        "vs",
+        "versus",
+        # Comparison directions — kept under before-only window so
+        # "drops -0.071 below" suppresses -0.071 (sign also catches),
+        # but "0.515 (delta -0.132)" doesn't suppress 0.515 ("delta"
+        # is AFTER 0.515).
+        # Excluded: "against", "above", "ahead", "behind" — too
+        # ambiguous; common comparison prepositions that appear in
+        # legitimate binding claims.
+        "below",
+    }
+)
+
+# _FLOOR_KEYWORDS: markers indicating a value is a random-baseline or
+# floor reference, not a detector binding. T2 filter suppresses
+# candidate values when any of these appears within −50 / +5 chars
+# (asymmetric: floor mentions canonically precede the value, e.g.,
+# "random AUPRC is 0.374").
+#
+# Intentionally narrow: "baseline", "prior", "majority" are EXCLUDED
+# because they have legitimate non-floor senses ("TF-IDF baseline",
+# "prior work", "majority of detectors"). The consumer's prose
+# patterns with these words ("below the prevalence baseline of 0.374")
+# are caught by T1 via "below"/"above" instead — the comparative
+# preposition is the reliable signal, not the noun.
+_FLOOR_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "random",
+        "floor",
+        "chance",
+        "trivial",
+    }
+)
+
+# _ABBREV_BEFORE_DOT: tokens that should NOT trigger a sentence
+# boundary when followed by `.`. The multi-letter pattern (e.g., i.e.,
+# c.f.) is handled separately via letter-dot-letter detection.
+_ABBREV_BEFORE_DOT: frozenset[str] = frozenset(
+    {
+        "vs",
+        "etc",
+        "cf",
+        "fig",
+        "eq",
+        "pp",
+        "viz",
+        "ca",
+    }
+)
+
+
+def _compile_keyword_pattern(keywords: frozenset[str]) -> re.Pattern[str]:
+    """Compile case-insensitive word-boundary OR regex matching any keyword."""
+    parts = sorted(re.escape(kw) for kw in keywords)
+    return re.compile(r"\b(?:" + "|".join(parts) + r")\b", re.IGNORECASE)
+
+
+_DELTA_PATTERN: re.Pattern[str] = _compile_keyword_pattern(_DELTA_KEYWORDS)
+_FLOOR_PATTERN: re.Pattern[str] = _compile_keyword_pattern(_FLOOR_KEYWORDS)
 
 
 @dataclass(frozen=True)
@@ -409,6 +502,19 @@ def validate_reader_value_bindings(
         # for scope="all" (legacy semantics; no exclusion).
         excluded_ranges = _build_exclusion_ranges(text, line_starts) if scope == "narrative" else []
 
+        # v1.2.0 T3 + T4 (narrative-scope only): precompute sentence
+        # boundaries once per file (paragraph-aware abbreviation guard).
+        # T3 uses a per-(sentence, canonical_key) set to suppress
+        # duplicate matches of the same binding within one sentence
+        # (e.g., "0.556 vs 0.519" — the second value belongs to a
+        # contrasting detector implicit in the prose). T4 uses the
+        # boundaries to reject (detector, value) pairings that cross
+        # a sentence terminator.
+        sentence_positions: Sequence[int] = (
+            _sentence_boundary_positions(text) if scope == "narrative" else ()
+        )
+        consumed_in_sentence: set[tuple[int, BindingKey]] = set()
+
         # Pre-collect ALL detector positions (across every canonical
         # detector key) so each value can be paired with its NEAREST
         # detector. This avoids cross-detector contamination — e.g.,
@@ -460,11 +566,15 @@ def validate_reader_value_bindings(
                     # picking up e.g., "0.974" inside "10.974" or version
                     # strings like "1.0.974"). Simple heuristic: the
                     # character before the match (if any) must not be a
-                    # digit or dot.
+                    # digit or dot. v1.2.0 T1a (narrative-scope only):
+                    # also skip values immediately preceded by `+` or
+                    # `-` (delta-magnitude markers like "-0.071 AUPRC").
                     val_start_in_full = window_offset + val_match.start()
                     if val_start_in_full > 0:
                         prev_char = text[val_start_in_full - 1]
                         if prev_char.isdigit() or prev_char == ".":
+                            continue
+                        if scope == "narrative" and prev_char in "+-":
                             continue
 
                     val_str = val_match.group(0)
@@ -479,16 +589,53 @@ def validate_reader_value_bindings(
                     if excluded_ranges and _is_excluded(val_start_in_full, excluded_ranges):
                         continue
 
+                    # v1.2.0 T1b (narrative-scope only): delta-keyword
+                    # context filter. Skip values whose preceding 30
+                    # chars contain a delta-marker token (e.g.,
+                    # "delta", "drop", "lift", "vs", "below"). Window
+                    # is BEFORE-only: delta keywords canonically
+                    # introduce the delta magnitude ("delta -0.132",
+                    # "drops -0.071"). Symmetric ±30 windows
+                    # mis-fire on prose like "X scored 0.515 (delta
+                    # -0.132)" where "delta" describes a DIFFERENT
+                    # value (-0.132), not the preceding 0.515.
+                    if scope == "narrative" and _has_keyword_in_window(
+                        text, val_start_in_full, _DELTA_PATTERN, 30, 0
+                    ):
+                        continue
+
+                    # v1.2.0 T2 (narrative-scope only): floor-keyword
+                    # context filter. Skip values within −50/+5 chars of
+                    # a floor-marker token (e.g., "random", "floor",
+                    # "baseline"). Floor mentions canonically precede
+                    # the value ("random AUPRC is 0.374"), hence the
+                    # asymmetric window.
+                    if scope == "narrative" and _has_keyword_in_window(
+                        text, val_start_in_full, _FLOOR_PATTERN, 50, 5
+                    ):
+                        continue
+
                     # Cross-detector disambiguation: require the current
                     # det_key to be the detector paired with this value
                     # by the text-order rule (last detector before; else
                     # first detector after). Avoids cross-contamination
                     # on multi-detector prose like "TF-IDF achieves
                     # 0.971, while LoRA reaches 0.974".
-                    paired_key = _nearest_canonical_key(
+                    detector_match = _nearest_canonical_key(
                         detector_positions, val_start_in_full, max_distance_chars
                     )
-                    if paired_key != det_key:
+                    if detector_match is None or detector_match[0] != det_key:
+                        continue
+                    paired_det_pos = detector_match[1]
+
+                    # v1.2.0 T4 (narrative-scope only): reject the
+                    # detector-value pair if a sentence boundary lies
+                    # between them. Prevents prose like "X scored
+                    # 0.291. The random floor is 0.374" from pairing
+                    # 0.374 with X across the `.` boundary.
+                    if scope == "narrative" and _crosses_sentence_boundary(
+                        paired_det_pos, val_start_in_full, sentence_positions
+                    ):
                         continue
 
                     # Require the metric mention be within distance of the value too,
@@ -514,12 +661,12 @@ def validate_reader_value_bindings(
                     #   (c) paired slice == this binding's slice →
                     #       fall through to value comparison.
                     if slice_key != "any":
-                        paired_slice = _nearest_canonical_key(
+                        slice_match = _nearest_canonical_key(
                             slice_positions,
                             val_start_in_full,
                             slice_window_chars,
                         )
-                        if paired_slice is None:
+                        if slice_match is None:
                             unmatched_slice_count += 1
                             _logger.warning(
                                 "audit_value_bindings: no slice mention "
@@ -533,8 +680,25 @@ def validate_reader_value_bindings(
                                 canonical_key,
                             )
                             continue
+                        paired_slice = slice_match[0]
                         if paired_slice != slice_key:
                             continue
+
+                    # v1.2.0 T3 (narrative-scope only): suppress
+                    # duplicate matches of the same binding within one
+                    # sentence. After a Match is emitted for
+                    # (canonical_key) at this sentence, subsequent
+                    # candidate values in the same sentence for the
+                    # same canonical_key are skipped. Catches dense
+                    # multi-detector enumerations like "AUPRC 0.556 vs
+                    # 0.519" where 0.519 is implicitly a contrasting
+                    # detector's value.
+                    if sentence_positions:
+                        sent_id = _sentence_id_of(val_start_in_full, sentence_positions)
+                        if (sent_id, canonical_key) in consumed_in_sentence:
+                            continue
+                    else:
+                        sent_id = 0  # placeholder; not used when scope="all"
 
                     line_no = _position_to_line(line_starts, val_start_in_full)
                     if abs(found - expected) <= tolerance:
@@ -548,6 +712,8 @@ def validate_reader_value_bindings(
                             )
                         )
                         matched_keys.add(canonical_key)
+                        if sentence_positions:
+                            consumed_in_sentence.add((sent_id, canonical_key))
                     else:
                         # Widen the surrounding context for diagnostic
                         # clarity. Center on the value but include
@@ -705,6 +871,154 @@ def _is_excluded(pos: int, excluded: Sequence[tuple[int, int]]) -> bool:
     return start <= pos < end
 
 
+# ---------------------------------------------------------------------------
+# v1.2.0 context-aware narrative filters.
+# Helpers below implement T1 (delta/sign), T2 (floor), T3 (consume-on-match
+# per-sentence), and T4 (sentence-boundary detector-pair reject) — all
+# scoped to `scope="narrative"`. Per ADR 0005 §4, these are Tier-1
+# ADDITIVE: legacy `scope="all"` callers see zero behavior change.
+# ---------------------------------------------------------------------------
+
+
+def _is_sentence_terminator_dot(text: str, dot_pos: int) -> bool:
+    """Return True if the dot at ``dot_pos`` terminates a sentence.
+
+    False positives the abbreviation guard catches:
+
+    - Decimal numbers (digit-dot-digit): ``0.5``, ``§5.2``.
+    - Letter-dot-letter-dot patterns: ``e.g.``, ``i.e.``, ``c.f.``.
+    - Single-token abbreviations preceding the dot (whitespace- /
+      punctuation-separated): ``vs.``, ``etc.``, ``cf.``, ``fig.``,
+      ``eq.``, ``pp.``, ``viz.``, ``ca.``. See ``_ABBREV_BEFORE_DOT``.
+    """
+    n = len(text)
+    prev_char = text[dot_pos - 1] if dot_pos > 0 else ""
+    next_char = text[dot_pos + 1] if dot_pos + 1 < n else ""
+    # Decimal: digit-dot-digit.
+    if prev_char.isdigit() and next_char.isdigit():
+        return False
+    # Letter-dot-letter-dot pattern, dot is the SECOND dot in "x.y."
+    if (
+        dot_pos >= 3
+        and prev_char.isalpha()
+        and text[dot_pos - 2] == "."
+        and text[dot_pos - 3].isalpha()
+    ):
+        return False
+    # Letter-dot-letter-dot pattern, dot is the FIRST dot in "x.y."
+    if dot_pos + 2 < n and next_char.isalpha() and text[dot_pos + 2] == ".":
+        return False
+    # Single-token abbreviation preceding the dot.
+    j = dot_pos - 1
+    while j >= 0 and text[j].isalpha():
+        j -= 1
+    word = text[j + 1 : dot_pos].lower()
+    return word not in _ABBREV_BEFORE_DOT
+
+
+def _sentence_boundary_positions(text: str) -> list[int]:
+    """Return sorted character positions where each sentence STARTS.
+
+    Hard breaks (sentence terminators):
+
+    - ``!`` and ``?`` always terminate.
+    - ``.`` terminates unless the abbreviation guard
+      (:func:`_is_sentence_terminator_dot`) returns False.
+    - ``\\n\\n`` (paragraph break) terminates.
+
+    Soft breaks (NOT sentence boundaries):
+
+    - Single ``\\n`` (markdown line-wrap mid-sentence).
+    - ``;`` (semicolons in dense list constructions).
+    - ``:`` (colons preceding list items or definitions).
+
+    The first sentence starts at position 0. Subsequent sentence starts
+    are recorded at the first non-whitespace character after a hard
+    break. Used by T3 (consume-on-match) and T4 (sentence-boundary
+    detector-pair reject).
+    """
+    positions = [0]
+    n = len(text)
+    i = 0
+    while i < n:
+        ch = text[i]
+        boundary = False
+        skip = 1
+        if ch in "!?" or ch == "." and _is_sentence_terminator_dot(text, i):
+            boundary = True
+        elif ch == "\n" and i + 1 < n and text[i + 1] == "\n":
+            boundary = True
+            skip = 2
+        if boundary:
+            j = i + skip
+            while j < n and text[j].isspace():
+                j += 1
+            if j < n and j > positions[-1]:
+                positions.append(j)
+            i = max(j, i + skip)
+        else:
+            i += 1
+    return positions
+
+
+def _sentence_id_of(pos: int, sentence_positions: Sequence[int]) -> int:
+    """Return the zero-based sentence index containing ``pos``.
+
+    Uses binary search over the sorted ``sentence_positions``. Returns
+    ``0`` for any position before the first sentence start.
+    """
+    if not sentence_positions:
+        return 0
+    idx = bisect.bisect_right(sentence_positions, pos) - 1
+    return max(0, idx)
+
+
+def _crosses_sentence_boundary(pos_a: int, pos_b: int, sentence_positions: Sequence[int]) -> bool:
+    """Return True if a sentence boundary lies strictly between ``pos_a`` and ``pos_b``.
+
+    Sentence-boundary positions are derived from
+    :func:`_sentence_boundary_positions`. Used by T4 to reject
+    (detector, value) pairs whose detector mention is in a different
+    sentence than the value.
+    """
+    if not sentence_positions:
+        return False
+    lo = min(pos_a, pos_b)
+    hi = max(pos_a, pos_b)
+    idx = bisect.bisect_right(sentence_positions, lo)
+    return idx < len(sentence_positions) and sentence_positions[idx] <= hi
+
+
+def _is_signed_value(text: str, val_start: int) -> bool:
+    """True if the value at ``val_start`` is immediately preceded by ``+`` or ``-``.
+
+    The sign marker indicates a paired-delta or comparative magnitude
+    (e.g., ``-0.071`` AUPRC delta), not a binding claim. T1 filter
+    skips these under ``scope="narrative"``.
+    """
+    return val_start > 0 and text[val_start - 1] in "+-"
+
+
+def _has_keyword_in_window(
+    text: str,
+    val_start: int,
+    pattern: re.Pattern[str],
+    before_chars: int,
+    after_chars: int,
+) -> bool:
+    """True if ``pattern`` matches anywhere in the character window around ``val_start``.
+
+    Used by T1 (delta keywords) and T2 (floor keywords) to detect
+    context cues near a candidate value. ``before_chars`` and
+    ``after_chars`` control the asymmetric window — floor mentions
+    typically PRECEDE the value (e.g., "random AUPRC is 0.374"),
+    while delta mentions can be on either side.
+    """
+    start = max(0, val_start - before_chars)
+    end = min(len(text), val_start + after_chars)
+    return bool(pattern.search(text, start, end))
+
+
 def _build_pattern(
     canonical: str,
     aliases: Sequence[str],
@@ -731,8 +1045,8 @@ def _nearest_canonical_key(
     positions: Sequence[tuple[int, str]],
     value_pos: int,
     max_distance: int,
-) -> str | None:
-    """Return the canonical key paired with ``value_pos`` by text-order, or None.
+) -> tuple[str, int] | None:
+    """Return ``(key, position)`` paired with ``value_pos`` by text-order, or None.
 
     Pairing rule: pick the LAST canonical occurrence that appears
     BEFORE the value (text-order); if none is within ``max_distance``,
@@ -741,25 +1055,24 @@ def _nearest_canonical_key(
     pattern "<token> ... <value>" (subject-verb-object, predominant)
     with a fallback for the inverted "<value> ... by <token>" form.
 
-    Used for DETECTOR pairing. The "absolute-distance nearest"
-    heuristic was rejected for detectors — it produces false positives
-    on prose like "TF-IDF achieves 0.971, while LoRA reaches 0.974"
-    where 0.971 is closer to LoRA in raw distance even though it
-    semantically belongs to TF-IDF.
+    Used for DETECTOR pairing AND slice pairing. The
+    "absolute-distance nearest" heuristic was rejected for detectors
+    — it produces false positives on prose like "TF-IDF achieves
+    0.971, while LoRA reaches 0.974" where 0.971 is closer to LoRA
+    in raw distance even though it semantically belongs to TF-IDF.
 
-    For slice pairing, use :func:`_nearest_slice_key_by_distance`
-    instead — slice context is a prepositional adjunct that appears
-    EITHER side of the value with no strong syntactic prior, and the
-    text-order bias mis-attributes setup-clause slices to values in
-    subsequent clauses.
+    v1.2.0: now returns ``(key, position)`` instead of just ``key``
+    so callers can apply position-dependent secondary checks (e.g.,
+    T4 sentence-boundary detector-pair reject). The slice-pairing
+    call site discards the position.
     """
     if not positions:
         return None
     # Look for the LAST position strictly before the value, within range.
-    last_before: str | None = None
+    last_before: tuple[str, int] | None = None
     for pos, key in positions:
         if pos < value_pos and (value_pos - pos) <= max_distance:
-            last_before = key
+            last_before = (key, pos)
         elif pos >= value_pos:
             break
     if last_before is not None:
@@ -767,7 +1080,7 @@ def _nearest_canonical_key(
     # Fall back: FIRST position after the value, within range.
     for pos, key in positions:
         if pos >= value_pos and (pos - value_pos) <= max_distance:
-            return key
+            return (key, pos)
     return None
 
 

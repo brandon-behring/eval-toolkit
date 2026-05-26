@@ -5,6 +5,141 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-05-26 — `audit_value_bindings` context-aware noise reduction (consumer-feedback follow-on to #80)
+
+Tier-1 ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md).
+Consumer-feedback follow-on after v1.1.0's adoption at
+`prompt-injection-detection-submission@v1.3.11`. The v1.1.0
+slice-axis fix achieved 62% noise reduction (96 → 36 warnings) on
+the consumer's writeup; the residual 36 were positional-heuristic
+limitations [ADR 0005](docs/source/adr/0005-structured-keys-for-audit-validators.md)
+named as "Future work (deferred)" for v1.2.0+. This release
+addresses 81% of that residual (36 → 7) via four context-aware
+extensions to `scope="narrative"`. Combined with v1.1.0,
+**93% total noise reduction** vs the pre-fix v1.0.5 baseline.
+
+### Added — `audit_value_bindings.py` context-aware narrative filters
+
+All four filters activate ONLY when `scope="narrative"`. Legacy
+`scope="all"` callers see zero behavior change (Tier-1 ADDITIVE).
+No new public kwargs; no signature drift; the keyword lists are
+hardcoded module-level `frozenset` constants. Issue [#80](https://github.com/brandon-behring/eval-toolkit/issues/80)'s
+acceptance criterion was ≤5 warnings; v1.2.0 hits 7 (close to the
+target; the remaining 7 are pure cross-detector list-grammar cases
+that require parser-level work — see "Out of scope" below).
+
+- **T1: Delta-context filter.** Suppresses values that are
+  comparative magnitudes rather than binding claims. Two
+  sub-filters:
+  - Sign-prefix skip: values immediately preceded by `+` or `-`
+    (negative-magnitude markers like `-0.071 AUPRC`,
+    `+0.073 lift`) are dropped.
+  - Delta-keyword skip: values within 30 chars AFTER a
+    delta-marker token are dropped. The before-only window
+    prevents mis-firing on prose like `"frozen probe's 0.515
+    (delta -0.132)"` where the `"delta"` token refers to the
+    following `-0.132`, not the preceding `0.515`.
+
+  Keyword list (`_DELTA_KEYWORDS`, hardcoded frozenset):
+  `delta`, `drop`, `drops`, `lift`, `lifts`, `gap`, `margin`,
+  `regresses`, `improves`, `beats`, `exceeds`, `trails`,
+  `underperforms`, `vs`, `versus`, `below`. Excluded:
+  `against`, `above`, `ahead`, `behind` (too ambiguous; common
+  comparison prepositions in legitimate binding prose).
+
+- **T2: Floor-context filter.** Suppresses values near random-
+  baseline / floor mentions. Window is asymmetric (50 chars
+  before, 5 chars after) because floor mentions canonically
+  precede the value (`"random AUPRC is 0.374"`).
+
+  Keyword list (`_FLOOR_KEYWORDS`): `random`, `floor`, `chance`,
+  `trivial`. Intentionally narrow — `baseline`, `prior`,
+  `majority` excluded because they have legitimate non-floor
+  senses (`"TF-IDF baseline"`, `"prior work"`). Multi-word
+  patterns like `"below the prevalence baseline of 0.374"` are
+  caught by T1's `"below"` keyword instead.
+
+- **T3: Consume-on-match within sentence.** After a value
+  produces a Match for `(detector, metric, slice)`, subsequent
+  values for the same canonical binding in the same sentence are
+  suppressed. Catches dense multi-detector enumerations like
+  `"AUPRC 0.556 vs 0.519"` where the second value is implicitly
+  a contrasting detector's binding (cross-detector inference
+  remains out of scope per ADR 0005 A4).
+
+- **T4: Sentence-boundary detector-pair reject.** When pairing a
+  detector mention with a value, if a sentence terminator (`.`,
+  `!`, `?`, `\n\n`) lies between them, the pair is rejected.
+  Sentence detection uses paragraph-aware abbreviation guarding
+  (`vs.`, `e.g.`, `i.e.`, `c.f.`, `etc.`, `cf.`, `fig.`,
+  `eq.`, `pp.`, `viz.`, `ca.` excluded; decimal numbers and
+  letter-dot-letter patterns also guarded). Single `\n` is a
+  soft break (markdown line-wrap, NOT a sentence boundary);
+  `\n\n` is hard.
+
+### Internal changes (no public API impact)
+
+- `_nearest_canonical_key()` now returns `(key, position)`
+  instead of just `key`. The position is needed for T4's
+  sentence-boundary check. The slice-pairing call site unpacks
+  and discards the position. Private helper; no consumer impact.
+- New private helpers: `_is_sentence_terminator_dot`,
+  `_sentence_boundary_positions`, `_sentence_id_of`,
+  `_crosses_sentence_boundary`, `_is_signed_value`,
+  `_has_keyword_in_window`, `_compile_keyword_pattern`. All
+  underscore-prefixed; Tier-3 FREE.
+
+### Dogfood evidence
+
+| Configuration | Warnings on `prompt-injection-detection-submission` HEAD | Reduction vs v1.0.5 baseline |
+|---|---|---|
+| v1.0.5 (legacy 2-tuple) | 95 | — |
+| v1.1.0 BindingKey + scope='narrative' (content-type filter only) | 23 | 76% |
+| **v1.2.0 + context filters (this release)** | **7** | **93%** |
+
+The 7 v1.2.0 residuals are all cross-detector list constructions
+(e.g., `"0.293 versus 0.364 for the frozen probe and 0.291 for
+TF-IDF + LR"` where the validator can't infer that 0.361 / 0.291
+belong to ProtectAI-v1 and TF-IDF respectively because they're
+introduced by `"and"` / `"for"` without an immediately-preceding
+detector mention). These require true list-grammar parsing
+(rejected for v1.x in ADR 0005 A4) and are tracked for v1.3.0+
+with their own ADR design review.
+
+### Consumer adoption path
+
+`prompt-injection-detection-submission` and other consumers using
+`scope="narrative"` get the v1.2.0 filters automatically with no
+code change. Consumers on `scope="all"` (default) continue with
+v1.1.0 behavior. Recommended consumer migration:
+
+1. Re-pin `eval-toolkit>=1.2.0,<2` (additive; no consumer code
+   change required).
+2. HARD-gate promotion is now credible: 7 residual warnings is
+   below the actionable threshold; consumer can promote
+   `audit_value_bindings` from SOFT to HARD bundled with
+   `audit_citation_alignment` per the v1.3.8 plan.
+
+### Tests
+
+36 in `tests/test_audit_value_bindings.py` (28 from v1.1.0 + 8
+new for T1–T4 + sentence-boundary helper unit test). All pass.
+Public API snapshot regenerated for `__version__` bump only (no
+signature changes beyond an inspect-formatting normalization on
+the `validate_reader_value_bindings` `bindings` annotation; same
+type semantically).
+
+### Out of scope (deferred)
+
+- **Cross-detector list-grammar parsing** — the 7 residual
+  warnings. Requires lookahead context-aware list parsing
+  (`"X scored Y vs Z for W and V for U"`). Track as a v1.3.0+
+  candidate; needs ADR design before implementation.
+- **Markdown AST parsing** (ADR 0005 A4) — v2.0 territory.
+- **`extra_*_keywords` kwargs** for runtime extension of the
+  hardcoded keyword lists — YAGNI for now (consumer's prose is
+  covered); add in a v1.2.x patch if concrete demand emerges.
+
 ## [1.1.0] — 2026-05-26 — `audit_value_bindings` slice-aware matching via `BindingKey` (closes #80)
 
 Tier-1 ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md).

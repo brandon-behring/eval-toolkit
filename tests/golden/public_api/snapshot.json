@@ -1429,7 +1429,7 @@
       "doc_first_line": "str(object='') -> str",
       "kind": "value",
       "type": "str",
-      "value": "'1.1.0'"
+      "value": "'1.2.0'"
     },
     "apply_operating_points": {
       "doc_first_line": "Apply fitted thresholds to a mixed-class or single-class target slice.",
@@ -1979,7 +1979,7 @@
     "validate_reader_value_bindings": {
       "doc_first_line": "Validate (detector, metric, value) bindings in reader-prose markdown.",
       "kind": "function",
-      "signature": "(*, files: 'Sequence[Path | str]', bindings: \"Mapping['BindingKey | tuple[str, str] | tuple[str, str, str]', float]\", value_pattern: 'str' = '\\\\d+\\\\.\\\\d{2,4}', max_distance_chars: 'int' = 80, metric_aliases: 'Mapping[str, Sequence[str]]' = mappingproxy({}), detector_aliases: 'Mapping[str, Sequence[str]]' = mappingproxy({}), slice_aliases: 'Mapping[str, Sequence[str]] | None' = None, slice_window_chars: 'int' = 120, scope: \"Literal['all', 'narrative']\" = 'all', tolerance: 'float' = 0.0001) -> 'ValueBindingsReport'"
+      "signature": "(*, files: 'Sequence[Path | str]', bindings: 'Mapping[BindingKey | tuple[str, str] | tuple[str, str, str], float]', value_pattern: 'str' = '\\\\d+\\\\.\\\\d{2,4}', max_distance_chars: 'int' = 80, metric_aliases: 'Mapping[str, Sequence[str]]' = mappingproxy({}), detector_aliases: 'Mapping[str, Sequence[str]]' = mappingproxy({}), slice_aliases: 'Mapping[str, Sequence[str]] | None' = None, slice_window_chars: 'int' = 120, scope: \"Literal['all', 'narrative']\" = 'all', tolerance: 'float' = 0.0001) -> 'ValueBindingsReport'"
     },
     "validate_results": {
       "doc_first_line": "Validate a serialized ``RunResult`` payload against ``results.v1.json``.",
