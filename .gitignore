@@ -72,8 +72,12 @@ codex-comprehensive-audit-*.md
 # Contents have historical value but are not part of any release.
 .scratch/
 
-# Claude Code project settings (machine-local)
-.claude/
+# Claude Code: settings are machine-local; the review agents + commands are
+# shared, versioned deliverables (see .claude/agents/README.md). Review ledgers
+# written by `/review-eval --ledger` stay local under .claude/reviews/.
+.claude/*
+!.claude/agents/
+!.claude/commands/
 
 # mkdocs build output (Section E.1 v0.28.0)
 /site/
