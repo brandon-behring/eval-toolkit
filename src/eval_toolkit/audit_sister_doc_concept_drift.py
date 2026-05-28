@@ -220,7 +220,10 @@ def validate_sister_doc_concept_drift(
     for path in files_resolved:
         try:
             file_texts[path] = path.read_text(encoding="utf-8")
-        except OSError:
+        except (OSError, UnicodeDecodeError):
+            # UnicodeDecodeError is a ValueError, not an OSError — without it a
+            # single non-UTF-8 byte would crash the whole scan. Skip unreadable
+            # or non-UTF-8 files (consistent with the missing-file skip above).
             continue
 
     drift_clusters: list[DriftCluster] = []

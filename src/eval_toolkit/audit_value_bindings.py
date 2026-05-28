@@ -469,7 +469,13 @@ def validate_reader_value_bindings(
     unmatched_slice_count = 0
 
     for file_path in files_resolved:
-        text = file_path.read_text(encoding="utf-8")
+        try:
+            text = file_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                f"{file_path}: not valid UTF-8 ({exc}). "
+                f"audit_value_bindings requires UTF-8-encoded markdown."
+            ) from exc
         line_starts = _line_starts(text)
 
         # When scope="narrative", pre-compute the character ranges to
