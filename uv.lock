@@ -609,6 +609,10 @@ docs = [
     { name = "sphinx-copybutton" },
     { name = "sphinx-design" },
 ]
+eda = [
+    { name = "matplotlib" },
+    { name = "pandas" },
+]
 embeddings = [
     { name = "sentence-transformers" },
 ]
@@ -647,6 +651,7 @@ requires-dist = [
     { name = "linkify-it-py", marker = "extra == 'docs'", specifier = ">=2.0" },
     { name = "matplotlib", marker = "extra == 'all'", specifier = ">=3.8" },
     { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.8" },
+    { name = "matplotlib", marker = "extra == 'eda'", specifier = ">=3.8" },
     { name = "matplotlib", marker = "extra == 'plotting'", specifier = ">=3.8" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "myst-nb", marker = "extra == 'docs'", specifier = ">=1.1" },
@@ -654,6 +659,7 @@ requires-dist = [
     { name = "pandas", marker = "extra == 'all'", specifier = ">=2.0" },
     { name = "pandas", marker = "extra == 'dataframe'", specifier = ">=2.0" },
     { name = "pandas", marker = "extra == 'dev'", specifier = ">=2.0" },
+    { name = "pandas", marker = "extra == 'eda'", specifier = ">=2.0" },
     { name = "pillow", marker = "extra == 'all'", specifier = ">=10.0" },
     { name = "pillow", marker = "extra == 'dev'", specifier = ">=10.0" },
     { name = "pillow", marker = "extra == 'plotting'", specifier = ">=10.0" },
@@ -683,7 +689,7 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'probes'", specifier = ">=4.40" },
     { name = "transformers", marker = "extra == 'transformers'", specifier = ">=4.0" },
 ]
-provides-extras = ["all", "dataframe", "dev", "docs", "embeddings", "losses", "parquet", "plotting", "probes", "property", "transformers", "validation", "yaml"]
+provides-extras = ["all", "dataframe", "dev", "docs", "eda", "embeddings", "losses", "parquet", "plotting", "probes", "property", "transformers", "validation", "yaml"]
 
 [[package]]
 name = "executing"

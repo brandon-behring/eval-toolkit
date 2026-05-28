@@ -5,6 +5,8 @@ src/eval_toolkit/bootstrap.py
 src/eval_toolkit/calibration.py
 src/eval_toolkit/config.py
 src/eval_toolkit/docs.py
+src/eval_toolkit/eda/data_audit.py
+src/eval_toolkit/eda/obfuscation.py
 src/eval_toolkit/embeddings.py
 src/eval_toolkit/leakage.py
 src/eval_toolkit/manifest.py

@@ -74,6 +74,14 @@ probes = ["torch>=2.0", "transformers>=4.40"]
 # (granular extras — losses callers should not have to install the larger
 # transformers stack). Shares the torch version pin with [probes].
 losses = ["torch>=2.0"]
+# v1.5.0 (feat/eda-data-audit): eval_toolkit.eda Job-1 integrity-gate layer.
+# Tier-2 surface (ADR 0003) — torch-free by design. pandas powers the
+# DataFrameLoader reuse path; matplotlib is reserved for the EDA layer's
+# future profiling plots. Intentionally NO sentence-transformers / torch:
+# the near-dup / cross-split checks use the lexical TfidfCosineStrategy and
+# token-length quantiles take a caller-supplied tokenizer (no transformers
+# import in this module). NOT folded into [all] / [dev] — opt-in only.
+eda = ["pandas>=2.0", "matplotlib>=3.8"]
 # NO-OP extra kept for backward compatibility (R3 at v0.49.0).
 #
 # jsonschema>=4.21 moved to base deps at v0.16.0; this extra has been a
