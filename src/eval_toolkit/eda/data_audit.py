@@ -63,6 +63,7 @@ from typing import TYPE_CHECKING, Final
 
 from eval_toolkit.artifacts import sanitize_for_json, write_json_strict
 from eval_toolkit.claims import GateResult
+from eval_toolkit.eda.obfuscation import ObfuscationProfile, analyze_obfuscation
 from eval_toolkit.leakage import (
     CrossSplitLeakageCheck,
     ExactDuplicateCheck,
@@ -272,6 +273,11 @@ class SplitSummary:
         Fraction of rows whose token length exceeds the supplied
         ``context_window``; ``None`` when a tokenizer or context window was
         not supplied.
+    obfuscation : ObfuscationProfile or None
+        Corpus-level obfuscation / encoding / invisible-Unicode prevalence
+        per :func:`eval_toolkit.eda.obfuscation.analyze_obfuscation`.
+        Profile-only — does not gate ``DataAudit.gate_passed``. ``None``
+        when the caller passed ``compute_obfuscation=False``.
     """
 
     split: str
@@ -285,6 +291,7 @@ class SplitSummary:
     word_lengths: dict[str, float | int | None]
     token_lengths: dict[str, float | int | None] | None = None
     pct_over_context_window: float | None = None
+    obfuscation: ObfuscationProfile | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serializable mapping of this summary."""
@@ -300,6 +307,7 @@ class SplitSummary:
             "word_lengths": dict(self.word_lengths),
             "token_lengths": dict(self.token_lengths) if self.token_lengths is not None else None,
             "pct_over_context_window": self.pct_over_context_window,
+            "obfuscation": self.obfuscation.to_dict() if self.obfuscation is not None else None,
         }
 
 
@@ -308,6 +316,7 @@ def summarize_split(
     *,
     tokenizer: Tokenizer | None = None,
     context_window: int | None = None,
+    compute_obfuscation: bool = True,
 ) -> SplitSummary:
     """Build a :class:`SplitSummary` for one slice.
 
@@ -321,6 +330,11 @@ def summarize_split(
     context_window : int or None, optional
         Model context window in tokens. When given **with** a tokenizer,
         ``pct_over_context_window`` is computed.
+    compute_obfuscation : bool, optional
+        Run :func:`eval_toolkit.eda.obfuscation.analyze_obfuscation` over
+        the slice and attach the resulting :class:`~eval_toolkit.eda.
+        obfuscation.ObfuscationProfile`. Default ``True``. Cheap relative
+        to the leakage checks (single pass over chars + token regex).
 
     Returns
     -------
@@ -364,6 +378,8 @@ def summarize_split(
         else:
             pct_over = 0.0
 
+    obfuscation = analyze_obfuscation(texts) if compute_obfuscation else None
+
     return SplitSummary(
         split=slice_.name,
         n_rows=n_rows,
@@ -376,6 +392,7 @@ def summarize_split(
         word_lengths=lengths["word"],
         token_lengths=token_lengths,
         pct_over_context_window=pct_over,
+        obfuscation=obfuscation,
     )
 
 
@@ -609,6 +626,7 @@ def audit_dataset(
     near_threshold: float = 0.9,
     cross_split: bool = True,
     cross_split_threshold: float = 0.9,
+    obfuscation: bool = True,
     min_neg_pos_ratio: float = DEFAULT_MIN_NEG_POS_RATIO,
     max_neg_pos_ratio: float = DEFAULT_MAX_NEG_POS_RATIO,
     pct_over_context_threshold: float = DEFAULT_PCT_OVER_CONTEXT_THRESHOLD,
@@ -647,6 +665,13 @@ def audit_dataset(
         ``no_cross_split_leakage`` gate then passes with a "skipped" note).
     cross_split_threshold : float, optional
         Similarity threshold for cross-split leakage. Default ``0.9``.
+    obfuscation : bool, optional
+        Compute the per-split :class:`~eval_toolkit.eda.obfuscation.
+        ObfuscationProfile` (invisible-Unicode / NFKC delta / high-entropy
+        runs / ROT13 markers / leetspeak prevalence). Default ``True``.
+        Profile-only — does not contribute to ``gate_passed``. Set
+        ``False`` to skip (e.g. on very large corpora where the single
+        char-walk pass per detector is undesirable).
     min_neg_pos_ratio, max_neg_pos_ratio : float, optional
         Inclusive bounds for the class-balance gate's neg:pos ratio. Defaults
         ``0.1`` / ``10.0``.
@@ -675,7 +700,12 @@ def audit_dataset(
     dataset_name = getattr(loader, "name", "") or ""
 
     summaries: dict[str, SplitSummary] = {
-        name: summarize_split(slice_, tokenizer=tokenizer, context_window=context_window)
+        name: summarize_split(
+            slice_,
+            tokenizer=tokenizer,
+            context_window=context_window,
+            compute_obfuscation=obfuscation,
+        )
         for name, slice_ in splits.items()
     }
 
