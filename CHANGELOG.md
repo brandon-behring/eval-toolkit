@@ -22,6 +22,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty or single-class train/test raises a diagnostic `ValueError`.
 - Exported via `from eval_toolkit.eda import ...`; 100% line+branch coverage; mypy-strict clean.
 
+### Added — Tier-2 `eda.distribution_shift` covariate-shift quantification (Job-3: E1)
+
+`eval_toolkit.eda` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — Tier-2. Public functions take **feature matrices**, so the module is base-install-safe (NumPy + SciPy + scikit-learn); embed text first with `eval_toolkit.embeddings.make_minilm_embedder` (`[embeddings]` extra) or any vectorizer.
+
+- **`proxy_a_distance`:** Ben-David et al. (2006/2010) PAD = `2(1 − 2ε)` from a **linear**
+  domain classifier's **k-fold CV** error, with **fixed strong regularization** (small `C`) —
+  *not* the high-`C` RBF-SVM-on-`predict_proba` recipe that overfits to `PAD ≈ 2` at small `n`.
+  Optional bootstrap CI.
+- **`maximum_mean_discrepancy`:** Gretton et al. (2012) **unbiased** RBF-kernel MMD² U-statistic +
+  **median-heuristic bandwidth** (freezable across folds) + **permutation-test** p-value
+  (Phipson & Smyth 2010, `(1+count)/(B+1)`, never zero). Optional bootstrap CI.
+- **`knn_purity`:** mean fraction of each point's k nearest neighbours sharing its domain label.
+- **`median_bandwidth`** helper + the **`distribution_shift`** orchestrator (all three) +
+  `PadResult` / `MmdResult` / `KnnPurityResult` / `DistributionShiftResult` dataclasses (`to_dict`).
+- Docstrings carry the pre-registered caveats: distance is **necessary-not-sufficient** for OOD
+  collapse (fuse with shortcut-exposure); a non-significant MMD p is not "no shift"; cross-dataset
+  distances are ordinal-only (covariate vs label-semantics conflation). 100% line+branch coverage.
+
 ### Fixed
 
 - **Public-API golden `__version__` drift:** the `v1.5.0` release commit bumped
