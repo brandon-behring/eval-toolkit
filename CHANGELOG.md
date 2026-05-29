@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] — unreleased — Tier-2 `eda` layer (#83) + schema-aware `HFDatasetsLoader` (#85)
+
+Tier-2 / `loaders` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — backward-compatible.
+
+- **`eda` Job-1 integrity gate (#83):** `audit_dataset` / `DataAudit` / `SplitSummary` + the
+  `class_balance` / `no_cross_split_leakage` / `context_window_fit` gates + the §B2 obfuscation
+  prevalence module.
+- **schema-aware `HFDatasetsLoader` (#85):** load real-world dataset schemas without column
+  guessing — `feature_cols` + `feature_join` (join multiple columns into one feature; NaN-safe),
+  `label_map` (remap raw labels → int; fail-fast `ValueError` lists unmapped values), `revision`
+  (pin the HF dataset SHA). All new params default to the prior behavior; a missing feature/label
+  column raises `KeyError` listing the observed columns.
+
 ## [1.4.0] — 2026-05-26 — `audit_citation_alignment` Layer 2 + Layer 3 (closes #82); shared `_narrative` helpers (ADR 0007)
 
 Tier-1 ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md).

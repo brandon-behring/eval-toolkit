@@ -455,12 +455,14 @@ class HFDatasetsLoader:
             raise ImportError(
                 "HFDatasetsLoader requires datasets. Install with: pip install datasets"
             ) from exc
+        # Only pass optional kwargs when set, so the default call signature is
+        # unchanged (backward-compatible: load_dataset(repo_id) / (repo_id, name=...)).
+        kwargs: dict[str, Any] = {}
         if self.config_name is not None:
-            return cast(
-                Mapping[str, Any],
-                load_dataset(self.repo_id, name=self.config_name, revision=self.revision),
-            )
-        return cast(Mapping[str, Any], load_dataset(self.repo_id, revision=self.revision))
+            kwargs["name"] = self.config_name
+        if self.revision is not None:
+            kwargs["revision"] = self.revision
+        return cast(Mapping[str, Any], load_dataset(self.repo_id, **kwargs))
 
     def load_splits(self) -> dict[str, EvalSlice]:
         """Convert each requested HF split to an :class:`EvalSlice`.
