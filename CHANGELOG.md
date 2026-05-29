@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0] — 2026-05-29 — Tier-2 `eda` Job-2 + Job-3: shortcut + shift diagnostics (#86, #87)
+
+`eval_toolkit.eda.*` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — Tier-2, backward-compatible. Completes the EDA-first analytic layer above the v1.5.0 Job-1 integrity gate: **Job-2** lexical shortcut diagnostics (`lexical_association`, #86) and **Job-3** distribution-shift quantification (`distribution_shift`, #87). Both are dogfooded by the consumer portfolio's pre-modeling OOD-wall prediction (V5 + V9).
 
 ### Added — Tier-2 `eda.lexical_association` shortcut diagnostics (Job-2: C1 + C2)
 
