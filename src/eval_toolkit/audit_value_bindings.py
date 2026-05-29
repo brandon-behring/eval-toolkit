@@ -341,6 +341,14 @@ def validate_reader_value_bindings(
         ``violations``, ``matched``, ``coverage``,
         ``unmatched_slice_count`` per the dataclass.
 
+    Raises
+    ------
+    ValueError
+        If any file in ``files`` is not valid UTF-8.
+    TypeError
+        If a ``bindings`` key is not a recognized shape (2-tuple,
+        3-tuple, or :class:`BindingKey`).
+
     Examples
     --------
     >>> from pathlib import Path

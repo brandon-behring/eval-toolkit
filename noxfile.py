@@ -7,8 +7,8 @@ lint + type matrix that tox.ini defines.
 Sessions
 --------
 - ``tests``: pytest + coverage gate on each Python interpreter available
-- ``lint``: ruff + black --check
-- ``type``: mypy strict
+- ``lint``: ruff + black --check (src + tests + scripts)
+- ``type``: mypy strict (src + scripts)
 - ``doctest``: pytest --doctest-modules on math kernels
 - ``visual``: pytest-mpl baseline validation
 """
@@ -48,15 +48,15 @@ def fast(session: nox.Session) -> None:
 def lint(session: nox.Session) -> None:
     """ruff + black --check."""
     session.install("-e", ".[dev]")
-    session.run("ruff", "check", "src", "tests")
-    session.run("black", "--check", "src", "tests")
+    session.run("ruff", "check", "src", "tests", "scripts")
+    session.run("black", "--check", "src", "tests", "scripts")
 
 
 @nox.session
 def type(session: nox.Session) -> None:
-    """mypy strict on src/."""
+    """mypy strict on src + scripts."""
     session.install("-e", ".[dev]")
-    session.run("mypy", "src")
+    session.run("mypy", "src", "scripts")
 
 
 @nox.session

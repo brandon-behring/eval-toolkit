@@ -1261,3 +1261,17 @@ def test_combined_consumer_residuals_resolve(tmp_path: Path) -> None:
     assert 0.364 in matched_vals
     assert 0.383 in matched_vals
     assert 0.515 in matched_vals
+
+
+@pytest.mark.unit
+def test_non_utf8_file_raises_valueerror(tmp_path: Path) -> None:
+    """A non-UTF-8 file raises a diagnostic ValueError (never a silent crash)."""
+    bad = tmp_path / "bad.md"
+    bad.write_bytes(b"TF-IDF reaches 0.974 AUPRC \xff on direct val.\n")
+    with pytest.raises(ValueError, match="not valid UTF-8"):
+        validate_reader_value_bindings(
+            files=[bad],
+            bindings=SEED_BINDINGS,
+            detector_aliases=SEED_DETECTOR_ALIASES,
+            metric_aliases=SEED_METRIC_ALIASES,
+        )

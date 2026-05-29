@@ -26,7 +26,9 @@ COMMANDS_DIR = REPO_ROOT / ".claude" / "commands"
 
 # Concrete repo-relative paths (src/tests/scripts/docs prefixes) with a file
 # extension. Globs (``*``) and placeholders (``<...>``) are filtered out below.
-_PATH_RE = re.compile(r"(?:src|tests|scripts|docs)/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+")
+# The leading ``\b`` (word boundary) prevents a compound prefix like
+# ``src_foo/bar.py`` from being mis-extracted as ``foo/bar.py``.
+_PATH_RE = re.compile(r"\b(?:src|tests|scripts|docs)/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+")
 # Top-level docs the agents reference by bare name.
 _TOPLEVEL_RE = re.compile(r"\b(STYLE|CONTRIBUTING|CHANGELOG)\.md\b")
 # Accepted `model:` values (tier aliases or a full claude-* id).
@@ -132,3 +134,15 @@ def test_review_eval_command_cited_paths_exist() -> None:
     assert not missing, f"{cmd.name} cites non-existent path(s): {missing}"
     adr_missing = _adr_refs_resolve(text)
     assert not adr_missing, f"{cmd.name} references non-existent ADR(s): {adr_missing}"
+
+
+def test_path_regex_not_fooled_by_compound_prefix() -> None:
+    """The `\\b` anchor stops `src_foo/bar.py` mis-extracting as `src/...`-style path.
+
+    Without the word boundary, ``src_validators/x.py`` would yield the spurious
+    path ``validators/x.py`` and the existence check could pass/fail on the wrong
+    file, masking real drift. Guards regression on _PATH_RE.
+    """
+    assert _cited_paths("see src_validators/x.py for details") == set()
+    # A genuine path is still extracted.
+    assert _cited_paths("see src/eval_toolkit/metrics.py") == {"src/eval_toolkit/metrics.py"}

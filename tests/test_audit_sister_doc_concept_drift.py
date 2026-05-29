@@ -335,3 +335,22 @@ def test_default_embedder_lazy_import() -> None:
     except ImportError as exc:
         # If sentence_transformers absent, the docstring promised hint.
         assert "embeddings" in str(exc).lower() or "sentence_transformers" in str(exc)
+
+
+@pytest.mark.unit
+def test_non_utf8_file_skipped_with_warning(tmp_path: Path) -> None:
+    """A non-UTF-8 file is skipped (not a crash) and the skip is warned, not silent."""
+    good = _write(tmp_path, "good.md", "T1 is full GPU re-eval.")
+    bad = tmp_path / "bad.md"
+    bad.write_bytes(b"T1 is \xff laptop smoke.\n")
+    embedder = _keyword_embedder({"GPU": GPU_VEC, "laptop": LAPTOP_VEC})
+    with pytest.warns(UserWarning, match="skipping unreadable"):
+        report = validate_sister_doc_concept_drift(
+            files=[good, bad],
+            concept_tokens=["T1"],
+            embedder=embedder,
+            similarity_threshold=0.5,
+        )
+    # bad.md dropped → only one T1 occurrence → no drift cluster, still consistent.
+    assert report.drift_clusters == ()
+    assert "T1" in report.consistent_tokens

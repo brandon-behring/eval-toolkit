@@ -25,7 +25,7 @@ You are orchestrating eval-toolkit's repo-local review subagents. Parse `$ARGUME
 - No target → **full baseline sweep**: launch audit-validator-reviewer (over all `audit_*.py` + `_narrative.py`), api-stability-guardian (whole public surface), silent-failure-auditor (all of `src/`), and docstring-conformance-auditor (public docstrings, kernels in `.doctest-modules`), in parallel. Skip dogfood unless `--consumer PATH` is given.
 - `--audit validators` → audit-validator-reviewer only. `--audit api` → api-stability-guardian only. `--audit docstrings` → docstring-conformance-auditor only. `--audit <path>` → run the agent(s) whose scope matches that path over that path.
 
-**Dogfood (`--consumer PATH`, or `--audit dogfood`).** First run the deterministic runner: `make dogfood VALIDATOR=<v> CONSUMER=<PATH>` (default consumer `~/Claude/prompt-injection-detection-submission`). Then pass its JSON output to `etk-dogfood-noise-analyst` for classification. The runner does the run; the agent does the judgment.
+**Dogfood (`--consumer PATH`, or `--audit dogfood`).** First run the deterministic runner: `make dogfood VALIDATOR=<v> CONSUMER=<PATH>` (default consumer `~/Claude/prompt-injection-detection-submission`; default validator `audit_citation_alignment` — **the only validator with a runner adapter today**; others raise `NotImplementedError`). Then pass its JSON output to `etk-dogfood-noise-analyst` for classification. The runner does the run; the agent does the judgment.
 
 ## Pass each agent
 
@@ -38,7 +38,7 @@ After collecting findings, re-spawn each agent on **its own findings only** (no 
 ## Synthesis (always)
 
 Produce one report:
-1. **Deduplicate first.** When several agents run, merge findings keyed on `(path, line, issue-class)`. Ownership for cross-cutting classes: **encoding/IO → `etk-silent-failure-auditor`**; keep the owner's version and drop the duplicate. Report `deduplicated M → N` so nothing is silently hidden.
+1. **Deduplicate first (the orchestrator owns dedup — agents always report what they see).** When several agents run, merge findings keyed on `(path, line, issue-class)`. For cross-cutting classes, keep the canonical owner's version and drop the duplicate: **encoding/IO → `etk-silent-failure-auditor`**. Report `deduplicated M → N` so nothing is silently hidden.
 2. **Overall verdict:** `PASS` / `CONCERNS` / `BLOCK` (BLOCK if any agent returned BLOCK).
 3. **Per-agent verdict line** with each agent's `PASS/CONCERNS/BLOCK`.
 4. **Combined high-confidence findings table** (post-dedup) grouped by agent: `path:line · severity · confidence · finding · fix`.

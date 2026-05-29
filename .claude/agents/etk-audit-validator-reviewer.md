@@ -25,7 +25,7 @@ You review **eval-toolkit audit validators** (`src/eval_toolkit/audit_*.py` and 
 
 **Shared-helper reuse.** Narrative-prose primitives must be imported from `eval_toolkit._narrative` — not re-implemented per validator. The shared helpers are enumerated in ADR 0007 §"Shared helpers" (exclusion ranges, sentence-boundary detection, keyword-window helpers, etc.). Flag any duplicated `_build_exclusion_ranges` / `_sentence_boundary_positions` / `_crosses_sentence_boundary`-style logic living inside a validator instead of `_narrative`.
 
-**Encoding & I/O (cross-ref — do not double-report).** Encoding correctness is owned by `etk-silent-failure-auditor`. If you notice a bare `read_text()` without `encoding="utf-8"` on consumer-content files, mention it once and defer the finding to that agent rather than counting it here (keeps `/review-eval` dedup clean).
+**Encoding & I/O (cross-ref).** Encoding correctness is canonically owned by `etk-silent-failure-auditor`. Report a bare `read_text()` without `encoding="utf-8"` on consumer-content files if you see it, and tag it `issue-class: encoding/io` — the `/review-eval` orchestrator dedups against the owner, so you don't need to suppress it yourself.
 
 **Behavioral coverage.** L2 (scope exclusion) and L3 (pairing) are *behavioral* — reading the validator cannot fully confirm they work. Confirm each claimed layer has matching tests in `tests/test_<validator>.py` (e.g. a table/code-fence/bracket exclusion test for L2, a grammar-cue suppression test for L3). Flag a layer asserted in code but uncovered by tests; do not assert a layer "✓" purely from static reading.
 
