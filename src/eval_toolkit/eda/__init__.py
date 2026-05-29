@@ -15,12 +15,18 @@ is intentionally evolvable and is **not** part of the v2.0-frozen top-level
 
     from eval_toolkit.eda import audit_dataset, DataAudit, SplitSummary
 
-Scope (deliberately narrow)
---------------------------
-Integrity gating only: row counts, class balance, text-length quantiles,
-dedup / cross-split leakage. **No** embeddings, semantic similarity,
-contamination scoring, or UMAP — those distribution-shift concerns are
-deferred to a future ``distribution_shift`` module.
+Scope
+-----
+- **Job-1 integrity gate** (``data_audit`` + ``obfuscation``): row counts, class
+  balance, text-length quantiles, dedup / cross-split leakage, obfuscation
+  prevalence.
+- **Job-2 lexical shortcut diagnostics** (``lexical_association``): weighted
+  log-odds + PMI (C1) and partial-input / competency baselines (C2) — still
+  torch-free (NumPy + scikit-learn).
+
+**No** embeddings, semantic similarity, proxy-A-distance, MMD, or UMAP — those
+distribution-shift concerns are deferred to the ``distribution_shift`` module
+(which carries the optional ``[embeddings]`` dependency).
 """
 
 from __future__ import annotations
@@ -38,6 +44,19 @@ from eval_toolkit.eda.data_audit import (
     length_quantiles,
     summarize_split,
 )
+from eval_toolkit.eda.lexical_association import (
+    DEFAULT_CHAR_NGRAM_RANGE,
+    DEFAULT_MIN_COUNT,
+    DEFAULT_PRIOR_SCALE,
+    BaselineScore,
+    CompetencyResult,
+    LexicalAssociationResult,
+    StrTokenizer,
+    class_lexical_association,
+    competency_baselines,
+    default_tokenizer,
+    weighted_log_odds,
+)
 from eval_toolkit.eda.obfuscation import (
     BASE64_ENTROPY_THRESHOLD,
     HEX_ENTROPY_THRESHOLD,
@@ -54,20 +73,33 @@ from eval_toolkit.eda.obfuscation import (
 )
 
 __all__ = [
+    # --- constants ---
     "BASE64_ENTROPY_THRESHOLD",
+    "DEFAULT_CHAR_NGRAM_RANGE",
     "DEFAULT_MAX_NEG_POS_RATIO",
+    "DEFAULT_MIN_COUNT",
     "DEFAULT_MIN_NEG_POS_RATIO",
     "DEFAULT_PCT_OVER_CONTEXT_THRESHOLD",
+    "DEFAULT_PRIOR_SCALE",
     "EDA_AUDIT_SCHEMA_VERSION",
     "HEX_ENTROPY_THRESHOLD",
+    # --- classes / type aliases ---
+    "BaselineScore",
+    "CompetencyResult",
     "DataAudit",
+    "LexicalAssociationResult",
     "ObfuscationProfile",
     "SplitSummary",
+    "StrTokenizer",
     "Tokenizer",
+    # --- functions ---
     "analyze_obfuscation",
     "audit_dataset",
     "class_balance",
+    "class_lexical_association",
+    "competency_baselines",
     "count_invisible_chars",
+    "default_tokenizer",
     "has_high_entropy_alnum_run",
     "has_rot13_marker",
     "is_leeted_token",
@@ -77,4 +109,5 @@ __all__ = [
     "nfkc_changed",
     "shannon_entropy",
     "summarize_split",
+    "weighted_log_odds",
 ]
