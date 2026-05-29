@@ -21,12 +21,15 @@ Scope
   balance, text-length quantiles, dedup / cross-split leakage, obfuscation
   prevalence.
 - **Job-2 lexical shortcut diagnostics** (``lexical_association``): weighted
-  log-odds + PMI (C1) and partial-input / competency baselines (C2) — still
-  torch-free (NumPy + scikit-learn).
+  log-odds + PMI (C1) and partial-input / competency baselines (C2) — torch-free
+  (NumPy + scikit-learn).
+- **Job-3 distribution shift** (``distribution_shift``): proxy-A-distance, MMD
+  (permutation-tested), and kNN purity (E1) — operates on feature matrices, so
+  still base-install-safe (NumPy + SciPy + scikit-learn).
 
-**No** embeddings, semantic similarity, proxy-A-distance, MMD, or UMAP — those
-distribution-shift concerns are deferred to the ``distribution_shift`` module
-(which carries the optional ``[embeddings]`` dependency).
+The shift functions take **feature matrices**, not text — embed first with
+:func:`eval_toolkit.embeddings.make_minilm_embedder` (the optional
+``[embeddings]`` extra) or any vectorizer. UMAP / 2-D projections stay caller-side.
 """
 
 from __future__ import annotations
@@ -43,6 +46,21 @@ from eval_toolkit.eda.data_audit import (
     class_balance,
     length_quantiles,
     summarize_split,
+)
+from eval_toolkit.eda.distribution_shift import (
+    DEFAULT_KNN_K,
+    DEFAULT_MMD_PERMUTATIONS,
+    DEFAULT_PAD_C,
+    DEFAULT_PAD_FOLDS,
+    DistributionShiftResult,
+    KnnPurityResult,
+    MmdResult,
+    PadResult,
+    distribution_shift,
+    knn_purity,
+    maximum_mean_discrepancy,
+    median_bandwidth,
+    proxy_a_distance,
 )
 from eval_toolkit.eda.lexical_association import (
     DEFAULT_CHAR_NGRAM_RANGE,
@@ -76,9 +94,13 @@ __all__ = [
     # --- constants ---
     "BASE64_ENTROPY_THRESHOLD",
     "DEFAULT_CHAR_NGRAM_RANGE",
+    "DEFAULT_KNN_K",
     "DEFAULT_MAX_NEG_POS_RATIO",
     "DEFAULT_MIN_COUNT",
     "DEFAULT_MIN_NEG_POS_RATIO",
+    "DEFAULT_MMD_PERMUTATIONS",
+    "DEFAULT_PAD_C",
+    "DEFAULT_PAD_FOLDS",
     "DEFAULT_PCT_OVER_CONTEXT_THRESHOLD",
     "DEFAULT_PRIOR_SCALE",
     "EDA_AUDIT_SCHEMA_VERSION",
@@ -87,8 +109,12 @@ __all__ = [
     "BaselineScore",
     "CompetencyResult",
     "DataAudit",
+    "DistributionShiftResult",
+    "KnnPurityResult",
     "LexicalAssociationResult",
+    "MmdResult",
     "ObfuscationProfile",
+    "PadResult",
     "SplitSummary",
     "StrTokenizer",
     "Tokenizer",
@@ -100,13 +126,18 @@ __all__ = [
     "competency_baselines",
     "count_invisible_chars",
     "default_tokenizer",
+    "distribution_shift",
     "has_high_entropy_alnum_run",
     "has_rot13_marker",
     "is_leeted_token",
+    "knn_purity",
     "leetspeak_counts",
     "length_quantiles",
+    "maximum_mean_discrepancy",
+    "median_bandwidth",
     "nfkc_char_delta",
     "nfkc_changed",
+    "proxy_a_distance",
     "shannon_entropy",
     "summarize_split",
     "weighted_log_odds",
