@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty or single-class train/test raises a diagnostic `ValueError`.
 - Exported via `from eval_toolkit.eda import ...`; 100% line+branch coverage; mypy-strict clean.
 
+### Fixed
+
+- **Public-API golden `__version__` drift:** the `v1.5.0` release commit bumped
+  `_version.py` to `1.5.0` but did not regenerate `tests/golden/public_api/snapshot.json`,
+  which still pinned `'1.4.0'` — leaving `test_public_api_drift_guard` red on `main` (and on
+  every branch cut from it). Regenerated the golden (the diff is the `__version__` value only).
+
 ## [1.5.0] — 2026-05-29 — Tier-2 `eda` layer (#83) + schema-aware `HFDatasetsLoader` (#85)
 
 Tier-2 / `loaders` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — backward-compatible.
