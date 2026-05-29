@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Tier-2 `eda.lexical_association` shortcut diagnostics (Job-2: C1 + C2)
+
+`eval_toolkit.eda` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — Tier-2, torch-free (NumPy + scikit-learn). The analytic layer above the Job-1 integrity gate: *"is the label recoverable from a surface shortcut that will not transfer out-of-distribution?"*
+
+- **C1 — `weighted_log_odds` / `class_lexical_association`:** Monroe, Colaresi & Quinn (2008)
+  informative-Dirichlet weighted log-odds-ratio z-scores + smoothed PMI per token, with a
+  `min_count` rare-token floor (the V5 pitfall). Returns a `LexicalAssociationResult`
+  (`top_a` / `top_b` / `to_dict`); tokens ordered by descending z-score.
+- **C2 — `competency_baselines`:** partial-input baselines (length-only, char-n-gram, BoW)
+  fit on a train split and scored on a test split → `CompetencyResult` of per-baseline
+  average-precision vs the positive-prevalence floor (the *shortcut floor*; Feng, Wallace &
+  Boyd-Graber, ACL 2019 caveat documented). Vectorizers fit on train only (no test leakage);
+  empty or single-class train/test raises a diagnostic `ValueError`.
+- Exported via `from eval_toolkit.eda import ...`; 100% line+branch coverage; mypy-strict clean.
+
 ## [1.5.0] — 2026-05-29 — Tier-2 `eda` layer (#83) + schema-aware `HFDatasetsLoader` (#85)
 
 Tier-2 / `loaders` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — backward-compatible.
