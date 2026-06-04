@@ -136,7 +136,7 @@ def test_benchmark_bootstrap_ci_pr_auc_n200(
     y, s = yspc_n200
 
     def _run() -> float:
-        return bootstrap_ci(y, s, metric=pr_auc, n_resamples=200, seed=42).point_estimate
+        return bootstrap_ci(y, s, metric=pr_auc, n_resamples=200, rng=42).point_estimate
 
     result = benchmark(_run)
     assert 0.0 <= result <= 1.0
@@ -155,7 +155,7 @@ def test_benchmark_paired_bootstrap_diff_pr_auc_n200(
     y, s_a, s_b = y_two_scorers_n200
 
     def _run() -> float:
-        return paired_bootstrap_diff(y, s_a, s_b, metric=pr_auc, n_resamples=200, seed=42).delta
+        return paired_bootstrap_diff(y, s_a, s_b, metric=pr_auc, n_resamples=200, rng=42).delta
 
     result = benchmark(_run)
     # Delta can be negative (B worse than A) — just verify it's finite + in expected range
