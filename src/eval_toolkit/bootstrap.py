@@ -1810,7 +1810,9 @@ def stratified_cluster_bootstrap_ci(
         combine=combine,
         resample_labels=resample_labels,
     )
-    raw = parallel_map(step, seed_seqs, n_jobs=n_jobs, description="stratified_cluster_bootstrap_ci")
+    raw = parallel_map(
+        step, seed_seqs, n_jobs=n_jobs, description="stratified_cluster_bootstrap_ci"
+    )
     failures = sum(1 for r in raw if r is None)
     vals = [r for r in raw if r is not None]
     if failures > 0.05 * n_resamples:

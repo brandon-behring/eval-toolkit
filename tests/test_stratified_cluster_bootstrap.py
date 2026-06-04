@@ -20,7 +20,9 @@ from eval_toolkit.bootstrap import (
 from eval_toolkit.metrics import roc_auc
 
 
-def _stratum(seed: int, *, n_clusters: int = 30, per: int = 4) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _stratum(
+    seed: int, *, n_clusters: int = 30, per: int = 4
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Cluster-pure labels + a separable score with cluster-level noise (one resample-unit)."""
     rng = np.random.default_rng(seed)
     g = np.repeat(np.arange(n_clusters), per)
@@ -102,8 +104,12 @@ def test_composite_top_bottom_statistic() -> None:
 def test_njobs_reproducibility() -> None:
     """Same seed → bit-for-bit-identical CI across n_jobs (spawn_seed_sequences)."""
     strata = {0: _stratum(0), 1: _stratum(1), 2: _stratum(2)}
-    r1 = stratified_cluster_bootstrap_ci(strata, roc_auc, _mean_combine, n_resamples=200, rng=42, n_jobs=1)
-    r2 = stratified_cluster_bootstrap_ci(strata, roc_auc, _mean_combine, n_resamples=200, rng=42, n_jobs=2)
+    r1 = stratified_cluster_bootstrap_ci(
+        strata, roc_auc, _mean_combine, n_resamples=200, rng=42, n_jobs=1
+    )
+    r2 = stratified_cluster_bootstrap_ci(
+        strata, roc_auc, _mean_combine, n_resamples=200, rng=42, n_jobs=2
+    )
     assert (r1.point_estimate, r1.ci_low, r1.ci_high) == (r2.point_estimate, r2.ci_low, r2.ci_high)
 
 
@@ -112,7 +118,9 @@ def test_njobs_reproducibility() -> None:
 def test_njobs_minus_one_runs() -> None:
     """n_jobs=-1 (all cores) completes without error."""
     strata = {0: _stratum(0), 1: _stratum(1)}
-    ci = stratified_cluster_bootstrap_ci(strata, roc_auc, _mean_combine, n_resamples=100, rng=42, n_jobs=-1)
+    ci = stratified_cluster_bootstrap_ci(
+        strata, roc_auc, _mean_combine, n_resamples=100, rng=42, n_jobs=-1
+    )
     assert ci.ci_low <= ci.ci_high
 
 
@@ -130,7 +138,9 @@ def test_validation_errors(kwargs: dict, strata_override, match: str) -> None:
     """Invalid parameters raise ValueError with a diagnostic message."""
     strata = {} if strata_override == {} else {0: _stratum(0), 1: _stratum(1)}
     with pytest.raises(ValueError, match=match):
-        stratified_cluster_bootstrap_ci(strata, roc_auc, _mean_combine, n_resamples=50, rng=0, **kwargs)
+        stratified_cluster_bootstrap_ci(
+            strata, roc_auc, _mean_combine, n_resamples=50, rng=0, **kwargs
+        )
 
 
 @pytest.mark.unit
