@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — `bootstrap.stratified_cluster_bootstrap_ci` (composite multi-stratum cluster bootstrap)
+
+`eval_toolkit.bootstrap` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — backward-compatible. Generalises the v1.7.0 single-block `cluster_bootstrap_ci` to the shape leave-one-group-out transfer gaps actually take: a **composite statistic reduced over several independently-resampled cluster strata**.
+
+- **`stratified_cluster_bootstrap_ci(strata, per_stratum_metric, combine, *, resample_labels=(0,1), …)`** — `strata` is a mapping `{key: (y, score, groups)}` of independent resample-units (e.g. `seed`, `(carrier, seed)`, `(attack_type, seed)`); each bootstrap iteration resamples every stratum's `(label, group)` clusters, computes `per_stratum_metric` on each, and reduces the `{key: metric}` map with `combine` to one scalar (a seed-averaged ROC-AUC gap, a mean-over-carriers gap, a top−bottom per-type AUPRC contrast, …). Percentile `BootstrapCI` (`method="stratified_cluster_percentile"`). `cluster_bootstrap_ci` is the single-stratum, identity-reduce special case.
+- **Why:** the v1.7.0 single-block primitive could not express the **seed-averaging** that real LODO estimators do inside the bootstrap (`Gx = val − mean_seed(test_roc)`), so it did not actually fit the consumer portfolio's attack-type / carrier / dialect bootstraps. This is the correct primitive for them.
+- **Parallel + reproducible:** built on `parallel_map` + `spawn_seed_sequences` ⇒ `n_jobs` gives bit-for-bit-identical CIs; `n_jobs=-1` all cores.
+- Exported via `from eval_toolkit import stratified_cluster_bootstrap_ci`; `__all__` + `_EXPORTS` + doctest + n_jobs-reproducibility / seed-averaged / composite-statistic tests; mypy-strict clean.
+
 ## [1.7.0] — 2026-06-04 — label-stratified cluster bootstrap (#90, #91)
 
 ### Added — `bootstrap.cluster_bootstrap_ci` (label-stratified cluster bootstrap)

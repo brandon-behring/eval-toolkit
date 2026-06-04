@@ -22,7 +22,7 @@ from __future__ import annotations
 import functools
 import logging
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Hashable, Mapping
 from dataclasses import dataclass
 from typing import Final, Literal
 
@@ -63,6 +63,7 @@ __all__ = [
     "paired_bootstrap_ece_diff",
     "paired_bootstrap_op_point_diff",
     "paired_mde",
+    "stratified_cluster_bootstrap_ci",
 ]
 
 DEFAULT_N_RESAMPLES: Final[int] = 1000
@@ -1644,6 +1645,191 @@ def cluster_bootstrap_ci(
         confidence=confidence,
         n_resamples=int(len(vals)),
         method="cluster_percentile",
+    )
+
+
+def _stratified_cluster_step(
+    seed_seq: np.random.SeedSequence,
+    *,
+    strata_data: dict[Hashable, tuple[np.ndarray, np.ndarray]],
+    strata_units: dict[Hashable, dict[int, list[np.ndarray]]],
+    per_stratum_metric: MetricFn,
+    combine: Callable[[Mapping[Hashable, float]], float],
+    resample_labels: tuple[int, ...],
+) -> float | None:
+    """One stratified-cluster draw of ``combine({key: metric})`` (module-level for picklability).
+
+    Each stratum's ``(label, group)`` units are resampled independently (per ``resample_labels``;
+    labels not listed are held fixed) with a single per-resample RNG, the per-stratum metric is
+    computed on the gathered rows, and ``combine`` reduces the ``{key: metric}`` map to one scalar.
+    Returns ``None`` if any stratum metric or ``combine`` raises (a degenerate draw).
+    """
+    rng = np.random.default_rng(seed_seq)
+    by_key: dict[Hashable, float] = {}
+    for key, units in strata_units.items():
+        y_k, s_k = strata_data[key]
+        parts: list[np.ndarray] = []
+        for lab, group_rows in units.items():
+            if lab in resample_labels:
+                chosen = rng.integers(0, len(group_rows), size=len(group_rows))
+                parts.extend(group_rows[c] for c in chosen)
+            else:
+                parts.extend(group_rows)
+        idx = np.concatenate(parts)
+        try:
+            by_key[key] = float(per_stratum_metric(y_k[idx], s_k[idx]))
+        except (ValueError, RuntimeError):
+            return None
+    try:
+        return float(combine(by_key))
+    except (ValueError, RuntimeError, KeyError, ZeroDivisionError):
+        return None
+
+
+def stratified_cluster_bootstrap_ci(
+    strata: Mapping[Hashable, tuple[np.ndarray, np.ndarray, np.ndarray]],
+    per_stratum_metric: MetricFn,
+    combine: Callable[[Mapping[Hashable, float]], float],
+    *,
+    resample_labels: tuple[int, ...] = (0, 1),
+    n_resamples: int = DEFAULT_N_RESAMPLES,
+    confidence: float = DEFAULT_CONFIDENCE,
+    rng: RNGLike | SeedLike | None = DEFAULT_SEED,
+    n_jobs: int = 1,
+) -> BootstrapCI:
+    r"""Cluster bootstrap of a **composite** statistic over several independent strata.
+
+    Generalises :func:`cluster_bootstrap_ci` (one condition, one metric) to a statistic that is a
+    user-supplied **reduction over several independently-resampled cluster strata** — the shape that
+    leave-one-group-out transfer gaps take in practice: a per-seed (and per-group) cluster resample,
+    averaged/combined into one scalar (a seed-averaged ROC-AUC gap, a mean-over-carriers gap, a
+    top-minus-bottom per-type AUPRC contrast, …). Each bootstrap iteration resamples every stratum's
+    ``(label, group)`` clusters (label-stratified, per ``resample_labels``; labels not listed are
+    held fixed), computes ``per_stratum_metric`` on each, and reduces the ``{key: metric}`` map with
+    ``combine``; the percentile CI is over those reduced values.
+
+    :func:`cluster_bootstrap_ci` is the single-stratum, identity-reduce special case
+    (``strata={0: (y, score, groups)}``, ``combine=lambda m: m[0]``).
+
+    Parameters
+    ----------
+    strata : Mapping[key, (y_true, y_score, groups)]
+        Independent resample-units keyed by any hashable (e.g. ``seed`` / ``(carrier, seed)`` /
+        ``(attack_type, seed)``). Each value is three aligned 1-D arrays. Iteration order is the
+        mapping's order (stable ⇒ deterministic).
+    per_stratum_metric : callable ``(y_true, y_score) -> float``
+        Metric computed on each stratum's resampled rows (e.g. ``roc_auc``, ``pr_auc``). Must be
+        **picklable** when ``n_jobs != 1``.
+    combine : callable ``Mapping[key, float] -> float``
+        Reduces the per-stratum metrics to the composite statistic (e.g.
+        ``val − mean_seed(m)``; ``mean_carrier(val[c] − mean_seed(m[c, ·]))``; a top−bottom contrast).
+        Closes over any fixed quantities (val ROC, the type partition) — pass a **picklable**
+        top-level function or ``functools.partial`` when ``n_jobs != 1`` (lambdas are fine at
+        ``n_jobs == 1``).
+    resample_labels : tuple[int, ...], optional
+        Which label strata are cluster-resampled within each stratum (default ``(0, 1)``);
+        ``(1,)`` resamples only positive clusters, holding negatives fixed (the payload-cluster
+        convention). Labels not present in a given stratum are simply skipped there.
+    n_resamples, confidence, rng : standard bootstrap params (``rng`` per SPEC 7).
+    n_jobs : int, optional
+        Parallel workers (default 1). Per-resample seeding via :func:`spawn_seed_sequences` makes the
+        CI **bit-for-bit identical across ``n_jobs``**; ``n_jobs=-1`` uses all cores. See
+        :ref:`methodology/parallelism`.
+
+    Returns
+    -------
+    BootstrapCI
+        ``method="stratified_cluster_percentile"``; ``point_estimate = combine({key:
+        per_stratum_metric(y, score)})`` on the full data; ``[alpha/2, 1 - alpha/2]`` percentile CI.
+
+    Raises
+    ------
+    ValueError
+        On empty ``strata``, a stratum whose arrays mismatch shape / are not 1-D, empty
+        ``resample_labels``, ``confidence`` outside (0, 1), ``n_jobs == 0``, or > 5% degenerate
+        resamples.
+    TypeError
+        If ``n_jobs != 1`` and ``per_stratum_metric`` / ``combine`` are not picklable.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from eval_toolkit.metrics import roc_auc
+    >>> def _block(seed):
+    ...     g = np.repeat(np.arange(20), 4)                 # 20 clusters of 4
+    ...     y = (g % 2).astype(int)
+    ...     s = y + np.random.default_rng(seed).normal(0, 0.3, size=y.size)
+    ...     return y, s, g
+    >>> strata = {0: _block(0), 1: _block(1)}               # two seeds
+    >>> ci = stratified_cluster_bootstrap_ci(
+    ...     strata, roc_auc, lambda m: float(np.mean(list(m.values()))),
+    ...     n_resamples=200, rng=0)
+    >>> ci.method
+    'stratified_cluster_percentile'
+    >>> bool(0.0 <= ci.ci_low <= ci.ci_high <= 1.0)
+    True
+
+    Notes
+    -----
+    For a *gap* with a fixed offset (``Gx = val − stat``, ``val`` fixed), fold the offset into
+    ``combine`` (``combine`` returns ``val − mean(m.values())``) so the CI is on ``Gx`` directly.
+
+    References
+    ----------
+    .. [1] Efron, B. & Tibshirani, R. "An Introduction to the Bootstrap." Chapman & Hall, 1993.
+           (§8 — stratified / clustered resampling.)
+    .. [2] Field, C. A. & Welsh, A. H. "Bootstrapping clustered data." JRSS-B 69(3), 2007.
+    """
+    if not strata:
+        raise ValueError("strata must be non-empty")
+    if not 0.0 < confidence < 1.0:
+        raise ValueError(f"confidence must be in (0, 1), got {confidence}")
+    resample_labels = tuple(int(x) for x in resample_labels)
+    if not resample_labels:
+        raise ValueError("resample_labels must be non-empty (nothing would be resampled)")
+
+    strata_data: dict[Hashable, tuple[np.ndarray, np.ndarray]] = {}
+    strata_units: dict[Hashable, dict[int, list[np.ndarray]]] = {}
+    for key, triple in strata.items():
+        y_a, s_a, g_a = (np.asarray(triple[0]), np.asarray(triple[1]), np.asarray(triple[2]))
+        if not (y_a.shape == s_a.shape == g_a.shape) or y_a.ndim != 1:
+            raise ValueError(
+                f"stratum {key!r}: y/score/groups must be aligned 1-D arrays; got "
+                f"{y_a.shape}, {s_a.shape}, {g_a.shape}"
+            )
+        strata_data[key] = (y_a, s_a)
+        strata_units[key] = _label_cluster_units(y_a, g_a)
+
+    point = float(combine({k: float(per_stratum_metric(*strata_data[k])) for k in strata_data}))
+    seed_seqs = spawn_seed_sequences(rng, n_resamples)
+    step = functools.partial(
+        _stratified_cluster_step,
+        strata_data=strata_data,
+        strata_units=strata_units,
+        per_stratum_metric=per_stratum_metric,
+        combine=combine,
+        resample_labels=resample_labels,
+    )
+    raw = parallel_map(step, seed_seqs, n_jobs=n_jobs, description="stratified_cluster_bootstrap_ci")
+    failures = sum(1 for r in raw if r is None)
+    vals = [r for r in raw if r is not None]
+    if failures > 0.05 * n_resamples:
+        raise ValueError(
+            f"stratified_cluster_bootstrap_ci: {failures}/{n_resamples} resamples degenerate "
+            "(a per-stratum metric or combine raised); refusing CI on > 5% degenerate"
+        )
+    if not vals:
+        raise ValueError("stratified_cluster_bootstrap_ci: no usable resamples")
+    arr = np.asarray(vals, dtype=np.float64)
+    alpha = 1.0 - confidence
+    ci_low, ci_high = np.quantile(arr, [alpha / 2.0, 1.0 - alpha / 2.0])
+    return BootstrapCI(
+        point_estimate=point,
+        ci_low=float(ci_low),
+        ci_high=float(ci_high),
+        confidence=confidence,
+        n_resamples=int(len(vals)),
+        method="stratified_cluster_percentile",
     )
 
 
