@@ -148,6 +148,7 @@
     "bootstrap_metric_from_predictions",
     "brier_decomposition",
     "capture_git_sha",
+    "cluster_bootstrap_ci",
     "compute_file_hash",
     "compute_label_overlap",
     "correct_p_values",
@@ -1475,6 +1476,11 @@
       "doc_first_line": "Current HEAD full SHA, or ``None`` if not in a git repo.",
       "kind": "function",
       "signature": "(repo_root: 'Path | str | None' = None) -> 'str | None'"
+    },
+    "cluster_bootstrap_ci": {
+      "doc_first_line": "Label-stratified **cluster** (group) bootstrap percentile CI for a single-condition metric.",
+      "kind": "function",
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', groups: 'np.ndarray', statistic: 'MetricFn', *, resample_labels: 'tuple[int, ...]' = (0, 1), n_resamples: 'int' = 1000, confidence: 'float' = 0.95, rng: 'RNGLike | SeedLike | None' = 42, n_jobs: 'int' = 1) -> 'BootstrapCI'"
     },
     "compute_file_hash": {
       "doc_first_line": "SHA-256 hex digest of an existing file (sentinel-typed).",
