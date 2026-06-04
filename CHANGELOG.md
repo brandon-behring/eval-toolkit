@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.7.0] — 2026-06-04 — label-stratified cluster bootstrap (#90, #91)
 
 ### Added — `bootstrap.cluster_bootstrap_ci` (label-stratified cluster bootstrap)
 
@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Parallel + reproducible:** built on `parallel_map` + `spawn_seed_sequences`, so `n_jobs` gives bit-for-bit-identical CIs across worker counts (the v0.34.0 reproducibility contract). `n_jobs=-1` uses all cores.
 - Motivation: the analytic row-level AUROC-difference CI (`delong_roc_variance`) assumes row independence and under-covers on clustered eval data (LODO transfer gaps with payload/document/page clusters). Dogfooded by the consumer portfolio's attack-type / carrier / dialect leave-one-group-out bootstraps (Rule of Three).
 - Exported via `from eval_toolkit import cluster_bootstrap_ci`; `__all__` + `_EXPORTS` updated; doctest + n_jobs-reproducibility tests; mypy-strict clean.
+
+### Fixed — stale `seed=` kwarg in 2 bootstrap benchmarks (#91)
+
+`tests/benchmarks/test_kernel_benchmarks.py` passed `seed=` to `bootstrap_ci` / `paired_bootstrap_diff`, but those parameters migrated to `rng=` (SPEC 7) — the two bootstrap benchmark tests `TypeError`'d on the nightly-benchmarks workflow (excluded from PR CI via `-m "not benchmark"`, so it went unnoticed). 2-line `seed=`→`rng=` rename.
 
 ## [1.6.0] — 2026-05-29 — Tier-2 `eda` Job-2 + Job-3: shortcut + shift diagnostics (#86, #87)
 
