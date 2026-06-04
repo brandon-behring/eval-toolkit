@@ -129,6 +129,7 @@ _EXPORTS: dict[str, str] = {
     "block_bootstrap_on_folds": "eval_toolkit.bootstrap",
     "bonferroni_correct": "eval_toolkit.bootstrap",
     "bootstrap_ci": "eval_toolkit.bootstrap",
+    "cluster_bootstrap_ci": "eval_toolkit.bootstrap",
     "correct_p_values": "eval_toolkit.bootstrap",
     "cross_validate_metric": "eval_toolkit.bootstrap",
     "cv_clt_ci": "eval_toolkit.bootstrap",

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — `bootstrap.cluster_bootstrap_ci` (label-stratified cluster bootstrap)
+
+`eval_toolkit.bootstrap` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — backward-compatible. Closes the gap between the row-level (`bootstrap_ci`) and fold-level (`block_bootstrap_on_folds`) resamplers: **the missing middle — resampling clusters of rows.**
+
+- **`cluster_bootstrap_ci(y_true, y_score, groups, statistic, *, resample_labels=(0, 1), …)`** — percentile CI for a single-condition metric that resamples whole **clusters** (`groups`) with replacement, so the CI is honest under intra-cluster correlation (prompts sharing one attack payload; a document contributing both a poisoned and a benign row). The resample unit is `(label, group)`: by default positive- and negative-clusters are resampled **separately** (never a single-class draw); `resample_labels=(1,)` resamples only positive clusters with negatives held fixed (the payload-cluster convention). Returns a `BootstrapCI` with `method="cluster_percentile"`.
+- **Parallel + reproducible:** built on `parallel_map` + `spawn_seed_sequences`, so `n_jobs` gives bit-for-bit-identical CIs across worker counts (the v0.34.0 reproducibility contract). `n_jobs=-1` uses all cores.
+- Motivation: the analytic row-level AUROC-difference CI (`delong_roc_variance`) assumes row independence and under-covers on clustered eval data (LODO transfer gaps with payload/document/page clusters). Dogfooded by the consumer portfolio's attack-type / carrier / dialect leave-one-group-out bootstraps (Rule of Three).
+- Exported via `from eval_toolkit import cluster_bootstrap_ci`; `__all__` + `_EXPORTS` updated; doctest + n_jobs-reproducibility tests; mypy-strict clean.
+
 ## [1.6.0] — 2026-05-29 — Tier-2 `eda` Job-2 + Job-3: shortcut + shift diagnostics (#86, #87)
 
 `eval_toolkit.eda.*` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — Tier-2, backward-compatible. Completes the EDA-first analytic layer above the v1.5.0 Job-1 integrity gate: **Job-2** lexical shortcut diagnostics (`lexical_association`, #86) and **Job-3** distribution-shift quantification (`distribution_shift`, #87). Both are dogfooded by the consumer portfolio's pre-modeling OOD-wall prediction (V5 + V9).
