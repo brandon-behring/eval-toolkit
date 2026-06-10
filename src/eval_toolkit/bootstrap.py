@@ -23,7 +23,7 @@ import functools
 import logging
 import warnings
 from collections.abc import Callable, Hashable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final, Literal
 
 import numpy as np
@@ -93,6 +93,12 @@ class BootstrapCI:
         Number of bootstrap resamples used.
     method : str
         Either ``"BCa"`` (bias-corrected accelerated) or ``"percentile"``.
+    samples : numpy.ndarray or None
+        The bootstrap resample statistics the CI was computed from
+        (post degenerate-draw filtering, read-only), attached only when
+        the producing function was called with ``return_samples=True``
+        (v1.9.0, #93); ``None`` otherwise. Excluded from equality
+        comparisons, ``repr``, and :meth:`to_dict`.
 
     Examples
     --------
@@ -122,9 +128,14 @@ class BootstrapCI:
     confidence: float
     n_resamples: int
     method: str
+    samples: np.ndarray | None = field(default=None, compare=False, repr=False)
 
     def to_dict(self) -> dict[str, object]:
         """Serialize to a stable, self-describing dict schema for JSON output.
+
+        ``samples`` is deliberately **not** serialized — the schema stays a
+        small value-record; callers wanting the distribution persist their
+        own summary (e.g. ``frac_gt0``) computed from ``self.samples``.
 
         v0.48 BREAKING (§5B): schema rewritten to drop the hard-coded
         ``"ci_95"`` key that lied when ``confidence != 0.95``. The new
@@ -1554,6 +1565,7 @@ def cluster_bootstrap_ci(
     confidence: float = DEFAULT_CONFIDENCE,
     rng: RNGLike | SeedLike | None = DEFAULT_SEED,
     n_jobs: int = 1,
+    return_samples: bool = False,
 ) -> BootstrapCI:
     r"""Label-stratified **cluster** (group) bootstrap percentile CI for a single-condition metric.
 
@@ -1590,12 +1602,19 @@ def cluster_bootstrap_ci(
         Parallel workers (default 1 — sequential). ``n_jobs=-1`` uses all cores; ``n_jobs=0`` is
         rejected. Per-resample seeding via :func:`spawn_seed_sequences` makes the CI **bit-for-bit
         identical across ``n_jobs``** for a fixed ``rng``. See :ref:`methodology/parallelism`.
+    return_samples : bool, optional
+        When ``True`` (v1.9.0, #93), attach the post-filter, read-only resample statistics to the
+        result as ``BootstrapCI.samples`` — the same array the quantiles are computed from, so
+        distribution summaries stay consistent with the CI (e.g.
+        ``frac_gt0 = float(np.mean(ci.samples > 0.0))``). Default ``False`` (``samples=None``).
 
     Returns
     -------
     BootstrapCI
         ``method="cluster_percentile"``; ``point_estimate = statistic(y_true, y_score)`` on the full
         data; ``[alpha/2, 1 - alpha/2]`` percentile CI over the cluster-resampled distribution.
+        With ``return_samples=True``, ``samples`` holds the resample distribution
+        (``shape == (n_resamples_used,)``, matching the result's ``n_resamples`` field).
 
     Raises
     ------
@@ -1619,6 +1638,15 @@ def cluster_bootstrap_ci(
     >>> ci.method
     'cluster_percentile'
     >>> bool(0.0 <= ci.ci_low <= ci.ci_high <= 1.0)
+    True
+
+    Exposing the resample distribution (e.g. for a ``frac_gt0``-style summary):
+
+    >>> ci2 = cluster_bootstrap_ci(y, s, groups, roc_auc, n_resamples=200, rng=0,
+    ...                            return_samples=True)
+    >>> ci2.samples.shape == (ci2.n_resamples,)
+    True
+    >>> bool(float(np.mean(ci2.samples > 0.5)) > 0.9)  # fraction of resamples > threshold
     True
 
     Notes
@@ -1693,6 +1721,8 @@ def cluster_bootstrap_ci(
     arr = np.asarray(vals, dtype=np.float64)
     alpha = 1.0 - confidence
     ci_low, ci_high = np.quantile(arr, [alpha / 2.0, 1.0 - alpha / 2.0])
+    if return_samples:
+        arr.setflags(write=False)  # frozen value-type carries an immutable view
     return BootstrapCI(
         point_estimate=point,
         ci_low=float(ci_low),
@@ -1700,6 +1730,7 @@ def cluster_bootstrap_ci(
         confidence=confidence,
         n_resamples=int(len(vals)),
         method="cluster_percentile",
+        samples=arr if return_samples else None,
     )
 
 
@@ -1756,6 +1787,7 @@ def stratified_cluster_bootstrap_ci(
     confidence: float = DEFAULT_CONFIDENCE,
     rng: RNGLike | SeedLike | None = DEFAULT_SEED,
     n_jobs: int = 1,
+    return_samples: bool = False,
 ) -> BootstrapCI:
     r"""Cluster bootstrap of a **composite** statistic over several independent strata.
 
@@ -1795,12 +1827,19 @@ def stratified_cluster_bootstrap_ci(
         Parallel workers (default 1). Per-resample seeding via :func:`spawn_seed_sequences` makes the
         CI **bit-for-bit identical across ``n_jobs``**; ``n_jobs=-1`` uses all cores. See
         :ref:`methodology/parallelism`.
+    return_samples : bool, optional
+        When ``True`` (v1.9.0, #93), attach the post-filter, read-only resample statistics to the
+        result as ``BootstrapCI.samples`` — the same array the quantiles are computed from, so
+        distribution summaries stay consistent with the CI (e.g.
+        ``frac_gt0 = float(np.mean(ci.samples > 0.0))``). Default ``False`` (``samples=None``).
 
     Returns
     -------
     BootstrapCI
         ``method="stratified_cluster_percentile"``; ``point_estimate = combine({key:
         per_stratum_metric(y, score)})`` on the full data; ``[alpha/2, 1 - alpha/2]`` percentile CI.
+        With ``return_samples=True``, ``samples`` holds the resample distribution
+        (``shape == (n_resamples_used,)``, matching the result's ``n_resamples`` field).
 
     Raises
     ------
@@ -1828,6 +1867,16 @@ def stratified_cluster_bootstrap_ci(
     >>> ci.method
     'stratified_cluster_percentile'
     >>> bool(0.0 <= ci.ci_low <= ci.ci_high <= 1.0)
+    True
+
+    Exposing the resample distribution (e.g. for a ``frac_gt0``-style summary):
+
+    >>> ci2 = stratified_cluster_bootstrap_ci(
+    ...     strata, roc_auc, lambda m: float(np.mean(list(m.values()))),
+    ...     n_resamples=200, rng=0, return_samples=True)
+    >>> ci2.samples.shape == (ci2.n_resamples,)
+    True
+    >>> bool(0.0 <= float(np.mean(ci2.samples > 0.0)) <= 1.0)
     True
 
     Notes
@@ -1896,6 +1945,8 @@ def stratified_cluster_bootstrap_ci(
     arr = np.asarray(vals, dtype=np.float64)
     alpha = 1.0 - confidence
     ci_low, ci_high = np.quantile(arr, [alpha / 2.0, 1.0 - alpha / 2.0])
+    if return_samples:
+        arr.setflags(write=False)  # frozen value-type carries an immutable view
     return BootstrapCI(
         point_estimate=point,
         ci_low=float(ci_low),
@@ -1903,6 +1954,7 @@ def stratified_cluster_bootstrap_ci(
         confidence=confidence,
         n_resamples=int(len(vals)),
         method="stratified_cluster_percentile",
+        samples=arr if return_samples else None,
     )
 
 
