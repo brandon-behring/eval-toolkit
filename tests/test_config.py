@@ -103,3 +103,19 @@ def test_from_yaml_rejects_non_dataclass() -> None:
 
     with pytest.raises(TypeError, match="dataclass"):
         from_yaml("/tmp/whatever.yaml", NotADataclass)  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_from_yaml_utf8_content(tmp_path: Path) -> None:
+    """#97: the config loader reads UTF-8 explicitly — non-ASCII values survive
+    regardless of the platform locale codec (Windows cp1252)."""
+
+    @frozen_config
+    class C:
+        name: str
+        lr: float = 0.1
+
+    yaml_path = tmp_path / "cfg.yaml"
+    yaml_path.write_text('name: "Δ-probe — résumé §2"\n', encoding="utf-8")
+    cfg = from_yaml(yaml_path, C)
+    assert cfg.name == "Δ-probe — résumé §2"

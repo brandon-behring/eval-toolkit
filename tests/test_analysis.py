@@ -48,7 +48,7 @@ def _jsonl_ref(path: Path, *, media_type: str = "application/jsonl") -> dict[str
 
 
 def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
-    with path.open("w", newline="") as fh:
+    with path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         for row in rows:
@@ -56,7 +56,7 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
-    with path.open("w") as fh:
+    with path.open("w", encoding="utf-8") as fh:
         for row in rows:
             fh.write(json.dumps(row) + "\n")
 
@@ -316,3 +316,19 @@ def test_load_prediction_arrays_rejects_non_finite_scores(tmp_path: Path) -> Non
     path.write_text('{"label": 0, "score": NaN}\n{"label": 1, "score": 0.9}\n')
     with pytest.raises(ValueError, match="non-finite score"):
         load_prediction_arrays(_jsonl_ref(path))
+
+
+@pytest.mark.unit
+def test_jsonl_reader_utf8_content(tmp_path: Path) -> None:
+    """#97: prediction artifacts with non-ASCII text columns read as UTF-8
+    regardless of the platform locale codec (Windows cp1252)."""
+    path = tmp_path / "preds.jsonl"
+    path.write_text(
+        json.dumps({"label": 1, "score": 0.9, "row_id": "Δ§é-1"}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    reader = JsonlPredictionReader()
+    table = reader.read_predictions(
+        str(path), columns={"label": "label", "score": "score", "row_id": "row_id"}
+    )
+    assert list(table["row_id"]) == ["Δ§é-1"]

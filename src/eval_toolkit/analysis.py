@@ -66,7 +66,7 @@ class CsvPredictionReader:
         """
         wanted = set(columns.values())
         out: dict[str, list[object]] = {col: [] for col in wanted}
-        with Path(uri).open(newline="") as fh:
+        with Path(uri).open(newline="", encoding="utf-8") as fh:
             reader = csv.DictReader(fh)
             # R8-F3: validate the header up-front so missing columns
             # surface as a clear ValueError rather than as a cryptic
@@ -108,7 +108,7 @@ class JsonlPredictionReader:
         """
         wanted = set(columns.values())
         out: dict[str, list[object]] = {col: [] for col in wanted}
-        with Path(uri).open() as fh:
+        with Path(uri).open(encoding="utf-8") as fh:
             for line_no, line in enumerate(fh, start=1):
                 if not line.strip():
                     continue

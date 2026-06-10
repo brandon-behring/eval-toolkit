@@ -287,7 +287,7 @@ def save_figure(
         else:
             fig.savefig(path, dpi=dpi)
         sidecar = path.with_suffix(".meta.json")
-        sidecar.write_text(json.dumps(combined, indent=2, sort_keys=True))
+        sidecar.write_text(json.dumps(combined, indent=2, sort_keys=True), encoding="utf-8")
     else:
         fig.savefig(path, dpi=dpi)
     return resolved

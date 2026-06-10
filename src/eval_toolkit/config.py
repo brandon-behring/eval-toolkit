@@ -98,7 +98,7 @@ def from_yaml[T](path: Path | str, cls: type[T]) -> T:
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"config file not found: {p}")
-    raw: Any = yaml.safe_load(p.read_text())
+    raw: Any = yaml.safe_load(p.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise TypeError(f"YAML root must be a mapping, got {type(raw).__name__}")
 

@@ -47,7 +47,7 @@ def _cmd_schemas_show(args: argparse.Namespace) -> int:
         else:
             print(f"unknown schema: {name}", file=sys.stderr)
             return 2
-    print(json.dumps(json.loads(candidate.read_text()), indent=2, sort_keys=True))
+    print(json.dumps(json.loads(candidate.read_text(encoding="utf-8")), indent=2, sort_keys=True))
     return 0
 
 
@@ -73,7 +73,7 @@ def _cmd_schemas_check(_args: argparse.Namespace) -> int:
     failures: list[str] = []
     for f in files:
         try:
-            schema = json.loads(f.read_text())
+            schema = json.loads(f.read_text(encoding="utf-8"))
             Draft202012Validator.check_schema(schema)
             print(f"  {f.name}: OK")
         except (json.JSONDecodeError, SchemaError) as exc:
@@ -109,8 +109,8 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     if not file_path.exists():
         print(f"file not found: {args.file}", file=sys.stderr)
         return 2
-    schema = json.loads(schema_path.read_text())
-    payload = json.loads(file_path.read_text())
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    payload = json.loads(file_path.read_text(encoding="utf-8"))
     import jsonschema as _js  # noqa: PLC0415
 
     try:

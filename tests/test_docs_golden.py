@@ -140,3 +140,17 @@ def test_unknown_key_reports_error_leaves_unchanged(
     assert "ORIGINAL" in rendered  # unchanged
     assert len(errors) == 1
     assert "no_such_key" in errors[0]
+
+
+def test_render_files_apply_mode_utf8_round_trip(tmp_path: Path) -> None:
+    """#97: apply mode reads + writes UTF-8 explicitly, so non-ASCII consumer
+    content survives byte-for-byte regardless of the platform locale codec
+    (Windows cp1252 previously corrupted it cumulatively on every apply)."""
+    target = tmp_path / "résumé.md"
+    content = "# Résumé — Δ§é ≥ 0.95\n\n" "pr_auc: <!-- begin:pr_auc -->stale<!-- end:pr_auc -->\n"
+    target.write_text(content, encoding="utf-8")
+    result = render_files([target], {"pr_auc": 0.951234}, mode="apply")
+    assert str(target) in result["updated"]
+    out = target.read_text(encoding="utf-8")
+    assert "Résumé — Δ§é ≥ 0.95" in out  # non-ASCII prose untouched
+    assert "0.951" in out  # anchor rendered
