@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-06-10 — resample distribution + silent-NaN hardening + UTF-8 batch (#93, #96, #97)
+
 ### Added — resample-distribution exposure on the cluster bootstraps (#93)
 
 Tier-1 strictly-appended optional parameters, SemVer-MINOR per the
