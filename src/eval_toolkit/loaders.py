@@ -429,6 +429,10 @@ class HFDatasetsLoader:
     label_col: str = "label"
     strata_col: str | None = None
     config_name: str | None = None
+    feature_cols: Sequence[str] | None = None
+    feature_join: str = "\n\n"
+    label_map: Mapping[Any, int] | None = None
+    revision: str | None = None
     name: str = ""
     description: str = ""
     cite_as: str = ""
@@ -451,35 +455,69 @@ class HFDatasetsLoader:
             raise ImportError(
                 "HFDatasetsLoader requires datasets. Install with: pip install datasets"
             ) from exc
+        # Only pass optional kwargs when set, so the default call signature is
+        # unchanged (backward-compatible: load_dataset(repo_id) / (repo_id, name=...)).
+        kwargs: dict[str, Any] = {}
         if self.config_name is not None:
-            return cast(Mapping[str, Any], load_dataset(self.repo_id, name=self.config_name))
-        return cast(Mapping[str, Any], load_dataset(self.repo_id))
+            kwargs["name"] = self.config_name
+        if self.revision is not None:
+            kwargs["revision"] = self.revision
+        return cast(Mapping[str, Any], load_dataset(self.repo_id, **kwargs))
 
     def load_splits(self) -> dict[str, EvalSlice]:
         """Convert each requested HF split to an :class:`EvalSlice`.
 
+        When ``feature_cols`` is given, those columns are stringified and joined
+        with ``feature_join`` into a single synthesized feature column (e.g. a
+        system+user prompt pair). When ``label_map`` is given, raw label values
+        are remapped through it (e.g. ``{"benign": 0, "injection": 1}``); any
+        value the map does not cover raises ``ValueError`` (fail-fast, no silent
+        NaN labels).
+
         Raises
         ------
         KeyError
-            If any split's pandas DataFrame is missing ``feature_col`` or
-            ``label_col``.
+            If any split's DataFrame is missing a required feature/label column
+            (the error lists the observed columns).
+        ValueError
+            If ``label_map`` leaves any label value unmapped.
         """
         ds = self._load_dataset()
         ds_splits = list(ds.keys()) if self.splits is None else list(self.splits)
+        feat_cols = list(self.feature_cols) if self.feature_cols else [self.feature_col]
         out: dict[str, EvalSlice] = {}
         for split_name in ds_splits:
-            sub = ds[split_name]
-            df = sub.to_pandas()
+            df = ds[split_name].to_pandas()
             _check_required_columns(
                 df,
-                (self.feature_col, self.label_col),
+                (*feat_cols, self.label_col),
                 context=f"HFDatasetsLoader: split {split_name!r}",
             )
+            if self.feature_cols:
+                df = df.copy()
+                synth = "\x00".join(feat_cols)  # collision-proof synthesized name
+                # NaN-safe: fill missing then stringify per column (pandas 3.0 keeps
+                # NaN as a float through a bare astype(str), which breaks str.join).
+                cols = df[feat_cols].apply(lambda s: s.fillna("").astype(str))
+                df[synth] = cols.apply(lambda row: self.feature_join.join(row.tolist()), axis=1)
+                feature_col = synth
+            else:
+                feature_col = self.feature_col
+            if self.label_map is not None:
+                df = df.copy()
+                mapped = df[self.label_col].map(self.label_map)
+                if mapped.isna().any():
+                    unmapped = sorted(set(df[self.label_col][mapped.isna()].unique()), key=str)
+                    raise ValueError(
+                        f"HFDatasetsLoader: split {split_name!r} label_map did not cover "
+                        f"values {unmapped}; map keys: {sorted(self.label_map, key=str)}"
+                    )
+                df[self.label_col] = mapped
             out[split_name] = EvalSlice(
                 name=split_name,
                 df=df,
                 description=self.description,
-                feature_col=self.feature_col,
+                feature_col=feature_col,
                 label_col=self.label_col,
                 strata_col=self.strata_col,
             )

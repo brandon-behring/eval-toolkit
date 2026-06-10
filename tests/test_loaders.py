@@ -159,3 +159,110 @@ def test_dataframe_loader_rejects_missing_strata() -> None:
     df = pd.DataFrame({"split": ["train"], "text": ["a"], "label": [0]})
     with pytest.raises(KeyError, match="strata column"):
         DataFrameLoader(df=df, split_col="split", strata_col="missing")
+
+
+# --- HFDatasetsLoader schema-aware extensions (feature_cols / label_map / revision) ---
+
+
+class _FakeHFDataset:
+    """Minimal stand-in for a HF Dataset (exposes .to_pandas())."""
+
+    def __init__(self, df: pd.DataFrame) -> None:
+        self._df = df
+
+    def to_pandas(self) -> pd.DataFrame:
+        return self._df
+
+
+@pytest.mark.unit
+def test_hf_loader_feature_cols_joins_multiple_columns(monkeypatch) -> None:
+    df = pd.DataFrame({"System Prompt": ["sys"], "User Prompt": ["usr"], "Prompt injection": [1]})
+    loader = HFDatasetsLoader(
+        repo_id="x",
+        feature_cols=["System Prompt", "User Prompt"],
+        feature_join=" || ",
+        label_col="Prompt injection",
+    )
+    monkeypatch.setattr(
+        HFDatasetsLoader, "_load_dataset", lambda self: {"train": _FakeHFDataset(df)}
+    )
+    sl = loader.load_splits()["train"]
+    assert sl.df[sl.feature_col].iloc[0] == "sys || usr"
+    assert sl.label_col == "Prompt injection"
+
+
+@pytest.mark.unit
+def test_hf_loader_feature_cols_nan_safe(monkeypatch) -> None:
+    # A missing value in one feature column must not break the join (pandas 3.0
+    # keeps NaN as float through astype(str)); it should render as empty.
+    df = pd.DataFrame(
+        {"System Prompt": ["sys", None], "User Prompt": ["usr", "u2"], "label": [0, 1]}
+    )
+    loader = HFDatasetsLoader(
+        repo_id="x", feature_cols=["System Prompt", "User Prompt"], feature_join=" | "
+    )
+    monkeypatch.setattr(
+        HFDatasetsLoader, "_load_dataset", lambda self: {"train": _FakeHFDataset(df)}
+    )
+    sl = loader.load_splits()["train"]
+    assert sl.df[sl.feature_col].iloc[0] == "sys | usr"
+    assert sl.df[sl.feature_col].iloc[1] == " | u2"  # missing System Prompt -> empty
+
+
+@pytest.mark.unit
+def test_hf_loader_label_map_remaps_string_labels(monkeypatch) -> None:
+    df = pd.DataFrame({"text": ["a", "b"], "verdict": ["benign", "injection"]})
+    loader = HFDatasetsLoader(
+        repo_id="x",
+        feature_col="text",
+        label_col="verdict",
+        label_map={"benign": 0, "injection": 1},
+    )
+    monkeypatch.setattr(
+        HFDatasetsLoader, "_load_dataset", lambda self: {"train": _FakeHFDataset(df)}
+    )
+    sl = loader.load_splits()["train"]
+    assert list(sl.df["verdict"]) == [0, 1]
+
+
+@pytest.mark.unit
+def test_hf_loader_label_map_fail_fast_on_unmapped_value(monkeypatch) -> None:
+    df = pd.DataFrame({"text": ["a"], "verdict": ["surprise"]})
+    loader = HFDatasetsLoader(
+        repo_id="x", feature_col="text", label_col="verdict", label_map={"benign": 0}
+    )
+    monkeypatch.setattr(
+        HFDatasetsLoader, "_load_dataset", lambda self: {"train": _FakeHFDataset(df)}
+    )
+    with pytest.raises(ValueError, match=r"label_map did not cover.*surprise"):
+        loader.load_splits()
+
+
+@pytest.mark.unit
+def test_hf_loader_missing_feature_col_lists_observed_columns(monkeypatch) -> None:
+    df = pd.DataFrame({"prompt": ["a"], "label": [1]})  # has 'prompt', not 'text'
+    loader = HFDatasetsLoader(repo_id="x", feature_col="text", label_col="label")
+    monkeypatch.setattr(
+        HFDatasetsLoader, "_load_dataset", lambda self: {"train": _FakeHFDataset(df)}
+    )
+    with pytest.raises(KeyError, match=r"missing column 'text'.*available.*prompt"):
+        loader.load_splits()
+
+
+@pytest.mark.unit
+def test_hf_loader_forwards_revision_to_load_dataset(monkeypatch) -> None:
+    import sys
+    import types
+
+    captured: dict[str, object] = {}
+
+    def fake_load_dataset(repo_id, name=None, revision=None):  # noqa: ANN001
+        captured.update(repo_id=repo_id, name=name, revision=revision)
+        return {"train": _FakeHFDataset(pd.DataFrame({"text": ["a"], "label": [1]}))}
+
+    fake_mod = types.ModuleType("datasets")
+    fake_mod.load_dataset = fake_load_dataset  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "datasets", fake_mod)
+    HFDatasetsLoader(repo_id="repo/x", revision="abc123").load_splits()
+    assert captured["revision"] == "abc123"
+    assert captured["repo_id"] == "repo/x"

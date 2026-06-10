@@ -1,8 +1,8 @@
 """Local-runnable nox session config for eval-toolkit.
 
 Mirrors the tox.ini matrix using nox's Python-API style. Contributors who
-prefer nox over tox can run `nox` to execute the same multi-Python test +
-lint + type matrix that tox.ini defines.
+prefer nox over tox can run `nox` to execute the same test + lint + type
+matrix that tox.ini defines (py313-only per requires-python).
 
 Sessions
 --------
@@ -22,7 +22,7 @@ import nox
 nox.options.sessions = ["tests", "lint", "type", "doctest"]
 nox.options.reuse_existing_virtualenvs = True
 
-PY_VERSIONS = ["3.11", "3.12", "3.13"]
+PY_VERSIONS = ["3.13"]  # matches pyproject requires-python = ">=3.13"
 
 # Canonical doctest module list shared with Makefile, tox.ini, and ci.yml.
 DOCTEST_MODULES = Path(".doctest-modules").read_text().strip().split("\n")
@@ -32,7 +32,14 @@ DOCTEST_MODULES = Path(".doctest-modules").read_text().strip().split("\n")
 def tests(session: nox.Session) -> None:
     """Run the full pytest suite with coverage gate."""
     session.install("-e", ".[dev]")
-    session.run("pytest", "--cov=eval_toolkit", "--cov-fail-under=92", *session.posargs)
+    session.run(
+        "pytest",
+        "--cov=eval_toolkit",
+        "--cov-fail-under=92",
+        "-m",
+        "not monte_carlo and not benchmark and not integration",
+        *session.posargs,
+    )
 
 
 @nox.session(python=False)

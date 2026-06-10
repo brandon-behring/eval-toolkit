@@ -9,16 +9,16 @@ DOCTEST_MODULES := $(shell tr '\n' ' ' < .doctest-modules)
 
 help:
 	@echo "Targets:"
-	@echo "  install       Create .venv via uv and install dev dependencies"
+	@echo "  install       Create .venv via uv and install dev + docs dependencies"
 	@echo "  hooks         Install pre-commit hooks (ruff+black at commit, mypy at push)"
 	@echo "  lint          ruff check + black --check + mypy"
 	@echo "  format        black + ruff --fix"
-	@echo "  test          pytest (all markers + doctests)"
+	@echo "  test          pytest: tests/ + README/docs Sybil fences + doctests"
 	@echo "  test-fast     pytest -m 'not slow' (fast iteration loop)"
 	@echo "  test-unit     pytest -m unit"
 	@echo "  test-property pytest -m property"
 	@echo "  test-smoke    pytest -m smoke"
-	@echo "  test-doctest  pytest --doctest-modules src/eval_toolkit/{metrics,bootstrap,calibration,text_dedup,thresholds,leakage,manifest,paths,provenance}.py"
+	@echo "  test-doctest  pytest --doctest-modules over the curated .doctest-modules list"
 	@echo "  type          mypy strict on src/"
 	@echo "  coverage      pytest with coverage report"
 	@echo "  ci            lint + test + coverage gate"
@@ -29,7 +29,7 @@ help:
 
 install:
 	uv venv
-	uv pip install -e ".[dev]"
+	uv pip install -e ".[dev,docs]"
 	@echo "Activate: source $(VENV)/bin/activate"
 
 hooks:
@@ -59,8 +59,11 @@ format:
 	$(PYTHON) -m black src tests scripts
 	$(PYTHON) -m ruff check --fix src tests scripts
 
+# Collection roots are listed explicitly (= pyproject testpaths) because
+# positional args override testpaths: a bare `tests` here silently dropped
+# the README/docs Sybil fences (v0.47 §5L incident class; 2026-06-09 audit).
 test:
-	$(PYTHON) -m pytest tests --doctest-modules $(DOCTEST_MODULES)
+	$(PYTHON) -m pytest tests README.md docs/source --doctest-modules $(DOCTEST_MODULES)
 
 test-fast:
 	$(PYTHON) -m pytest -m "not slow" -q
@@ -152,9 +155,9 @@ release-prep:
 #   Surface 1 (Sybil .md fences + tests/): bare pytest (no positional)
 #     so testpaths applies — covers tests/ + README.md + docs/source/.
 #   Surface 2 (MyST-NB example notebooks): sphinx-build runs the
-#     {code-cell} blocks per nb_execution_mode="cache". Best-effort
-#     until §5H lands (nb_execution_raise_on_error=True in conf.py),
-#     at which point this exits non-zero on notebook execution errors.
+#     {code-cell} blocks per nb_execution_mode="cache". A hard gate:
+#     conf.py sets nb_execution_raise_on_error=True (§5H, landed v0.48),
+#     so this exits non-zero on notebook execution errors.
 #   Surface 3 (in-source >>> docstring examples): --doctest-modules
 #     over the curated DOCTEST_MODULES list.
 #
@@ -165,7 +168,7 @@ pre-push:
 	$(PYTHON) -m pytest --no-cov -q --ignore=tests/benchmarks
 	@echo ""
 	@echo "[pre-push] Surface 2: MyST-NB example notebooks via sphinx-build"
-	@echo "           (best-effort until §5H lands — see conf.py nb_execution_raise_on_error)"
+	@echo "           (hard gate: conf.py sets nb_execution_raise_on_error=True)"
 	$(PYTHON) -m sphinx -b html -n docs/source/ docs/build/html/
 	@echo ""
 	@echo "[pre-push] Surface 3: in-source >>> docstring examples (curated DOCTEST_MODULES list)"

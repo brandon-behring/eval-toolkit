@@ -23,6 +23,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/` is now covered by `ruff` / `black` / `mypy` across all runners
   (`Makefile`, `ci.yml`, `.pre-commit-config.yaml`, `tox.ini`, `noxfile.py`).
 
+### Fixed — documentation/config consistency batch (2026-06-09 full-repo audit)
+
+- [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md)
+  amended: records the v1.0.2 `SimilarityStrategy` promotion (strict
+  Tier-2 count 9 → 10) in the Tier-1 Protocol list, and replaces the
+  unimplemented `STRICT_DOCSTRINGS` plan with the actual contract
+  (docstring first lines remain pinned through v1.x).
+- `SimilarityStrategy` registered in
+  `tests/test_public_api.py::_TIER2_PROTOCOLS` — the R6-D fail-fast
+  list had lagged the v1.0.2 promotion.
+- `docs/source/roadmap.md` post-v1.0 section refreshed to the v1.8.0
+  state (was still "v1.0.1 is the next minor"; the referenced
+  `v1.0.1 cleanup` issue #76 closed at v1.0.2); broken repo-relative
+  link to a machine-local planning document removed.
+- STYLE.md §17 example updated — `pr_auc` left the top level at v0.46
+  (Decision L); the example now uses `scorecard`. README Tier-2 box
+  disambiguated (10 strict Protocols vs `SliceAwareScorer`/`Versioned`).
+- CONTRIBUTING.md: corrected the `[dev]`-extra claim (heavy optional
+  stacks `embeddings`/`transformers`/`probes`/`losses` are not
+  included) and documented the docs-extra requirement for `pre-push`.
+
+### Internal
+
+- `make test` now collects all three doc-execution surfaces — the
+  positional `tests` arg silently bypassed pyproject `testpaths`,
+  skipping the 161 README/docs Sybil doc tests (v0.47 §5L incident
+  class). `make install` installs `.[dev,docs]` so the sphinx
+  pre-push gate works on a fresh environment.
+- CI coverage step excludes `-m integration` (aligns ci.yml with the
+  pyproject marker contract and the Makefile coverage target).
+- tox/nox aligned with `requires-python = ">=3.13"`: py313-only
+  envlist/`PY_VERSIONS`, monte_carlo/benchmark/integration marker
+  exclusions added to their pytest commands, stale "private and
+  home-designed" framing removed; Makefile help text and §5H
+  notebook-gate comments updated to current reality.
+
+## [1.8.0] — 2026-06-04 — composite multi-stratum cluster bootstrap (#92)
+
+### Added — `bootstrap.stratified_cluster_bootstrap_ci` (composite multi-stratum cluster bootstrap)
+
+`eval_toolkit.bootstrap` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — backward-compatible. Generalises the v1.7.0 single-block `cluster_bootstrap_ci` to the shape leave-one-group-out transfer gaps actually take: a **composite statistic reduced over several independently-resampled cluster strata**.
+
+- **`stratified_cluster_bootstrap_ci(strata, per_stratum_metric, combine, *, resample_labels=(0,1), …)`** — `strata` is a mapping `{key: (y, score, groups)}` of independent resample-units (e.g. `seed`, `(carrier, seed)`, `(attack_type, seed)`); each bootstrap iteration resamples every stratum's `(label, group)` clusters, computes `per_stratum_metric` on each, and reduces the `{key: metric}` map with `combine` to one scalar (a seed-averaged ROC-AUC gap, a mean-over-carriers gap, a top−bottom per-type AUPRC contrast, …). Percentile `BootstrapCI` (`method="stratified_cluster_percentile"`). `cluster_bootstrap_ci` is the single-stratum, identity-reduce special case.
+- **Why:** the v1.7.0 single-block primitive could not express the **seed-averaging** that real LODO estimators do inside the bootstrap (`Gx = val − mean_seed(test_roc)`), so it did not actually fit the consumer portfolio's attack-type / carrier / dialect bootstraps. This is the correct primitive for them.
+- **Parallel + reproducible:** built on `parallel_map` + `spawn_seed_sequences` ⇒ `n_jobs` gives bit-for-bit-identical CIs; `n_jobs=-1` all cores.
+- Exported via `from eval_toolkit import stratified_cluster_bootstrap_ci`; `__all__` + `_EXPORTS` + doctest + n_jobs-reproducibility / seed-averaged / composite-statistic tests; mypy-strict clean.
+
+## [1.7.0] — 2026-06-04 — label-stratified cluster bootstrap (#90, #91)
+
+### Added — `bootstrap.cluster_bootstrap_ci` (label-stratified cluster bootstrap)
+
+`eval_toolkit.bootstrap` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — backward-compatible. Closes the gap between the row-level (`bootstrap_ci`) and fold-level (`block_bootstrap_on_folds`) resamplers: **the missing middle — resampling clusters of rows.**
+
+- **`cluster_bootstrap_ci(y_true, y_score, groups, statistic, *, resample_labels=(0, 1), …)`** — percentile CI for a single-condition metric that resamples whole **clusters** (`groups`) with replacement, so the CI is honest under intra-cluster correlation (prompts sharing one attack payload; a document contributing both a poisoned and a benign row). The resample unit is `(label, group)`: by default positive- and negative-clusters are resampled **separately** (never a single-class draw); `resample_labels=(1,)` resamples only positive clusters with negatives held fixed (the payload-cluster convention). Returns a `BootstrapCI` with `method="cluster_percentile"`.
+- **Parallel + reproducible:** built on `parallel_map` + `spawn_seed_sequences`, so `n_jobs` gives bit-for-bit-identical CIs across worker counts (the v0.34.0 reproducibility contract). `n_jobs=-1` uses all cores.
+- Motivation: the analytic row-level AUROC-difference CI (`delong_roc_variance`) assumes row independence and under-covers on clustered eval data (LODO transfer gaps with payload/document/page clusters). Dogfooded by the consumer portfolio's attack-type / carrier / dialect leave-one-group-out bootstraps (Rule of Three).
+- Exported via `from eval_toolkit import cluster_bootstrap_ci`; `__all__` + `_EXPORTS` updated; doctest + n_jobs-reproducibility tests; mypy-strict clean.
+
+### Fixed — stale `seed=` kwarg in 2 bootstrap benchmarks (#91)
+
+`tests/benchmarks/test_kernel_benchmarks.py` passed `seed=` to `bootstrap_ci` / `paired_bootstrap_diff`, but those parameters migrated to `rng=` (SPEC 7) — the two bootstrap benchmark tests `TypeError`'d on the nightly-benchmarks workflow (excluded from PR CI via `-m "not benchmark"`, so it went unnoticed). 2-line `seed=`→`rng=` rename.
+
+## [1.6.0] — 2026-05-29 — Tier-2 `eda` Job-2 + Job-3: shortcut + shift diagnostics (#86, #87)
+
+`eval_toolkit.eda.*` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — Tier-2, backward-compatible. Completes the EDA-first analytic layer above the v1.5.0 Job-1 integrity gate: **Job-2** lexical shortcut diagnostics (`lexical_association`, #86) and **Job-3** distribution-shift quantification (`distribution_shift`, #87). Both are dogfooded by the consumer portfolio's pre-modeling OOD-wall prediction (V5 + V9).
+
+### Added — Tier-2 `eda.lexical_association` shortcut diagnostics (Job-2: C1 + C2)
+
+`eval_toolkit.eda` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — Tier-2, torch-free (NumPy + scikit-learn). The analytic layer above the Job-1 integrity gate: *"is the label recoverable from a surface shortcut that will not transfer out-of-distribution?"*
+
+- **C1 — `weighted_log_odds` / `class_lexical_association`:** Monroe, Colaresi & Quinn (2008)
+  informative-Dirichlet weighted log-odds-ratio z-scores + smoothed PMI per token, with a
+  `min_count` rare-token floor (the V5 pitfall). Returns a `LexicalAssociationResult`
+  (`top_a` / `top_b` / `to_dict`); tokens ordered by descending z-score.
+- **C2 — `competency_baselines`:** partial-input baselines (length-only, char-n-gram, BoW)
+  fit on a train split and scored on a test split → `CompetencyResult` of per-baseline
+  average-precision vs the positive-prevalence floor (the *shortcut floor*; Feng, Wallace &
+  Boyd-Graber, ACL 2019 caveat documented). Vectorizers fit on train only (no test leakage);
+  empty or single-class train/test raises a diagnostic `ValueError`.
+- Exported via `from eval_toolkit.eda import ...`; 100% line+branch coverage; mypy-strict clean.
+
+### Added — Tier-2 `eda.distribution_shift` covariate-shift quantification (Job-3: E1)
+
+`eval_toolkit.eda` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — Tier-2. Public functions take **feature matrices**, so the module is base-install-safe (NumPy + SciPy + scikit-learn); embed text first with `eval_toolkit.embeddings.make_minilm_embedder` (`[embeddings]` extra) or any vectorizer.
+
+- **`proxy_a_distance`:** Ben-David et al. (2006/2010) PAD = `2(1 − 2ε)` from a **linear**
+  domain classifier's **k-fold CV** error, with **fixed strong regularization** (small `C`) —
+  *not* the high-`C` RBF-SVM-on-`predict_proba` recipe that overfits to `PAD ≈ 2` at small `n`.
+  Optional bootstrap CI.
+- **`maximum_mean_discrepancy`:** Gretton et al. (2012) **unbiased** RBF-kernel MMD² U-statistic +
+  **median-heuristic bandwidth** (freezable across folds) + **permutation-test** p-value
+  (Phipson & Smyth 2010, `(1+count)/(B+1)`, never zero). Optional bootstrap CI.
+- **`knn_purity`:** mean fraction of each point's k nearest neighbours sharing its domain label.
+- **`median_bandwidth`** helper + the **`distribution_shift`** orchestrator (all three) +
+  `PadResult` / `MmdResult` / `KnnPurityResult` / `DistributionShiftResult` dataclasses (`to_dict`).
+- Docstrings carry the pre-registered caveats: distance is **necessary-not-sufficient** for OOD
+  collapse (fuse with shortcut-exposure); a non-significant MMD p is not "no shift"; cross-dataset
+  distances are ordinal-only (covariate vs label-semantics conflation). 100% line+branch coverage.
+
+### Fixed
+
+- **Public-API golden `__version__` drift:** the `v1.5.0` release commit bumped
+  `_version.py` to `1.5.0` but did not regenerate `tests/golden/public_api/snapshot.json`,
+  which still pinned `'1.4.0'` — leaving `test_public_api_drift_guard` red on `main` (and on
+  every branch cut from it). Regenerated the golden (the diff is the `__version__` value only).
+
+## [1.5.0] — 2026-05-29 — Tier-2 `eda` layer (#83) + schema-aware `HFDatasetsLoader` (#85)
+
+Tier-2 / `loaders` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — backward-compatible.
+
+- **`eda` Job-1 integrity gate (#83):** `audit_dataset` / `DataAudit` / `SplitSummary` + the
+  `class_balance` / `no_cross_split_leakage` / `context_window_fit` gates + the §B2 obfuscation
+  prevalence module.
+- **schema-aware `HFDatasetsLoader` (#85):** load real-world dataset schemas without column
+  guessing — `feature_cols` + `feature_join` (join multiple columns into one feature; NaN-safe),
+  `label_map` (remap raw labels → int; fail-fast `ValueError` lists unmapped values), `revision`
+  (pin the HF dataset SHA). All new params default to the prior behavior; a missing feature/label
+  column raises `KeyError` listing the observed columns.
+
 ## [1.4.0] — 2026-05-26 — `audit_citation_alignment` Layer 2 + Layer 3 (closes #82); shared `_narrative` helpers (ADR 0007)
 
 Tier-1 ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md).

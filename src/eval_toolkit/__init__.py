@@ -129,6 +129,7 @@ _EXPORTS: dict[str, str] = {
     "block_bootstrap_on_folds": "eval_toolkit.bootstrap",
     "bonferroni_correct": "eval_toolkit.bootstrap",
     "bootstrap_ci": "eval_toolkit.bootstrap",
+    "cluster_bootstrap_ci": "eval_toolkit.bootstrap",
     "correct_p_values": "eval_toolkit.bootstrap",
     "cross_validate_metric": "eval_toolkit.bootstrap",
     "cv_clt_ci": "eval_toolkit.bootstrap",
@@ -139,6 +140,7 @@ _EXPORTS: dict[str, str] = {
     "paired_bootstrap_ece_diff": "eval_toolkit.bootstrap",
     "paired_bootstrap_op_point_diff": "eval_toolkit.bootstrap",
     "paired_mde": "eval_toolkit.bootstrap",
+    "stratified_cluster_bootstrap_ci": "eval_toolkit.bootstrap",
     # --- calibration ---
     "DEFAULT_FN_COST": "eval_toolkit.calibration",
     "DEFAULT_FP_COST": "eval_toolkit.calibration",

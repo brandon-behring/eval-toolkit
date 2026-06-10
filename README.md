@@ -30,11 +30,10 @@ format changes.
 │  manifest.json + seeds + git_sha + data_hashes +       │
 │  gpu_info + leakage_report (NeurIPS-aligned)           │
 ├─ Tier 2 ─ Protocol-based orchestration ────────────────┤
-│  Scorer / SliceAwareScorer / LeakageCheck / Splitter   │
-│  ThresholdSelector / DatasetLoader / MetricSpec        │
-│  MetaLearner / Probe / TextTransform /                 │
-│  SimilarityStrategy (10 strict)                        │
-│  Versioned (opt-in: per-object versions in manifest)   │
+│  Scorer / LeakageCheck / Splitter / ThresholdSelector  │
+│  DatasetLoader / MetricSpec / MetaLearner / Probe /    │
+│  TextTransform / SimilarityStrategy (10 strict)        │
+│  SliceAwareScorer / Versioned (outside the 10 strict)  │
 ├─ Tier 1 ─ Functional core ─────────────────────────────┤
 │  pr_auc / roc_auc / ECE variants / Brier / bootstrap_ci│
 │  paired_bootstrap_diff / cv_clt_ci / mde_from_ci       │
