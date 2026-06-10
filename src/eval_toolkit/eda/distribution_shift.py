@@ -101,7 +101,8 @@ def _validate_pair(x_a: np.ndarray, x_b: np.ndarray) -> tuple[int, int]:
     Raises
     ------
     ValueError
-        If either array is not 2-D, is empty, or the feature dimensions differ.
+        If either array is not 2-D, is empty, contains non-finite values
+        (NaN/inf), or the feature dimensions differ.
     """
     if x_a.ndim != 2 or x_b.ndim != 2:
         raise ValueError(f"x_a and x_b must be 2-D, got ndim {x_a.ndim} and {x_b.ndim}")
@@ -111,6 +112,11 @@ def _validate_pair(x_a: np.ndarray, x_b: np.ndarray) -> tuple[int, int]:
         raise ValueError(
             f"feature-dimension mismatch: x_a has {x_a.shape[1]}, x_b has {x_b.shape[1]}"
         )
+    # Boundary finiteness: NaN/inf embeddings otherwise die deep inside
+    # sklearn (check_array) blaming internals instead of the caller's input.
+    for name, arr in (("x_a", x_a), ("x_b", x_b)):
+        if not np.isfinite(arr).all():
+            raise ValueError(f"{name} contains non-finite values (NaN or inf)")
     return x_a.shape[0], x_b.shape[0]
 
 
@@ -277,17 +283,30 @@ def median_bandwidth(
     Raises
     ------
     ValueError
-        If ``x`` has fewer than 2 rows, or all points are identical (σ = 0).
+        If ``x`` has fewer than 2 rows, contains non-finite values (NaN/inf),
+        or all points are identical (σ = 0).
     """
     if x.ndim != 2 or x.shape[0] < 2:
         raise ValueError("median_bandwidth needs a 2-D array with >= 2 rows")
+    # Check the FULL input, not the subsample below — a NaN row outside the
+    # subsample would otherwise escape and return a misleadingly finite σ.
+    if not np.isfinite(x).all():
+        raise ValueError(
+            f"median_bandwidth: x contains {int(np.count_nonzero(~np.isfinite(x)))} "
+            "non-finite value(s) (NaN/inf)"
+        )
     if x.shape[0] > max_samples:
         rng = np.random.default_rng(random_state)
         idx = rng.choice(x.shape[0], size=max_samples, replace=False)
         x = x[idx]
     sigma = float(np.median(pdist(x)))
-    if sigma <= 0.0:
-        raise ValueError("degenerate bandwidth: all pooled points are identical (σ = 0)")
+    # NaN compares False against <= 0.0, so guard finiteness explicitly even
+    # though the entry check should make a non-finite median unreachable.
+    if not np.isfinite(sigma) or sigma <= 0.0:
+        raise ValueError(
+            f"degenerate bandwidth: median pairwise distance σ = {sigma} "
+            "(all pooled points identical)"
+        )
     return sigma
 
 
@@ -460,7 +479,9 @@ def maximum_mean_discrepancy(
     ------
     ValueError
         On invalid feature matrices, ``n_permutations < 1``, fewer than 2 rows in
-        either corpus, or a degenerate (σ = 0) bandwidth.
+        either corpus, or a degenerate (σ = 0) or non-finite bandwidth (an ``inf``
+        bandwidth would yield γ = 0, an all-ones Gram matrix, MMD² = 0 and
+        ``p_value = 1.0`` — silently reading "no shift").
 
     Examples
     --------
@@ -485,8 +506,8 @@ def maximum_mean_discrepancy(
     sigma = (
         bandwidth if bandwidth is not None else median_bandwidth(pooled, random_state=random_state)
     )
-    if sigma <= 0.0:
-        raise ValueError("bandwidth must be > 0")
+    if not np.isfinite(sigma) or sigma <= 0.0:
+        raise ValueError(f"bandwidth must be finite and > 0, got {sigma}")
     gamma = 1.0 / (2.0 * sigma * sigma)
     k = rbf_kernel(pooled, gamma=gamma)
 

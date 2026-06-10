@@ -720,3 +720,35 @@ def test_make_spec_name_in_metric_specs_all() -> None:
 
     assert "make_spec_name" in metric_specs.__all__
     assert "make_spec_name" not in eval_toolkit.__all__
+
+
+def test_non_finite_metric_value_becomes_error_status(
+    well_mixed_data: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """#96: NaN from a custom compute is an error cell, not status='ok' with a NaN value."""
+    y, s = well_mixed_data
+
+    class _NanSpec:
+        name = "nan_metric"
+
+        def compute(self, y_t: np.ndarray, y_s: np.ndarray) -> float:
+            return float("nan")
+
+    r = scorecard(y, s, metrics=[ms.brier, _NanSpec()], bootstrap=False)
+    assert r["brier"].status == "ok"
+    assert r["nan_metric"].status == "error"
+    assert "non-finite" in r["nan_metric"].reason
+    assert r["nan_metric"].value is None
+
+
+def test_bootstrap_non_finite_ci_bounds_not_attached() -> None:
+    """#96: BCa-degenerate NaN bounds are recorded in reason, never attached as a CI."""
+    y = np.array([0] * 30 + [1] * 30)
+    s = y.astype(float)  # perfect separation → pr_auc ≡ 1.0 → BCa NaN bounds
+    with pytest.warns(UserWarning, match="BCa degenerated"):
+        r = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=100, rng=0)
+    cell = r["pr_auc"]
+    assert cell.status == "ok"
+    assert cell.value == pytest.approx(1.0)
+    assert cell.ci is None
+    assert "non-finite CI bounds" in cell.reason

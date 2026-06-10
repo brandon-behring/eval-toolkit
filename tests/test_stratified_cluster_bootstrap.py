@@ -151,3 +151,48 @@ def test_shape_mismatch_in_a_stratum_raises() -> None:
         stratified_cluster_bootstrap_ci(
             {"bad": (y, s[:-1], g)}, roc_auc, _mean_combine, n_resamples=50, rng=0
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Silent-NaN hardening (#96, v1.9.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_nan_stratum_scores_rejected_at_boundary() -> None:
+    """NaN in any stratum's scores raises at the validation boundary (was shape-only)."""
+    y0, s0, g0 = _stratum(0)
+    s0[5] = np.nan
+    with pytest.raises(ValueError, match="stratum 0: y_score contains NaN or inf"):
+        stratified_cluster_bootstrap_ci(
+            {0: (y0, s0, g0)}, roc_auc, _mean_combine, n_resamples=50, rng=0
+        )
+
+
+@pytest.mark.unit
+def test_non_finite_point_estimate_raises() -> None:
+    """``combine`` returning NaN on the full data raises instead of a silent NaN CI."""
+    strata = {0: _stratum(0), 1: _stratum(1)}
+
+    def nan_combine(m: dict) -> float:
+        return float("nan")
+
+    with pytest.raises(ValueError, match="non-finite point estimate"):
+        stratified_cluster_bootstrap_ci(strata, roc_auc, nan_combine, n_resamples=50, rng=0)
+
+
+@pytest.mark.unit
+def test_nan_resamples_count_as_degenerate() -> None:
+    """NaN-returning ``combine`` draws hit the >5% degenerate gate (pre-#96: silent NaN CI)."""
+    strata = {0: _stratum(0), 1: _stratum(1)}
+    point_values = {k: float(roc_auc(v[0], v[1])) for k, v in strata.items()}
+
+    def nan_on_resamples(m: dict) -> float:
+        # Finite on the point-estimate call (per-stratum metrics match the full
+        # data), NaN on every resampled draw.
+        if all(m[k] == point_values[k] for k in m):
+            return 0.5
+        return float("nan")
+
+    with pytest.raises(ValueError, match="degenerate"):
+        stratified_cluster_bootstrap_ci(strata, roc_auc, nan_on_resamples, n_resamples=50, rng=0)

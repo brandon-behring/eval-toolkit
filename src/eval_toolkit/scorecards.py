@@ -516,6 +516,15 @@ def _evaluate_spec(
             reason=f"{type(exc).__name__}: {exc}",
         )
 
+    # A non-finite value must not masquerade as a healthy measurement —
+    # route it through the same error path as a raising compute.
+    if not np.isfinite(point):
+        return MetricResult(
+            value=None,
+            status="error",
+            reason=f"{spec.name} returned non-finite value {point}",
+        )
+
     if not bootstrap:
         return MetricResult(value=point, status="ok")
 
@@ -539,6 +548,18 @@ def _evaluate_spec(
             value=point,
             status="ok",
             reason=f"bootstrap unavailable: {type(exc).__name__}: {exc}",
+        )
+
+    # BCa degeneracy returns NaN bounds with only a UserWarning (see
+    # bootstrap_ci) — don't attach a CI that lies; record why it's missing.
+    if not (np.isfinite(ci.ci_low) and np.isfinite(ci.ci_high)):
+        return MetricResult(
+            value=point,
+            status="ok",
+            reason=(
+                f"bootstrap unavailable: non-finite CI bounds [{ci.ci_low}, {ci.ci_high}] "
+                "(BCa degeneracy — see the bootstrap_ci UserWarning)"
+            ),
         )
 
     return MetricResult(value=point, status="ok", ci=ci)

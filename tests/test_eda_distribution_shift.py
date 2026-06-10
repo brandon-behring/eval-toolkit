@@ -90,7 +90,7 @@ def test_median_bandwidth_too_few_rows() -> None:
 
 @pytest.mark.unit
 def test_median_bandwidth_identical_points_raises() -> None:
-    with pytest.raises(ValueError, match="all pooled points are identical"):
+    with pytest.raises(ValueError, match="all pooled points identical"):
         median_bandwidth(np.ones((6, 4)))
 
 
@@ -175,7 +175,7 @@ def test_mmd_explicit_bandwidth(separated: tuple[np.ndarray, np.ndarray]) -> Non
 @pytest.mark.unit
 def test_mmd_rejects_bad_bandwidth(separated: tuple[np.ndarray, np.ndarray]) -> None:
     a, b = separated
-    with pytest.raises(ValueError, match="bandwidth must be > 0"):
+    with pytest.raises(ValueError, match="bandwidth must be finite and > 0"):
         maximum_mean_discrepancy(a, b, bandwidth=0.0)
 
 
@@ -300,3 +300,44 @@ def test_results_to_dict_json_round_trip(separated: tuple[np.ndarray, np.ndarray
     assert set(restored["knn"]) == {"mean_purity", "k", "n_a", "n_b"}
     # null CI fields survive the round-trip as JSON null.
     assert restored["pad"]["ci_low"] is None
+
+
+# --- silent-NaN hardening (#96, v1.9.0) ---
+
+
+def test_median_bandwidth_non_finite_input_raises() -> None:
+    """NaN/inf input raises at entry (pre-#96 a NaN σ escaped: NaN <= 0.0 is False)."""
+    x = np.ones((6, 4))
+    x[0, 0] = np.nan
+    with pytest.raises(ValueError, match="non-finite value"):
+        median_bandwidth(x)
+
+
+def test_median_bandwidth_non_finite_outside_subsample_raises() -> None:
+    """The finiteness check covers the FULL input, not just the subsampled rows."""
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=(50, 3))
+    x[49, 0] = np.nan  # likely excluded from a 10-row subsample draw
+    with pytest.raises(ValueError, match="non-finite value"):
+        median_bandwidth(x, max_samples=10, random_state=3)
+
+
+@pytest.mark.parametrize("bad", [float("inf"), float("nan")])
+def test_mmd_non_finite_bandwidth_raises(
+    separated: tuple[np.ndarray, np.ndarray], bad: float
+) -> None:
+    """inf bandwidth → γ=0 → all-ones Gram → MMD²=0 → p=1.0 silently reads 'no shift'."""
+    a, b = separated
+    with pytest.raises(ValueError, match="bandwidth must be finite"):
+        maximum_mean_discrepancy(a, b, bandwidth=bad, n_permutations=5)
+
+
+def test_validate_pair_non_finite_embedding_raises(
+    separated: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """NaN/inf embeddings raise at the boundary, not deep inside sklearn's check_array."""
+    a, b = separated
+    b = b.copy()
+    b[2, 1] = np.inf
+    with pytest.raises(ValueError, match="x_b contains non-finite"):
+        proxy_a_distance(a, b)

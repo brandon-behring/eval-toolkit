@@ -93,14 +93,40 @@ class JsonlPredictionReader:
         *,
         columns: Mapping[str, str],
     ) -> Mapping[str, Sequence[object]]:
-        """Read a local JSONL file."""
+        """Read a local JSONL file.
+
+        Raises
+        ------
+        ValueError
+            If any non-blank row is not valid JSON, or is missing (or has
+            ``null`` for) a key declared in the ``columns`` mapping.
+            Validated at read time — the R8-F3 pattern already applied to
+            CSV headers — so a missing ``score`` key surfaces with the file
+            path + row number instead of being coerced to NaN deep inside
+            the metric computation (or, for ``label``, dying as a
+            context-free ``TypeError``).
+        """
         wanted = set(columns.values())
         out: dict[str, list[object]] = {col: [] for col in wanted}
         with Path(uri).open() as fh:
-            for line in fh:
+            for line_no, line in enumerate(fh, start=1):
                 if not line.strip():
                     continue
-                row = json.loads(line)
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    # json.loads on a single line always reports "line 1",
+                    # actively misdirecting on which file row is broken.
+                    raise ValueError(
+                        f"JSONL file at {uri!r} row {line_no} is not valid JSON: {exc}"
+                    ) from exc
+                missing = sorted(col for col in wanted if row.get(col) is None)
+                if missing:
+                    raise ValueError(
+                        f"JSONL file at {uri!r} row {line_no} is missing required "
+                        f"key(s) {missing} (or they are null); "
+                        f"available keys: {sorted(row)}"
+                    )
                 for col in wanted:
                     out[col].append(row.get(col))
         return out
@@ -117,8 +143,11 @@ def load_prediction_arrays(
     ------
     ValueError
         If ``ref`` lacks a ``columns`` mapping, lacks a non-empty ``uri``,
-        or its ``columns`` mapping is missing the ``label`` / ``score``
-        keys (re-raised from :func:`_required_column`).
+        its ``columns`` mapping is missing the ``label`` / ``score`` keys
+        (re-raised from :func:`_required_column`), or the loaded scores
+        contain non-finite values (a bare ``NaN`` token in JSONL or a
+        ``"nan"`` cell in CSV passes the readers' per-row key checks but
+        must not flow into metrics as a silent NaN).
     """
     columns = ref.get("columns")
     if not isinstance(columns, Mapping):
@@ -133,6 +162,12 @@ def load_prediction_arrays(
     table = selected_reader.read_predictions(uri, columns=reader_columns)
     labels = np.asarray(table[label_col], dtype=int)
     scores = np.asarray(table[score_col], dtype=float)
+    if not np.isfinite(scores).all():
+        first_bad = int(np.flatnonzero(~np.isfinite(scores))[0])
+        raise ValueError(
+            f"prediction artifact at {uri!r} column {score_col!r} contains "
+            f"non-finite score(s) (NaN/inf); first at data row index {first_bad}"
+        )
     row_id_col = columns.get("row_id")
     hash_col = columns.get("content_hash")
     row_ids = tuple(str(v) for v in table.get(str(row_id_col), ())) if row_id_col else ()

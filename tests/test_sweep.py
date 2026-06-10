@@ -478,3 +478,26 @@ def test_sweep_correct_scorer_passes_validation() -> None:
     )
     assert df.shape[0] == 2
     assert (df["original_score"] == 0.5).all()
+
+
+def test_sweep_nan_attack_threshold_raises() -> None:
+    """#96: NaN threshold would silently zero every asr flag — must raise."""
+    with pytest.raises(ValueError, match="attack_threshold is NaN"):
+        sweep(
+            [DelimitVariant()],
+            ["ignore me"],
+            scorer=_FixedScorer(),
+            attack_threshold=float("nan"),
+        )
+
+
+def test_sweep_inf_attack_threshold_is_valid_sentinel() -> None:
+    """±inf is the documented unsatisfiable sentinel: accepted, asr all-False."""
+    df = sweep(
+        [DelimitVariant()],
+        ["ignore me", "hello"],
+        scorer=_FixedScorer(),
+        attack_threshold=float("inf"),
+    )
+    assert "asr" in df.columns
+    assert not df["asr"].any()

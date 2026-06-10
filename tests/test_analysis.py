@@ -272,3 +272,47 @@ def test_csv_reader_raises_actionable_error_on_missing_column(tmp_path: Path) ->
     reader = CsvPredictionReader()
     with pytest.raises(ValueError, match=r"missing required column"):
         reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
+
+
+@pytest.mark.unit
+def test_jsonl_reader_missing_key_raises(tmp_path: Path) -> None:
+    """#96: a row missing a declared key fails fast with uri + row context (R8-F3 pattern).
+
+    Pre-#96 the missing score loaded as None, coerced to NaN inside
+    ``np.asarray(dtype=float)``, and surfaced (if at all) deep in the metric
+    computation with no file/row context.
+    """
+    path = tmp_path / "preds.jsonl"
+    _write_jsonl(path, [{"label": 0, "score": 0.2}, {"label": 1}])
+    reader = JsonlPredictionReader()
+    with pytest.raises(ValueError, match=r"row 2 is missing required key\(s\) \['score'\]"):
+        reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
+
+
+@pytest.mark.unit
+def test_jsonl_reader_null_value_raises(tmp_path: Path) -> None:
+    """A JSON null for a declared key is treated the same as a missing key."""
+    path = tmp_path / "preds.jsonl"
+    _write_jsonl(path, [{"label": None, "score": 0.2}])
+    reader = JsonlPredictionReader()
+    with pytest.raises(ValueError, match=r"row 1 is missing required key\(s\) \['label'\]"):
+        reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
+
+
+@pytest.mark.unit
+def test_jsonl_reader_invalid_json_row_raises(tmp_path: Path) -> None:
+    """#96: a malformed row reports the actual file row (json.loads always says 'line 1')."""
+    path = tmp_path / "preds.jsonl"
+    path.write_text(json.dumps({"label": 0, "score": 0.2}) + "\nnot json\n")
+    reader = JsonlPredictionReader()
+    with pytest.raises(ValueError, match="row 2 is not valid JSON"):
+        reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
+
+
+@pytest.mark.unit
+def test_load_prediction_arrays_rejects_non_finite_scores(tmp_path: Path) -> None:
+    """#96: a bare JSON NaN token passes the per-row key check but must not reach metrics."""
+    path = tmp_path / "preds.jsonl"
+    path.write_text('{"label": 0, "score": NaN}\n{"label": 1, "score": 0.9}\n')
+    with pytest.raises(ValueError, match="non-finite score"):
+        load_prediction_arrays(_jsonl_ref(path))
