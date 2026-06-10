@@ -28,8 +28,8 @@ repos:
   - repo: local
     hooks:
       - id: mypy
-        name: mypy (strict, src/ only)
-        entry: uv run python -m mypy src
+        name: mypy (strict, src + scripts)
+        entry: uv run python -m mypy src scripts
         language: system
         types: [python]
         pass_filenames: false

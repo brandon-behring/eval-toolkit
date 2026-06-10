@@ -1,4 +1,4 @@
-.PHONY: help install hooks lint format test test-fast test-unit test-property test-smoke test-doctest type ci coverage clean release-prep pre-push
+.PHONY: help install hooks lint format test test-fast test-unit test-property test-smoke test-doctest type ci coverage clean release-prep pre-push dogfood
 
 PYTHON := .venv/bin/python
 VENV := .venv
@@ -25,6 +25,7 @@ help:
 	@echo "  clean         remove .venv, caches, build artifacts"
 	@echo "  release-prep  bump _version.py + regen public-api snapshot (VERSION=X.Y.Z)"
 	@echo "  pre-push      mirror CI doc-execution gate: pytest (NO path arg) + sphinx-build + --doctest-modules"
+	@echo "  dogfood       run an audit_* validator against its consumer, emit residual findings as JSON"
 
 install:
 	uv venv
@@ -50,13 +51,13 @@ hooks:
 	@echo "Hooks installed: ruff+black at commit, mypy at push."
 
 lint:
-	$(PYTHON) -m ruff check src tests
-	$(PYTHON) -m black --check src tests
-	$(PYTHON) -m mypy src
+	$(PYTHON) -m ruff check src tests scripts
+	$(PYTHON) -m black --check src tests scripts
+	$(PYTHON) -m mypy src scripts
 
 format:
-	$(PYTHON) -m black src tests
-	$(PYTHON) -m ruff check --fix src tests
+	$(PYTHON) -m black src tests scripts
+	$(PYTHON) -m ruff check --fix src tests scripts
 
 # Collection roots are listed explicitly (= pyproject testpaths) because
 # positional args override testpaths: a bare `tests` here silently dropped
@@ -80,13 +81,24 @@ test-doctest:
 	$(PYTHON) -m pytest --doctest-modules $(DOCTEST_MODULES)
 
 type:
-	$(PYTHON) -m mypy src
+	$(PYTHON) -m mypy src scripts
 
 coverage:
 	$(PYTHON) -m pytest --cov=eval_toolkit --cov-report=term-missing --cov-report=json --cov-fail-under=92 -m "not monte_carlo and not benchmark and not integration"
 	$(PYTHON) scripts/check_module_floors.py
 
 ci: lint test coverage
+
+# dogfood — run an audit_* validator against its real consumer and emit the
+# residual findings as JSON. The deterministic *run*; classification of the
+# residuals is the etk-dogfood-noise-analyst agent's job (see .claude/agents/).
+# Override the defaults: make dogfood VALIDATOR=audit_citation_alignment \
+#     CONSUMER=~/Claude/prompt-injection-detection-submission SCOPE=narrative
+VALIDATOR ?= audit_citation_alignment
+CONSUMER ?= $(HOME)/Claude/prompt-injection-detection-submission
+SCOPE ?= narrative
+dogfood:
+	$(PYTHON) scripts/dogfood_audit.py --validator $(VALIDATOR) --consumer $(CONSUMER) --scope $(SCOPE)
 
 clean:
 	rm -rf $(VENV) build dist *.egg-info

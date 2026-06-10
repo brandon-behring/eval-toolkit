@@ -54,6 +54,7 @@ concept_drift v1.0.4).
 from __future__ import annotations
 
 import re
+import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -220,7 +221,14 @@ def validate_sister_doc_concept_drift(
     for path in files_resolved:
         try:
             file_texts[path] = path.read_text(encoding="utf-8")
-        except OSError:
+        except (OSError, UnicodeDecodeError) as exc:
+            # UnicodeDecodeError is a ValueError, not an OSError — without it a
+            # single non-UTF-8 byte would crash the whole scan. Skip unreadable
+            # or non-UTF-8 files, but warn so the skip is not silent (STYLE §1).
+            warnings.warn(
+                f"skipping unreadable file {path}: {exc}",
+                stacklevel=2,
+            )
             continue
 
     drift_clusters: list[DriftCluster] = []
