@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed — documentation/config consistency batch (2026-06-09 full-repo audit)
+
+- [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md)
+  amended: records the v1.0.2 `SimilarityStrategy` promotion (strict
+  Tier-2 count 9 → 10) in the Tier-1 Protocol list, and replaces the
+  unimplemented `STRICT_DOCSTRINGS` plan with the actual contract
+  (docstring first lines remain pinned through v1.x).
+- `SimilarityStrategy` registered in
+  `tests/test_public_api.py::_TIER2_PROTOCOLS` — the R6-D fail-fast
+  list had lagged the v1.0.2 promotion.
+- `docs/source/roadmap.md` post-v1.0 section refreshed to the v1.8.0
+  state (was still "v1.0.1 is the next minor"; the referenced
+  `v1.0.1 cleanup` issue #76 closed at v1.0.2); broken repo-relative
+  link to a machine-local planning document removed.
+- STYLE.md §17 example updated — `pr_auc` left the top level at v0.46
+  (Decision L); the example now uses `scorecard`. README Tier-2 box
+  disambiguated (10 strict Protocols vs `SliceAwareScorer`/`Versioned`).
+- CONTRIBUTING.md: corrected the `[dev]`-extra claim (heavy optional
+  stacks `embeddings`/`transformers`/`probes`/`losses` are not
+  included) and documented the docs-extra requirement for `pre-push`.
+
+### Internal
+
+- `make test` now collects all three doc-execution surfaces — the
+  positional `tests` arg silently bypassed pyproject `testpaths`,
+  skipping the 161 README/docs Sybil doc tests (v0.47 §5L incident
+  class). `make install` installs `.[dev,docs]` so the sphinx
+  pre-push gate works on a fresh environment.
+- CI coverage step excludes `-m integration` (aligns ci.yml with the
+  pyproject marker contract and the Makefile coverage target).
+- tox/nox aligned with `requires-python = ">=3.13"`: py313-only
+  envlist/`PY_VERSIONS`, monte_carlo/benchmark/integration marker
+  exclusions added to their pytest commands, stale "private and
+  home-designed" framing removed; Makefile help text and §5H
+  notebook-gate comments updated to current reality.
+
 ## [1.8.0] — 2026-06-04 — composite multi-stratum cluster bootstrap (#92)
 
 ### Added — `bootstrap.stratified_cluster_bootstrap_ci` (composite multi-stratum cluster bootstrap)
