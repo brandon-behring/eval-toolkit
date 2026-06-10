@@ -243,7 +243,10 @@ def write_json_strict(
     out_path = Path(path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     sanitized = sanitize_for_json(payload)
-    out_path.write_text(json.dumps(sanitized, indent=indent, sort_keys=sort_keys, allow_nan=False))
+    out_path.write_text(
+        json.dumps(sanitized, indent=indent, sort_keys=sort_keys, allow_nan=False),
+        encoding="utf-8",
+    )
     return out_path
 
 
@@ -258,7 +261,7 @@ def validate_payload(payload: object, schema_name: str) -> None:
     from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 
     schema_path = resources.files("eval_toolkit") / "schemas" / schema_name
-    schema = json.loads(schema_path.read_text())
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
     Draft202012Validator(schema).validate(sanitize_for_json(payload))
 
 

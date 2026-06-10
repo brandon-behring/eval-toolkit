@@ -142,9 +142,11 @@ def _run_citation_alignment(
     for path in surfaces:
         try:
             text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as exc:
             # Consumer content may contain non-UTF-8 bytes; skip the file but
-            # never let it abort the whole run.
+            # never let it abort the whole run — and never skip silently:
+            # a dropped surface file is missing acceptance evidence.
+            print(f"WARNING: skipping non-UTF-8 surface file {path}: {exc}", file=sys.stderr)
             continue
         for f in validate_citations(
             markdown_text=text,

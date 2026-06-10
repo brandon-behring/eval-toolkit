@@ -80,6 +80,26 @@ input that previously produced silently-wrong results:
   non-finite loaded scores (a bare JSON `NaN` token or a CSV `"nan"` cell passes
   per-row key checks) with file + column + row-index context.
 
+### Fixed — explicit UTF-8 encoding batch (#97)
+
+Windows (cp1252 locale codec) is the trigger; Linux/macOS hid all of these.
+Locked convention: always pass `encoding="utf-8"` on text-file IO.
+
+- `docs.render_files` **apply mode** read and wrote consumer markdown with the
+  locale codec — on cp1252 this silently and *cumulatively* corrupted
+  non-ASCII user content on every apply (the worst item in the batch).
+- All remaining text IO made explicit: `__main__` schema/payload reads
+  (RFC 8259 mandates UTF-8 for JSON), `analysis` CSV/JSONL prediction readers,
+  `config.from_yaml`, `artifacts` schema read + report write,
+  `plotting` sidecar write, `scripts/audit_raises_sections.py`.
+- `scripts/dogfood_audit.py`: a surface file skipped for `UnicodeDecodeError`
+  now emits a stderr warning with the path — previously it silently vanished
+  from the acceptance evidence.
+- **Detection locked out permanently**: ruff now enforces `PLW1514`
+  (implicit-encoding) across `src/`, `scripts/`, and `tests/` via
+  `preview = true` + `explicit-preview-rules = true` (only this rule gets
+  preview status; no other behavior changes).
+
 ### Fixed
 
 - `audit_value_bindings.validate_reader_value_bindings` now raises a

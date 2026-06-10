@@ -41,7 +41,7 @@ def _write_prediction_csv(
     scores: np.ndarray,
     scorer: str,
 ) -> None:
-    with path.open("w", newline="") as fh:
+    with path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(
             fh,
             fieldnames=["row_id", "content_hash", "label", "score", "scorer", "slice", "source"],

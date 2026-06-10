@@ -274,7 +274,7 @@ def render_files(
         if not path.exists():
             errors[str(path)] = [f"file not found: {path}"]
             continue
-        original = path.read_text()
+        original = path.read_text(encoding="utf-8")
         rendered, errs = render_text(original, metrics, formatters, compound_keys=compound_keys)
         if errs:
             errors[str(path)] = errs
@@ -282,7 +282,7 @@ def render_files(
             unchanged.append(str(path))
             continue
         if mode == "apply":
-            path.write_text(rendered)
+            path.write_text(rendered, encoding="utf-8")
             updated.append(str(path))
         else:
             diff = "".join(

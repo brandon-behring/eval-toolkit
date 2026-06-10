@@ -106,7 +106,7 @@ Finding = tuple[str, str, set[str], set[str]]
 
 def audit_file(path: Path) -> list[Finding]:
     """Audit one file. Return list of (rel_path, qualname, undocumented, extra)."""
-    tree = ast.parse(path.read_text())
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     findings: list[Finding] = []
     for qualname, fn in _public_functions(tree):
         raised = _find_raise_types(fn)
