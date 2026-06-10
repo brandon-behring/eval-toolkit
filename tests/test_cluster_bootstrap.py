@@ -175,3 +175,61 @@ def test_nan_resamples_count_as_degenerate() -> None:
 
     with pytest.raises(ValueError, match="degenerate"):
         cluster_bootstrap_ci(y, s, g, nan_on_resamples, n_resamples=50, rng=0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# return_samples — resample-distribution exposure (#93, v1.9.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_samples_default_none() -> None:
+    """Without return_samples the result carries samples=None (no behavior change)."""
+    y, s, g = _clustered_inputs()
+    ci = cluster_bootstrap_ci(y, s, g, roc_auc, n_resamples=50, rng=0)
+    assert ci.samples is None
+
+
+@pytest.mark.unit
+def test_return_samples_exposes_consistent_distribution() -> None:
+    """samples is the post-filter array the quantiles came from: right length, finite, read-only."""
+    y, s, g = _clustered_inputs()
+    ci = cluster_bootstrap_ci(y, s, g, roc_auc, n_resamples=200, rng=0, return_samples=True)
+    assert ci.samples is not None
+    assert ci.samples.shape == (ci.n_resamples,)
+    assert np.isfinite(ci.samples).all()
+    assert not ci.samples.flags.writeable
+    with pytest.raises(ValueError, match="read-only"):
+        ci.samples[0] = 0.0
+    # The CI bounds are exactly the quantiles of the exposed distribution.
+    alpha = 1.0 - ci.confidence
+    lo, hi = np.quantile(ci.samples, [alpha / 2.0, 1.0 - alpha / 2.0])
+    assert ci.ci_low == pytest.approx(float(lo))
+    assert ci.ci_high == pytest.approx(float(hi))
+    # The issue #93 use case: frac_gt0 from the same draws as the CI.
+    frac_gt0 = float(np.mean(ci.samples > 0.0))
+    assert 0.0 <= frac_gt0 <= 1.0
+
+
+@pytest.mark.unit
+def test_return_samples_bit_identical_across_njobs() -> None:
+    """The exposed distribution honors the v0.34.0 n_jobs-reproducibility contract."""
+    y, s, g = _clustered_inputs()
+    ci1 = cluster_bootstrap_ci(y, s, g, roc_auc, n_resamples=100, rng=7, return_samples=True)
+    ci2 = cluster_bootstrap_ci(
+        y, s, g, roc_auc, n_resamples=100, rng=7, n_jobs=2, return_samples=True
+    )
+    assert np.array_equal(ci1.samples, ci2.samples)
+
+
+@pytest.mark.unit
+def test_samples_excluded_from_eq_and_to_dict() -> None:
+    """samples is a non-comparing field and never enters the stable to_dict schema."""
+    y, s, g = _clustered_inputs()
+    plain = cluster_bootstrap_ci(y, s, g, roc_auc, n_resamples=50, rng=0)
+    with_samples = cluster_bootstrap_ci(
+        y, s, g, roc_auc, n_resamples=50, rng=0, return_samples=True
+    )
+    assert plain == with_samples  # equality ignores samples
+    assert "samples" not in with_samples.to_dict()
+    assert plain.to_dict() == with_samples.to_dict()

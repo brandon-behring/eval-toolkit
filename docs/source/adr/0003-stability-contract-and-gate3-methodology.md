@@ -50,9 +50,20 @@ bump to alter:
   `MetricResult`, `bootstrap_ci`, `BootstrapCI`, `evaluate`,
   `RunManifest`, `LogisticStacker`, `MetaLearner`, etc.
 - **Their signatures** — parameter names, defaults, kwarg-only markers,
-  return types. A new optional kwarg with a default is technically
-  additive, but it changes the signature snapshot — handle via the
-  additive-Protocol path below or accept the major bump.
+  return types. (Amended 2026-06-10, #101/#93: a **strictly appended
+  optional parameter** — a new keyword-only kwarg with a default, or a
+  new trailing dataclass field with a default that does not perturb
+  positional construction, equality/hash semantics, or serialized
+  schemas — is **SemVer-MINOR**, provided the public-API snapshot is
+  regenerated in the same commit so the change is reviewed, not
+  accidental. Any other signature change — renames, removals,
+  reorderings, default changes, return-type changes, non-trailing or
+  non-defaulted field insertions — remains SemVer-major. This codifies
+  the practice already shipped at v1.5.0 (`HFDatasetsLoader` kwargs;
+  recorded as erratum #101) and v1.9.0 (#93 `return_samples` /
+  `BootstrapCI.samples`). The original text routed every signature
+  change to "the additive-Protocol path or accept the major bump",
+  which provides no path at all for functions and dataclasses.)
 - **Tier-2 Protocols** (9 strict at v1.0, all shipped through v0.47.0;
   10 strict since v1.0.2 — see the `SimilarityStrategy` entry below):
   - `Scorer` (from `protocols.py`)

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — resample-distribution exposure on the cluster bootstraps (#93)
+
+Tier-1 strictly-appended optional parameters, SemVer-MINOR per the
+[ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md)
+2026-06-10 amendment (#101) — backward-compatible; snapshot regenerated in
+the same commit.
+
+- **`cluster_bootstrap_ci(..., return_samples=True)`** and
+  **`stratified_cluster_bootstrap_ci(..., return_samples=True)`** attach the
+  post-filter bootstrap resample statistics to the result as
+  **`BootstrapCI.samples`** (read-only `numpy.ndarray`, the same array the
+  percentile bounds are computed from; `shape == (n_resamples_used,)`).
+  Distribution summaries such as the consumer's `frac_gt0`
+  (`float(np.mean(ci.samples > 0.0))`) are now derivable from the *same*
+  draws as the CI — previously structurally unrecoverable, blocking the two
+  remaining LODO call-site migrations (downstream DF-11).
+- `BootstrapCI` gains the trailing optional field `samples`
+  (default `None`, `compare=False`, `repr=False`): positional construction,
+  equality/hash semantics, and the **`to_dict()` schema are all unchanged**.
+  Note: `dataclasses.asdict()` (which ignores those flags) now includes a
+  `samples` key — consumers serializing via `asdict` instead of `to_dict()`
+  should drop it (an attached ndarray is not JSON-serializable).
+- scipy precedent: `BootstrapResult.bootstrap_distribution`. Honors the
+  n_jobs bit-for-bit reproducibility contract.
+
 ### Fixed — silent-NaN hardening batch (#96)
 
 Finiteness guards across the numeric surface (STYLE §1 *never fail silently* /

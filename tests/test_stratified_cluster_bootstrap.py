@@ -196,3 +196,43 @@ def test_nan_resamples_count_as_degenerate() -> None:
 
     with pytest.raises(ValueError, match="degenerate"):
         stratified_cluster_bootstrap_ci(strata, roc_auc, nan_on_resamples, n_resamples=50, rng=0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# return_samples — resample-distribution exposure (#93, v1.9.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_samples_default_none() -> None:
+    strata = {0: _stratum(0), 1: _stratum(1)}
+    ci = stratified_cluster_bootstrap_ci(strata, roc_auc, _mean_combine, n_resamples=50, rng=0)
+    assert ci.samples is None
+
+
+@pytest.mark.unit
+def test_return_samples_exposes_consistent_distribution() -> None:
+    strata = {0: _stratum(0), 1: _stratum(1)}
+    ci = stratified_cluster_bootstrap_ci(
+        strata, roc_auc, _mean_combine, n_resamples=200, rng=0, return_samples=True
+    )
+    assert ci.samples is not None
+    assert ci.samples.shape == (ci.n_resamples,)
+    assert np.isfinite(ci.samples).all()
+    assert not ci.samples.flags.writeable
+    alpha = 1.0 - ci.confidence
+    lo, hi = np.quantile(ci.samples, [alpha / 2.0, 1.0 - alpha / 2.0])
+    assert ci.ci_low == pytest.approx(float(lo))
+    assert ci.ci_high == pytest.approx(float(hi))
+
+
+@pytest.mark.unit
+def test_return_samples_bit_identical_across_njobs() -> None:
+    strata = {0: _stratum(0), 1: _stratum(1)}
+    ci1 = stratified_cluster_bootstrap_ci(
+        strata, roc_auc, _mean_combine, n_resamples=100, rng=7, return_samples=True
+    )
+    ci2 = stratified_cluster_bootstrap_ci(
+        strata, roc_auc, _mean_combine, n_resamples=100, rng=7, n_jobs=2, return_samples=True
+    )
+    assert np.array_equal(ci1.samples, ci2.samples)

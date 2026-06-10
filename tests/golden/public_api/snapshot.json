@@ -336,7 +336,7 @@
       ],
       "doc_first_line": "95% CI for a metric on a single condition.",
       "kind": "class",
-      "signature": "(point_estimate: 'float', ci_low: 'float', ci_high: 'float', confidence: 'float', n_resamples: 'int', method: 'str') -> None"
+      "signature": "(point_estimate: 'float', ci_low: 'float', ci_high: 'float', confidence: 'float', n_resamples: 'int', method: 'str', samples: 'np.ndarray | None' = None) -> None"
     },
     "CISafeThresholdSelector": {
       "bases": [
@@ -1481,7 +1481,7 @@
     "cluster_bootstrap_ci": {
       "doc_first_line": "Label-stratified **cluster** (group) bootstrap percentile CI for a single-condition metric.",
       "kind": "function",
-      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', groups: 'np.ndarray', statistic: 'MetricFn', *, resample_labels: 'tuple[int, ...]' = (0, 1), n_resamples: 'int' = 1000, confidence: 'float' = 0.95, rng: 'RNGLike | SeedLike | None' = 42, n_jobs: 'int' = 1) -> 'BootstrapCI'"
+      "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', groups: 'np.ndarray', statistic: 'MetricFn', *, resample_labels: 'tuple[int, ...]' = (0, 1), n_resamples: 'int' = 1000, confidence: 'float' = 0.95, rng: 'RNGLike | SeedLike | None' = 42, n_jobs: 'int' = 1, return_samples: 'bool' = False) -> 'BootstrapCI'"
     },
     "compute_file_hash": {
       "doc_first_line": "SHA-256 hex digest of an existing file (sentinel-typed).",
@@ -1951,7 +1951,7 @@
     "stratified_cluster_bootstrap_ci": {
       "doc_first_line": "Cluster bootstrap of a **composite** statistic over several independent strata.",
       "kind": "function",
-      "signature": "(strata: 'Mapping[Hashable, tuple[np.ndarray, np.ndarray, np.ndarray]]', per_stratum_metric: 'MetricFn', combine: 'Callable[[Mapping[Hashable, float]], float]', *, resample_labels: 'tuple[int, ...]' = (0, 1), n_resamples: 'int' = 1000, confidence: 'float' = 0.95, rng: 'RNGLike | SeedLike | None' = 42, n_jobs: 'int' = 1) -> 'BootstrapCI'"
+      "signature": "(strata: 'Mapping[Hashable, tuple[np.ndarray, np.ndarray, np.ndarray]]', per_stratum_metric: 'MetricFn', combine: 'Callable[[Mapping[Hashable, float]], float]', *, resample_labels: 'tuple[int, ...]' = (0, 1), n_resamples: 'int' = 1000, confidence: 'float' = 0.95, rng: 'RNGLike | SeedLike | None' = 42, n_jobs: 'int' = 1, return_samples: 'bool' = False) -> 'BootstrapCI'"
     },
     "stratified_recall": {
       "doc_first_line": "Recall (TPR) per categorical stratum.",
