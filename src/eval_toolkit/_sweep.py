@@ -72,7 +72,9 @@ def sweep(
         **Required to materialize ``asr``** — the documented contract refuses
         a magic default threshold (cf. ``methodology/thresholds.md``).
         Ignored when ``scorer`` is ``None`` (with ``ValueError`` if passed
-        with ``scorer=None`` to surface the API misuse).
+        with ``scorer=None`` to surface the API misuse). Must not be NaN
+        (every ``asr`` flag would silently be ``False``); ``±inf`` is
+        accepted as a deliberately unsatisfiable sentinel.
 
     Returns
     -------
@@ -93,6 +95,7 @@ def sweep(
     ValueError
         - If ``strategies`` is empty.
         - If ``attack_threshold`` is provided without ``scorer``.
+        - If ``attack_threshold`` is NaN.
         - If any strategy doesn't satisfy ``TextTransform`` structurally
           (typically a missing ``name`` attribute).
 
@@ -138,6 +141,13 @@ def sweep(
             "Either pass scorer=<scorer> + attack_threshold=<float>, "
             "or omit attack_threshold."
         )
+    # NaN comparisons are all False, so a NaN threshold would silently zero
+    # every asr flag. (±inf is semantically valid: an unsatisfiable sentinel.)
+    if attack_threshold is not None and np.isnan(attack_threshold):
+        raise ValueError(
+            "sweep(): attack_threshold is NaN — every asr flag would be False. "
+            "Pass a finite threshold (or ±inf as an unsatisfiable sentinel)."
+        )
     for i, strategy in enumerate(strategies):
         if not (hasattr(strategy, "name") and hasattr(strategy, "transform")):
             raise ValueError(
@@ -177,8 +187,11 @@ def sweep(
                 "transformed_text": transformed,
             }
             if scorer is not None:
-                assert original_scores is not None
-                assert transformed_scores is not None
+                if original_scores is None or transformed_scores is None:  # pragma: no cover
+                    raise RuntimeError(
+                        "sweep(): internal invariant violated — batch scores not "
+                        "materialized despite scorer being set"
+                    )
                 s_orig = float(original_scores[text_id])
                 s_adv = float(transformed_scores[text_id])
                 row["original_score"] = s_orig

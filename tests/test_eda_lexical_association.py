@@ -338,3 +338,22 @@ def test_competency_result_to_dict_json_round_trip(
     assert restored["n_test"] == 2
     assert len(restored["baselines"]) == 3
     assert {b["name"] for b in restored["baselines"]} == {"length", "char_ngram", "bow"}
+
+
+# --- silent-NaN hardening (#96, v1.9.0): label degeneracy guards ---
+
+
+@pytest.mark.unit
+def test_class_lexical_association_unmatched_positive_label_raises() -> None:
+    """A type-mismatched positive_label (1 vs '1') raises instead of an all-empty result."""
+    texts = ["ignore this", "weather", "ignore that", "sunny"]
+    labels = [1, 0, 1, 0]
+    with pytest.raises(ValueError, match="matches no label"):
+        class_lexical_association(texts, labels, positive_label="1")
+
+
+@pytest.mark.unit
+def test_class_lexical_association_all_positive_raises() -> None:
+    """All labels equal to positive_label → empty negative corpus must raise."""
+    with pytest.raises(ValueError, match="negative corpus would be empty"):
+        class_lexical_association(["a b", "a c"], [1, 1])

@@ -391,7 +391,10 @@ def class_lexical_association(
     Raises
     ------
     ValueError
-        If ``texts`` and ``labels`` differ in length.
+        If ``texts`` and ``labels`` differ in length, if ``positive_label``
+        matches no label (e.g. a type mismatch: ``positive_label=1`` against
+        string labels ``"1"``), or if every label matches ``positive_label``
+        (the negative corpus would be empty).
 
     Examples
     --------
@@ -408,6 +411,20 @@ def class_lexical_association(
         raise ValueError(f"texts ({len(texts)}) and labels ({len(labels)}) length mismatch")
     pos = [t for t, y in zip(texts, labels, strict=True) if y == positive_label]
     neg = [t for t, y in zip(texts, labels, strict=True) if y != positive_label]
+    # An unmatched positive_label (typically a type mismatch — 1 vs "1") would
+    # otherwise produce an empty corpus and a documented all-empty result that
+    # silently reads "no shortcut signal". repr() exposes the type difference.
+    if not pos:
+        observed = sorted({repr(y) for y in labels})
+        raise ValueError(
+            f"positive_label {positive_label!r} matches no label; "
+            f"observed label values: {observed}"
+        )
+    if not neg:
+        raise ValueError(
+            f"every label matches positive_label {positive_label!r}; "
+            "the negative corpus would be empty"
+        )
     return weighted_log_odds(
         pos, neg, prior_scale=prior_scale, min_count=min_count, tokenizer=tokenizer
     )

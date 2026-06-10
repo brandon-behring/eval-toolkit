@@ -129,3 +129,49 @@ def test_shape_and_size_validation() -> None:
         cluster_bootstrap_ci(y, s[:-1], g, roc_auc, n_resamples=50, rng=0)
     with pytest.raises(ValueError, match="too small"):
         cluster_bootstrap_ci(y[:8], s[:8], g[:8], roc_auc, n_resamples=50, rng=0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Silent-NaN hardening (#96, v1.9.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_nan_scores_rejected_at_boundary() -> None:
+    """NaN in ``y_score`` raises at the validation boundary (sibling convention: cv_clt_ci)."""
+    y, s, g = _clustered_inputs()
+    s[3] = np.nan
+    with pytest.raises(ValueError, match="y_score contains NaN or inf"):
+        cluster_bootstrap_ci(y, s, g, roc_auc, n_resamples=50, rng=0)
+
+
+@pytest.mark.unit
+def test_non_finite_point_estimate_raises() -> None:
+    """A statistic returning NaN on the full data raises instead of a silent NaN CI."""
+    y, s, g = _clustered_inputs()
+
+    def nan_stat(y_t: np.ndarray, y_s: np.ndarray) -> float:
+        return float("nan")
+
+    with pytest.raises(ValueError, match="non-finite point estimate"):
+        cluster_bootstrap_ci(y, s, g, nan_stat, n_resamples=50, rng=0)
+
+
+@pytest.mark.unit
+def test_nan_resamples_count_as_degenerate() -> None:
+    """NaN-returning resamples hit the >5% degenerate gate instead of poisoning the quantiles.
+
+    Pre-#96 only *raising* statistics counted as degenerate; a NaN return flowed
+    straight into ``np.quantile`` and produced a silent all-NaN ``BootstrapCI``.
+    """
+    y, s, g = _clustered_inputs()
+
+    def nan_on_resamples(y_t: np.ndarray, y_s: np.ndarray) -> float:
+        # Finite on the original arrays (the point-estimate call), NaN on every
+        # resampled draw (cluster gathering never reproduces the original order).
+        if y_s.shape == s.shape and np.array_equal(y_s, s):
+            return 0.5
+        return float("nan")
+
+    with pytest.raises(ValueError, match="degenerate"):
+        cluster_bootstrap_ci(y, s, g, nan_on_resamples, n_resamples=50, rng=0)

@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — silent-NaN hardening batch (#96)
+
+Finiteness guards across the numeric surface (STYLE §1 *never fail silently* /
+§7 validation boundary). All are new raises (or error statuses) on garbage
+input that previously produced silently-wrong results:
+
+- `cluster_bootstrap_ci` / `stratified_cluster_bootstrap_ci`: NaN/inf scores
+  now raise at the validation boundary (previously the per-stratum check was
+  shape-only and the result was a silent all-NaN `BootstrapCI`); a non-finite
+  point estimate raises with the got-value; resample draws where the statistic
+  (or `combine`) **returns** NaN/inf now count toward the >5% degenerate gate
+  instead of poisoning the quantile CI (previously only *raising* draws counted).
+- `paired_bootstrap_diff` / `paired_bootstrap_ece_diff` /
+  `paired_bootstrap_op_point_diff`: NaN resample deltas now count as degenerate
+  draws (same ≤5% tolerance as raising draws — pre-#96 a NaN CI made
+  `overlaps_zero` read `False`, i.e. silently "statistically significant");
+  a non-finite full-data Δ raises with the got-value; a non-finite-CI-bounds
+  raise remains in each constructor as a backstop (mirrors the BCa degeneracy
+  guard in `bootstrap_ci`).
+- `scorecard` bootstrap path: BCa-degenerate NaN CI bounds are no longer
+  attached to an `"ok"` cell — the CI is dropped and the reason recorded
+  (consistent with the existing "bootstrap unavailable" convention).
+- `eda.median_bandwidth`: non-finite input (NaN/inf) now raises at entry —
+  NaN bypassed the `sigma <= 0.0` check and escaped as a NaN bandwidth, and a
+  NaN row outside the `max_samples` subsample escaped entirely.
+- `eda.maximum_mean_discrepancy`: explicit `bandwidth` must be finite and > 0 —
+  `inf` yielded γ = 0 → all-ones Gram → MMD² = 0 → `p_value = 1.0` silently
+  reading "no shift".
+- `eda` PAD/MMD/kNN feature matrices are finiteness-checked at the boundary
+  (previously NaN embeddings died deep inside sklearn blaming internals).
+- `eda.class_lexical_association`: a `positive_label` matching no label (the
+  1-vs-`"1"` type-mismatch trap) or matching every label now raises listing the
+  observed label values, instead of returning a documented all-empty result
+  that read "no shortcut signal".
+- `scorecard`: a custom `MetricSpec.compute` returning NaN/inf now yields
+  `MetricResult(status="error", reason=...)` through the same path as a raising
+  compute — previously `status="ok"` with a NaN value.
+- `sweep`: a NaN `attack_threshold` now raises (it silently zeroed every `asr`
+  flag); `±inf` remains a documented unsatisfiable sentinel.
+- `analysis.JsonlPredictionReader`: a row missing (or `null` on) a declared
+  column key now fails fast with file + row + key context (the R8-F3 pattern
+  already applied to CSV headers) — previously a missing score coerced to NaN
+  deep in the metric computation and a missing label died as a bare `TypeError`.
+  A malformed JSON row now reports the actual file row (raw `json.JSONDecodeError`
+  always said "line 1"). `analysis.load_prediction_arrays` additionally rejects
+  non-finite loaded scores (a bare JSON `NaN` token or a CSV `"nan"` cell passes
+  per-row key checks) with file + column + row-index context.
+
 ### Fixed
 
 - `audit_value_bindings.validate_reader_value_bindings` now raises a

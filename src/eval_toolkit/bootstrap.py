@@ -514,7 +514,8 @@ def _paired_bootstrap_diff_step(
     """One paired-bootstrap resample step (module-level for parallel_map picklability).
 
     Returns the delta ``metric(B) - metric(A)`` on the resampled indices, or
-    ``None`` if the resample is degenerate (single-class draw → metric raises).
+    ``None`` if the resample is degenerate (single-class draw → metric raises,
+    or the metric returns a non-finite value that would poison the quantile CI).
     Caller filters None values + tracks failure rate.
     """
     rng = np.random.default_rng(seed_seq)
@@ -525,7 +526,8 @@ def _paired_bootstrap_diff_step(
         metric_a = float(metric(y_true_arr[idx], a[idx]))
     except (ValueError, RuntimeError):
         return None
-    return metric_b - metric_a
+    delta = metric_b - metric_a
+    return delta if np.isfinite(delta) else None
 
 
 def paired_bootstrap_diff(
@@ -564,9 +566,10 @@ def paired_bootstrap_diff(
     ValueError
         If ``y_true``, ``y_score_a``, ``y_score_b`` do not share the same
         shape; if ``n < 10`` (too small for paired bootstrap); if more
-        than 5% of resamples raised in ``metric`` (rare-positive
-        degeneracy); or if no resamples produced a usable Δ; or if
-        ``n_jobs == 0``.
+        than 5% of resamples were degenerate (``metric`` raised —
+        rare-positive degeneracy — or returned non-finite); if the
+        full-data Δ is non-finite; if no resamples produced a usable Δ;
+        or if ``n_jobs == 0``.
     TypeError
         If ``n_jobs != 1`` and ``metric`` is not picklable.
 
@@ -612,6 +615,11 @@ def paired_bootstrap_diff(
         raise ValueError(f"n={n} too small for paired bootstrap; need ≥ 10")
 
     delta_point = float(metric(y_true_arr, b)) - float(metric(y_true_arr, a))
+    if not np.isfinite(delta_point):
+        raise ValueError(
+            f"paired_bootstrap_diff: metric returned non-finite delta {delta_point} "
+            "on the full (non-resampled) data"
+        )
     seed_seqs = spawn_seed_sequences(rng, n_resamples)
     step = functools.partial(
         _paired_bootstrap_diff_step,
@@ -626,9 +634,9 @@ def paired_bootstrap_diff(
 
     if failures > 0.05 * n_resamples:
         raise ValueError(
-            f"paired_bootstrap_diff: {failures}/{n_resamples} resamples raised "
-            "the metric function (likely single-class draws on rare-positive "
-            "data); refusing to compute CI on > 5% degenerate resamples"
+            f"paired_bootstrap_diff: {failures}/{n_resamples} resamples degenerate "
+            "(metric raised — likely single-class draws on rare-positive data — "
+            "or returned non-finite); refusing to compute CI on > 5% degenerate resamples"
         )
     if not deltas:
         raise ValueError("paired_bootstrap_diff: no usable resamples")
@@ -637,6 +645,13 @@ def paired_bootstrap_diff(
     alpha = (1.0 - confidence) / 2.0
     ci_low = float(np.quantile(deltas_arr, alpha))
     ci_high = float(np.quantile(deltas_arr, 1.0 - alpha))
+    # NaN bounds would make `overlaps_zero` read False ("significant") —
+    # a silent lie. Mirror the BCa degeneracy guard above.
+    if not (np.isfinite(ci_low) and np.isfinite(ci_high)):
+        raise ValueError(
+            f"paired_bootstrap_diff: non-finite CI bounds [{ci_low}, {ci_high}] "
+            "(metric returned NaN/inf on resamples); cannot assess overlap with zero"
+        )
     return PairedBootstrapCI(
         delta=delta_point,
         ci_low=ci_low,
@@ -659,8 +674,8 @@ def _paired_bootstrap_ece_diff_step(
     """One paired-ECE resample step (module-level for parallel_map picklability).
 
     Returns ``ECE(B) - ECE(A)`` on the resampled indices, or ``None`` if the
-    resample is single-class (ECE undefined). Caller filters None values +
-    tracks failure rate.
+    resample is single-class (ECE undefined) or the delta is non-finite.
+    Caller filters None values + tracks failure rate.
     """
     rng = np.random.default_rng(seed_seq)
     n = len(y_true_arr)
@@ -674,7 +689,8 @@ def _paired_bootstrap_ece_diff_step(
         ece_b = ece_fn(y_re, b[idx], n_bins)
     except (ValueError, ZeroDivisionError):
         return None
-    return float(ece_b - ece_a)
+    delta = float(ece_b - ece_a)
+    return delta if np.isfinite(delta) else None
 
 
 def paired_bootstrap_ece_diff(
@@ -725,8 +741,9 @@ def paired_bootstrap_ece_diff(
     Raises
     ------
     ValueError
-        On shape mismatch, ``n < 10``, > 5% degenerate resamples, or
-        ``n_jobs == 0``.
+        On shape mismatch, ``n < 10``, > 5% degenerate resamples
+        (``ece_fn`` raised or returned non-finite), a non-finite
+        full-data Δ, or ``n_jobs == 0``.
     TypeError
         If ``n_jobs != 1`` and ``ece_fn`` is not picklable.
 
@@ -746,6 +763,11 @@ def paired_bootstrap_ece_diff(
         raise ValueError(f"n={n} too small for paired bootstrap; need >= 10")
 
     delta_point = float(ece_fn(y_true_arr, b, n_bins)) - float(ece_fn(y_true_arr, a, n_bins))
+    if not np.isfinite(delta_point):
+        raise ValueError(
+            f"paired_bootstrap_ece_diff: ece_fn returned non-finite delta {delta_point} "
+            "on the full (non-resampled) data"
+        )
     seed_seqs = spawn_seed_sequences(rng, n_resamples)
     step = functools.partial(
         _paired_bootstrap_ece_diff_step,
@@ -773,6 +795,12 @@ def paired_bootstrap_ece_diff(
     alpha = (1.0 - confidence) / 2.0
     ci_low = float(np.quantile(deltas_arr, alpha))
     ci_high = float(np.quantile(deltas_arr, 1.0 - alpha))
+    # NaN bounds would make `overlaps_zero` read False ("significant").
+    if not (np.isfinite(ci_low) and np.isfinite(ci_high)):
+        raise ValueError(
+            f"paired_bootstrap_ece_diff: non-finite CI bounds [{ci_low}, {ci_high}] "
+            "(ece_fn returned NaN/inf on resamples); cannot assess overlap with zero"
+        )
     return PairedBootstrapCI(
         delta=delta_point,
         ci_low=ci_low,
@@ -800,7 +828,8 @@ def _paired_bootstrap_op_point_diff_step(
     Resamples val + test indices independently; refits threshold on val
     resample (per scorer); evaluates metric_fn at that threshold on the
     test resample for both scorers. Returns ``m_B - m_A`` or ``None`` on
-    any threshold-fit / metric-eval failure (e.g., single-class val draw).
+    any threshold-fit / metric-eval failure (e.g., single-class val draw)
+    or a non-finite delta.
     """
     rng = np.random.default_rng(seed_seq)
     n_val = len(val_y_arr)
@@ -814,7 +843,8 @@ def _paired_bootstrap_op_point_diff_step(
         m_b = float(metric_fn(test_y_arr[test_idx], test_b[test_idx], thr_b))
     except (ValueError, RuntimeError):
         return None
-    return m_b - m_a
+    delta = m_b - m_a
+    return delta if np.isfinite(delta) else None
 
 
 def paired_bootstrap_op_point_diff(
@@ -872,7 +902,8 @@ def paired_bootstrap_op_point_diff(
     Raises
     ------
     ValueError
-        On shape mismatch, insufficient sample size, or ``n_jobs == 0``.
+        On shape mismatch, insufficient sample size, a non-finite
+        full-data Δ, or ``n_jobs == 0``.
     RuntimeError
         If > 50% of resamples are degenerate (e.g., single-class val draws).
     TypeError
@@ -943,6 +974,11 @@ def paired_bootstrap_op_point_diff(
     delta_point = float(metric_fn(test_y_arr, test_b, thr_b_full)) - float(
         metric_fn(test_y_arr, test_a, thr_a_full)
     )
+    if not np.isfinite(delta_point):
+        raise ValueError(
+            f"paired_bootstrap_op_point_diff: metric_fn returned non-finite delta "
+            f"{delta_point} on the full (non-resampled) data"
+        )
 
     seed_seqs = spawn_seed_sequences(rng, n_resamples)
     step = functools.partial(
@@ -971,6 +1007,12 @@ def paired_bootstrap_op_point_diff(
     alpha = (1.0 - confidence) / 2.0
     ci_low = float(np.quantile(valid, alpha))
     ci_high = float(np.quantile(valid, 1.0 - alpha))
+    # NaN bounds would make `overlaps_zero` read False ("significant").
+    if not (np.isfinite(ci_low) and np.isfinite(ci_high)):
+        raise ValueError(
+            f"paired_bootstrap_op_point_diff: non-finite CI bounds [{ci_low}, {ci_high}] "
+            "(metric_fn returned NaN/inf on resamples); cannot assess overlap with zero"
+        )
     return PairedBootstrapCI(
         delta=delta_point,
         ci_low=ci_low,
@@ -1482,7 +1524,8 @@ def _cluster_bootstrap_step(
 
     For each label, its ``(label, group)`` units are resampled with replacement when the label is
     in ``resample_labels``, else all its rows are held fixed. Returns the statistic on the gathered
-    rows, or ``None`` if the draw is degenerate (statistic raises — e.g. a single-class draw).
+    rows, or ``None`` if the draw is degenerate (statistic raises — e.g. a single-class draw — or
+    returns a non-finite value, which would otherwise poison the quantile CI).
     """
     rng = np.random.default_rng(seed_seq)
     parts: list[np.ndarray] = []
@@ -1494,9 +1537,10 @@ def _cluster_bootstrap_step(
             parts.extend(group_rows)
     idx = np.concatenate(parts)
     try:
-        return float(statistic(y_true[idx], y_score[idx]))
+        val = float(statistic(y_true[idx], y_score[idx]))
     except (ValueError, RuntimeError):
         return None
+    return val if np.isfinite(val) else None
 
 
 def cluster_bootstrap_ci(
@@ -1557,8 +1601,9 @@ def cluster_bootstrap_ci(
     ------
     ValueError
         On shape mismatch, non-1-D input, ``n < 10``, ``confidence`` outside (0, 1), empty
-        ``resample_labels``, a ``resample_labels`` entry absent from ``y_true``, ``n_jobs == 0``, or
-        > 5% degenerate resamples.
+        ``resample_labels``, a ``resample_labels`` entry absent from ``y_true``, ``n_jobs == 0``,
+        non-finite ``y_score`` (NaN/inf), a non-finite point estimate, or > 5% degenerate
+        resamples (statistic raised or returned non-finite).
     TypeError
         If ``n_jobs != 1`` and ``statistic`` is not picklable.
 
@@ -1613,8 +1658,17 @@ def cluster_bootstrap_ci(
         raise ValueError(
             f"resample_labels {sorted(missing)} absent from y_true (present: {sorted(present)})"
         )
+    # Boundary finiteness (sibling convention: cv_clt_ci). NaN scores would
+    # otherwise surface only as a silent all-NaN BootstrapCI.
+    if not np.isfinite(np.asarray(y_score_arr, dtype=np.float64)).all():
+        raise ValueError("cluster_bootstrap_ci: y_score contains NaN or inf")
 
     point = float(statistic(y_true_arr, y_score_arr))
+    if not np.isfinite(point):
+        raise ValueError(
+            f"cluster_bootstrap_ci: statistic returned non-finite point estimate {point} "
+            "on the full (non-resampled) data"
+        )
     units = _label_cluster_units(y_true_arr, groups_arr)
     seed_seqs = spawn_seed_sequences(rng, n_resamples)
     step = functools.partial(
@@ -1631,7 +1685,8 @@ def cluster_bootstrap_ci(
     if failures > 0.05 * n_resamples:
         raise ValueError(
             f"cluster_bootstrap_ci: {failures}/{n_resamples} resamples degenerate "
-            "(statistic raised — e.g. single-class draws); refusing to compute CI on > 5% degenerate"
+            "(statistic raised — e.g. single-class draws — or returned non-finite); "
+            "refusing to compute CI on > 5% degenerate"
         )
     if not vals:
         raise ValueError("cluster_bootstrap_ci: no usable resamples")
@@ -1662,7 +1717,8 @@ def _stratified_cluster_step(
     Each stratum's ``(label, group)`` units are resampled independently (per ``resample_labels``;
     labels not listed are held fixed) with a single per-resample RNG, the per-stratum metric is
     computed on the gathered rows, and ``combine`` reduces the ``{key: metric}`` map to one scalar.
-    Returns ``None`` if any stratum metric or ``combine`` raises (a degenerate draw).
+    Returns ``None`` if any stratum metric or ``combine`` raises or returns a non-finite value
+    (a degenerate draw).
     """
     rng = np.random.default_rng(seed_seq)
     by_key: dict[Hashable, float] = {}
@@ -1677,13 +1733,17 @@ def _stratified_cluster_step(
                 parts.extend(group_rows)
         idx = np.concatenate(parts)
         try:
-            by_key[key] = float(per_stratum_metric(y_k[idx], s_k[idx]))
+            val = float(per_stratum_metric(y_k[idx], s_k[idx]))
         except (ValueError, RuntimeError):
             return None
+        if not np.isfinite(val):
+            return None
+        by_key[key] = val
     try:
-        return float(combine(by_key))
+        combined = float(combine(by_key))
     except (ValueError, RuntimeError, KeyError, ZeroDivisionError):
         return None
+    return combined if np.isfinite(combined) else None
 
 
 def stratified_cluster_bootstrap_ci(
@@ -1745,9 +1805,10 @@ def stratified_cluster_bootstrap_ci(
     Raises
     ------
     ValueError
-        On empty ``strata``, a stratum whose arrays mismatch shape / are not 1-D, empty
-        ``resample_labels``, ``confidence`` outside (0, 1), ``n_jobs == 0``, or > 5% degenerate
-        resamples.
+        On empty ``strata``, a stratum whose arrays mismatch shape / are not 1-D, a stratum with
+        non-finite scores (NaN/inf), empty ``resample_labels``, ``confidence`` outside (0, 1),
+        ``n_jobs == 0``, a non-finite point estimate, or > 5% degenerate resamples (a per-stratum
+        metric or ``combine`` raised or returned non-finite).
     TypeError
         If ``n_jobs != 1`` and ``per_stratum_metric`` / ``combine`` are not picklable.
 
@@ -1797,10 +1858,19 @@ def stratified_cluster_bootstrap_ci(
                 f"stratum {key!r}: y/score/groups must be aligned 1-D arrays; got "
                 f"{y_a.shape}, {s_a.shape}, {g_a.shape}"
             )
+        # Boundary finiteness per stratum (the shape check alone lets NaN
+        # scores flow into a silent all-NaN BootstrapCI).
+        if not np.isfinite(np.asarray(s_a, dtype=np.float64)).all():
+            raise ValueError(f"stratum {key!r}: y_score contains NaN or inf")
         strata_data[key] = (y_a, s_a)
         strata_units[key] = _label_cluster_units(y_a, g_a)
 
     point = float(combine({k: float(per_stratum_metric(*strata_data[k])) for k in strata_data}))
+    if not np.isfinite(point):
+        raise ValueError(
+            f"stratified_cluster_bootstrap_ci: combine returned non-finite point estimate "
+            f"{point} on the full (non-resampled) data"
+        )
     seed_seqs = spawn_seed_sequences(rng, n_resamples)
     step = functools.partial(
         _stratified_cluster_step,
@@ -1818,7 +1888,8 @@ def stratified_cluster_bootstrap_ci(
     if failures > 0.05 * n_resamples:
         raise ValueError(
             f"stratified_cluster_bootstrap_ci: {failures}/{n_resamples} resamples degenerate "
-            "(a per-stratum metric or combine raised); refusing CI on > 5% degenerate"
+            "(a per-stratum metric or combine raised or returned non-finite); "
+            "refusing CI on > 5% degenerate"
         )
     if not vals:
         raise ValueError("stratified_cluster_bootstrap_ci: no usable resamples")

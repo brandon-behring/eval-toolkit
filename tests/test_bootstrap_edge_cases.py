@@ -91,7 +91,7 @@ def test_paired_bootstrap_diff_raises_on_too_many_degenerate_resamples() -> None
     y[0] = 1  # exactly one positive
     a = rng.uniform(0, 1, size=n)
     b = rng.uniform(0, 1, size=n)
-    with pytest.raises(ValueError, match="raised the metric function|no usable resamples"):
+    with pytest.raises(ValueError, match="degenerate|no usable resamples"):
         paired_bootstrap_diff(y, a, b, _strict_single_class_metric, n_resamples=200, rng=42)
 
 
@@ -183,3 +183,135 @@ def test_bootstrap_ci_invalid_confidence_raises() -> None:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Silent-NaN hardening (#96, v1.9.0): NaN-returning metrics in the paired
+# bootstraps.
+#
+# Pre-#96, a NaN-returning metric flowed into np.quantile, yielding NaN bounds
+# and `overlaps_zero = NaN <= 0.0 <= NaN` == False — silently reading
+# "statistically significant". Now: NaN resample deltas count as degenerate
+# draws (>5% triggers the existing gate, ≤5% are filtered like raising draws),
+# a non-finite full-data delta raises immediately, and a non-finite-CI-bounds
+# raise remains in each constructor as an unreachable-by-construction backstop.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _paired_nan_inputs() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(0)
+    y = np.array([0, 1] * 20)
+    a = rng.normal(size=40)
+    b = rng.normal(size=40)
+    return y, a, b
+
+
+def test_paired_bootstrap_diff_nan_resamples_hit_degenerate_gate() -> None:
+    y, a, b = _paired_nan_inputs()
+
+    def metric(y_t: np.ndarray, y_s: np.ndarray) -> float:
+        # Finite on the full arrays (delta_point), NaN on every row resample.
+        for o in (a, b):
+            if y_s.shape == o.shape and np.array_equal(y_s, o):
+                return 0.5
+        return float("nan")
+
+    with pytest.raises(ValueError, match="degenerate"):
+        paired_bootstrap_diff(y, a, b, metric, n_resamples=50, rng=0)
+
+
+def test_paired_bootstrap_diff_non_finite_delta_point_raises() -> None:
+    y, a, b = _paired_nan_inputs()
+
+    def metric(y_t: np.ndarray, y_s: np.ndarray) -> float:
+        # NaN on the full arrays only — the delta_point guard must fire.
+        for o in (a, b):
+            if y_s.shape == o.shape and np.array_equal(y_s, o):
+                return float("nan")
+        return 0.5
+
+    with pytest.raises(ValueError, match="non-finite delta"):
+        paired_bootstrap_diff(y, a, b, metric, n_resamples=50, rng=0)
+
+
+def test_paired_bootstrap_ece_diff_nan_resamples_hit_degenerate_gate() -> None:
+    y, a, b = _paired_nan_inputs()
+
+    def ece_fn(y_t: np.ndarray, y_s: np.ndarray, n_bins: int) -> float:
+        for o in (a, b):
+            if y_s.shape == o.shape and np.allclose(y_s, o):
+                return 0.5
+        return float("nan")
+
+    with pytest.raises(ValueError, match="degenerate"):
+        paired_bootstrap_ece_diff(y, a, b, ece_fn=ece_fn, n_resamples=50, rng=0)
+
+
+def test_paired_bootstrap_ece_diff_non_finite_delta_point_raises() -> None:
+    y, a, b = _paired_nan_inputs()
+
+    def ece_fn(y_t: np.ndarray, y_s: np.ndarray, n_bins: int) -> float:
+        for o in (a, b):
+            if y_s.shape == o.shape and np.allclose(y_s, o):
+                return float("nan")
+        return 0.5
+
+    with pytest.raises(ValueError, match="non-finite delta"):
+        paired_bootstrap_ece_diff(y, a, b, ece_fn=ece_fn, n_resamples=50, rng=0)
+
+
+def test_paired_bootstrap_op_point_diff_nan_resamples_hit_degenerate_gate() -> None:
+    val_y, val_a, val_b = _paired_nan_inputs()
+    test_y, test_a, test_b = _paired_nan_inputs()
+
+    def threshold_fn(y_t: np.ndarray, y_s: np.ndarray) -> float:
+        return 0.5
+
+    def metric_fn(y_t: np.ndarray, y_s: np.ndarray, thr: float) -> float:
+        # Finite on the full test arrays (delta_point), NaN on every resample.
+        for o in (test_a, test_b):
+            if y_s.shape == o.shape and np.array_equal(y_s, o):
+                return 0.5
+        return float("nan")
+
+    with pytest.raises(RuntimeError, match="degenerate"):
+        paired_bootstrap_op_point_diff(
+            val_y,
+            val_a,
+            val_b,
+            test_y,
+            test_a,
+            test_b,
+            threshold_fn,
+            metric_fn,
+            n_resamples=50,
+            rng=0,
+        )
+
+
+def test_paired_bootstrap_op_point_diff_non_finite_delta_point_raises() -> None:
+    val_y, val_a, val_b = _paired_nan_inputs()
+    test_y, test_a, test_b = _paired_nan_inputs()
+
+    def threshold_fn(y_t: np.ndarray, y_s: np.ndarray) -> float:
+        return 0.5
+
+    def metric_fn(y_t: np.ndarray, y_s: np.ndarray, thr: float) -> float:
+        for o in (test_a, test_b):
+            if y_s.shape == o.shape and np.array_equal(y_s, o):
+                return float("nan")
+        return 0.5
+
+    with pytest.raises(ValueError, match="non-finite delta"):
+        paired_bootstrap_op_point_diff(
+            val_y,
+            val_a,
+            val_b,
+            test_y,
+            test_a,
+            test_b,
+            threshold_fn,
+            metric_fn,
+            n_resamples=50,
+            rng=0,
+        )
