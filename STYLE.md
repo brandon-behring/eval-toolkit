@@ -359,6 +359,9 @@ restate what the code says.
 
 - Every module declares `__all__`.
 - The package's `__init__.py` re-exports the public surface so both
-  `from eval_toolkit import pr_auc` and `from eval_toolkit.metrics import pr_auc`
-  work — matches sklearn/pandas/scipy convention.
+  `from eval_toolkit import scorecard` and
+  `from eval_toolkit.scorecards import scorecard` work — matches
+  sklearn/pandas/scipy convention. (Threshold-dependent scalar metrics
+  such as `pr_auc` left the top level at v0.46 Decision L — import
+  them from `eval_toolkit.metrics`.)
 - Private helpers are prefixed with `_` and not re-exported.

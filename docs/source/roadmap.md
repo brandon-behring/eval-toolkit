@@ -153,20 +153,32 @@ All v0.45 / v0.46 / v0.46.1 / v0.47 tracked candidates closed:
 - Advanced-6 character_injection (v0.43.0 forward-look) — shipped at
   v0.47.0 alongside the sweep consolidation per Decision Q11→11.3.
 
-Post-v1.0 roadmap is v1.0.1 cleanup-only:
+Post-v1.0 state (updated 2026-06-09):
 
-- **v1.0.1 (next minor)** — Round 9 deferred-minors batch: RC2
-  `SimilarityStrategy` contract reconciliation, RC3 reseed_splitter
-  test row-content hardening, RC4 audit-count-tally polish, and 3
-  `brier_score` / ECE docstring precision items (F-metrics-1/3/4).
-  All Tier-2 ADDITIVE or Tier-3 FREE — no Tier-1 changes.
-  See the `v1.0.1 cleanup` GH issue for the live checklist.
+- **v1.0.1–v1.0.2** — Round 9 deferred-minors batch shipped: RC2
+  `SimilarityStrategy` strict-Tier-2 promotion, RC3 reseed_splitter
+  test hardening, RC4 audit-count-tally polish, F-metrics-1/3/4
+  docstring precision. #76 (`v1.0.1 cleanup`) closed.
+- **v1.0.3–v1.4.0** — audit-validator family shipped and generalized:
+  `audit_value_bindings` (#71, #80, #81), `audit_citation_alignment`
+  (#73, #82), `audit_sister_doc_concept_drift` (#72); three-layer
+  architecture (identity / scope / pairing) codified family-wide in
+  ADR 0007 with shared `_narrative` helpers.
+- **v1.5.0–v1.6.0** — Tier-2 `eda` layer (#83, #86, #87) +
+  schema-aware `HFDatasetsLoader` (#85): `data_audit`, `obfuscation`,
+  `lexical_association`, `distribution_shift`.
+- **v1.7.0–v1.8.0** — cluster bootstrap CIs (#90, #92):
+  `cluster_bootstrap_ci` + `stratified_cluster_bootstrap_ci`.
+- **Open**: #93 — expose the resample distribution (`return_samples` /
+  `frac_gt`) on `stratified_cluster_bootstrap_ci`; live consumer ask
+  and the natural next-minor candidate. #88 (decision log) — candidate
+  for closure now that `docs/source/adr/` (ADR 0001–0007) exists.
 
-The current planning document is
-[`~/.claude/plans/evaluate-all-the-work-twinkly-kite.md`](https://github.com/brandon-behring/eval-toolkit/blob/main/.claude/plans/evaluate-all-the-work-twinkly-kite.md)
-(local) — covers the staggered v0.45 → v0.46 → v0.47 → v0.48 → v1.0
-sequence and the 17 design decisions locked across four `/exploring-options`
-rounds.
+The v1.0-era planning document was
+`~/.claude/plans/evaluate-all-the-work-twinkly-kite.md` (local to the
+maintainer's machine, not in the repo) — it covers the staggered
+v0.45 → v0.46 → v0.47 → v0.48 → v1.0 sequence and the 17 design
+decisions locked across four `/exploring-options` rounds.
 
 Run `gh issue list -R brandon-behring/eval-toolkit --label P2` or
 `--label P3` for live state.

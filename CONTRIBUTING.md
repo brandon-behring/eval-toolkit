@@ -21,13 +21,18 @@ package management.
 ```bash
 git clone https://github.com/brandon-behring/eval-toolkit
 cd eval-toolkit
-make install    # uv venv + uv pip install -e ".[dev]"
+make install    # uv venv + uv pip install -e ".[dev,docs]"
 source .venv/bin/activate
 ```
 
-The `[dev]` extra pulls in all sub-extras (`dataframe`, `plotting`, `property`,
-`yaml`, `parquet`) plus the test/lint/type toolchain (`pytest`, `pytest-cov`,
-`pytest-mpl`, `sybil`, `ruff`, `black`, `mypy`, `pre-commit`).
+The `[dev]` extra pulls in the core sub-extras (`dataframe`, `plotting`,
+`property`, `yaml`, `parquet`) plus the test/lint/type toolchain (`pytest`,
+`pytest-cov`, `pytest-mpl`, `sybil`, `ruff`, `black`, `mypy`, `pre-commit`);
+`make install` adds `[docs]` (sphinx + myst-nb) so the `pre-push` docs gate
+works on a fresh environment. The heavy optional stacks (`embeddings`,
+`transformers`, `probes`, `losses`) are **not** included — install them
+explicitly if you need the per-module coverage floors
+(`scripts/check_module_floors.py`) to pass locally for those modules.
 
 ## Hooks
 

@@ -248,6 +248,7 @@ _TIER2_PROTOCOLS = frozenset(
         "MetricSpec",
         "Probe",
         "Scorer",
+        "SimilarityStrategy",  # promoted to 10th strict at v1.0.2 (#76 RC2)
         "Splitter",
         "TextTransform",  # added in v0.47 release/v0.47.0 Sub-PR 3 (Decision K)
         "ThresholdSelector",
