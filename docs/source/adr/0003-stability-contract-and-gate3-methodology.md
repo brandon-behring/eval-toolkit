@@ -53,7 +53,8 @@ bump to alter:
   return types. A new optional kwarg with a default is technically
   additive, but it changes the signature snapshot — handle via the
   additive-Protocol path below or accept the major bump.
-- **Tier-2 Protocols** (9 strict at v1.0, all shipped through v0.47.0):
+- **Tier-2 Protocols** (9 strict at v1.0, all shipped through v0.47.0;
+  10 strict since v1.0.2 — see the `SimilarityStrategy` entry below):
   - `Scorer` (from `protocols.py`)
   - `LeakageCheck` (from `leakage.py`)
   - `Splitter` (from `splits.py`)
@@ -63,6 +64,10 @@ bump to alter:
   - `TextTransform` (from `protocols.py`, shipped v0.47)
   - `MetaLearner` (from `stacking.py`, shipped v0.45)
   - `Probe` (from `probes.py`, shipped v0.43)
+  - `SimilarityStrategy` (from `text_dedup.py`; promoted to the 10th
+    strict Protocol at v1.0.2 per the #76 RC2 reconciliation — a
+    documentation-only promotion, the contract was already pinned in
+    the public-API snapshot since v1.0.0. Amended here 2026-06-09.)
   - PLUS 1 opt-in Protocol: `Versioned` (additive on top of Tier-2).
 
   Tier-2 Protocol method signatures are pinned by the Decision R6-D drift
@@ -100,12 +105,13 @@ functionality:
 
 The following may change in any release:
 
-- **Docstring first lines** — `tests/test_public_api.py` currently
-  captures them as part of the public-API snapshot. At v1.0, the
-  snapshot test is modified to drop docstring-first-line capture from
-  the golden (or gate it behind a `STRICT_DOCSTRINGS=1` env var for
-  local power-user use). This removes the SemVer tax on docstring
-  polish.
+- **Docstring first lines** — `tests/test_public_api.py` captures
+  them as part of the public-API snapshot. (Amended 2026-06-09: the
+  v1.0 plan to drop this capture — or gate it behind a
+  `STRICT_DOCSTRINGS=1` env var — was never implemented. Through
+  v1.x, docstring first lines remain pinned, so docstring polish
+  requires a snapshot regen in the same commit; the SemVer *tier* of
+  such a change is still Tier-3/patch.)
 - **Implementation internals** (helpers without `__all__` entries,
   private `_-prefixed` symbols, module-level constants not in any
   `__all__`). These may move, rename, or disappear without a SemVer
@@ -271,5 +277,6 @@ explicit ADR amendment. Likely triggers:
 - [ADR 0002 — scorecard as primary metric surface](0002-scorecard-as-primary-metric-surface.md)
   — adds `MetricSpec` to Tier-2 Protocols list above; demotes
   `eval_toolkit.metrics.*` to the Tier-2 additive-only commitment.
-- `tests/test_public_api.py` — currently captures docstring first lines;
-  modified at v1.0 to skip them per Tier 3.
+- `tests/test_public_api.py` — captures docstring first lines; the
+  planned v1.0 skip was not implemented (see the amended Tier-3 note
+  above).

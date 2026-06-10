@@ -46,7 +46,9 @@ jobs:
       - name: Run tests with coverage
         # Excludes the monte_carlo suite (~14 min) — see nightly-mc.yml
         # Excludes the benchmark suite — see nightly-benchmarks.yml
-        run: uv run python -m pytest --cov=eval_toolkit --cov-fail-under=92 -m "not monte_carlo and not benchmark"
+        # Excludes integration (network-dependent; per the pyproject marker
+        # contract these never run in PR CI — opt in via `-m integration`)
+        run: uv run python -m pytest --cov=eval_toolkit --cov-fail-under=92 -m "not monte_carlo and not benchmark and not integration"
 
       - name: Run doctests on math kernels + utility modules
         # Reads .doctest-modules (canonical list, shared with Makefile /
