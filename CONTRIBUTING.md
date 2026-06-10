@@ -151,7 +151,8 @@ lives in
    toolkit's *only* INFO log — keep it that way unless you have an
    equally strong "user-relevant progress" case).
 
-Currently parallel-capable: the 5 public bootstrap functions
+Currently parallel-capable (illustrative — grep `n_jobs` in `src/` for the
+authoritative current set): the public bootstrap functions
 (`bootstrap_ci`, `paired_bootstrap_diff`, `paired_bootstrap_ece_diff`,
 `paired_bootstrap_op_point_diff`, `paired_mde`). See
 [methodology/parallelism.md "When to add `n_jobs`"](docs/source/methodology/parallelism.md)

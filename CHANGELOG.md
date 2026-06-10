@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `audit_value_bindings.validate_reader_value_bindings` now raises a
+  diagnostic `ValueError` when a scanned file is not valid UTF-8, instead
+  of letting an unguarded `read_text(encoding="utf-8")` abort the run with
+  a bare `UnicodeDecodeError`. Documented in the function's `Raises` section.
+- `audit_sister_doc_concept_drift.validate_sister_doc_concept_drift` now
+  skips non-UTF-8 files with a `warnings.warn` instead of crashing — its
+  prior `except OSError` did not catch `UnicodeDecodeError` (a `ValueError`,
+  not an `OSError`), so a single non-UTF-8 byte aborted the whole scan.
+
+### Internal
+
+- `scripts/` is now covered by `ruff` / `black` / `mypy` across all runners
+  (`Makefile`, `ci.yml`, `.pre-commit-config.yaml`, `tox.ini`, `noxfile.py`).
+
 ### Fixed — documentation/config consistency batch (2026-06-09 full-repo audit)
 
 - [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md)

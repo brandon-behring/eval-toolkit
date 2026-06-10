@@ -1,8 +1,8 @@
 # eval-toolkit — Coding Standards
 
-Self-contained standards for this repository. External readers do not need
-access to any other style document; everything required to contribute lives
-here.
+Self-contained quick reference for this repository. The ADRs
+(`docs/source/adr/`) are the authoritative source for the decisions summarized
+here; everything needed for day-to-day contribution lives in this file.
 
 ## 1. Foundational principles
 
@@ -27,7 +27,7 @@ here.
 | Formatter | `black`, line length 100 |
 | Linter | `ruff` with `select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "C4"]`, ignore `E501` (Black handles), `N803`/`N806` (math identifiers) |
 | Type checker | `mypy` strict (`disallow_untyped_defs`, `disallow_incomplete_defs`, `check_untyped_defs`, `no_implicit_optional`, `warn_redundant_casts`, `warn_unused_ignores`, `warn_no_return`, `strict_equality`, `warn_return_any`) |
-| Test runner | `pytest` with markers `unit`, `property`, `smoke`, `golden`; coverage floor `90%` |
+| Test runner | `pytest` with markers `unit`, `property`, `smoke`, `golden`; coverage floor `92%` |
 | Build backend | `hatchling` |
 | Env manager | `uv` (`uv venv` → `.venv/`; `uv pip install -e .[dev]`) |
 | Python | `>=3.13` (RunPod parity floor; py313 tool targets in pyproject.toml) |
@@ -130,7 +130,15 @@ Examples:
   required.
 - `from __future__ import annotations` only when forward refs require it.
 - `Protocol` only at "real seams" — where two or more concrete implementations
-  exist or are planned. Current seams (as of v0.8.0):
+  exist or are planned. The authoritative Tier-2-stable set is `_TIER2_PROTOCOLS` in
+`tests/test_public_api.py` plus
+[ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md):
+the nine strict Tier-2 Protocols are `Scorer`, `LeakageCheck`, `Splitter`,
+`ThresholdSelector`, `DatasetLoader`, `MetricSpec`, `MetaLearner`, `Probe`,
+`TextTransform`. The seams below are illustrative detail —
+`SliceAwareScorer` is an opt-in subprotocol of `Scorer`, and
+`SimilarityStrategy` / `Versioned` are real seams that are **not** in the
+Tier-2 frozenset:
   - `Scorer` + `SliceAwareScorer` (`harness.py`) — anything with
     `predict_proba(X) -> np.ndarray`. `SliceAwareScorer` adds opt-in
     `should_score_slice(name)` for cost-controlled skipping.
@@ -251,7 +259,11 @@ Local imports inside functions are allowed for:
 ## 11. Logging
 
 Use `logging` (library context — consumers configure handlers). Do not use
-`print` in `src/eval_toolkit/`.
+`print` in `src/eval_toolkit/`. Log levels: `DEBUG` for internal events; `INFO`
+only for the rare user-relevant harness progress signal; **`WARNING` is reserved
+for `warnings.warn(...)`, not `logger.warning(...)`**; and **`ERROR` must not
+appear in library code — raise an exception instead**. See CONTRIBUTING.md
+§Logging for the full rationale.
 
 ## 12. Docstrings
 
@@ -333,7 +345,7 @@ restate what the code says.
   `hypothesis.extra.numpy` for arrays.
 - **Golden tests** only for `docs.py`, where the output is the contract.
 - **Doctests** for math/algorithmic kernels.
-- **Coverage floor**: 90%.
+- **Coverage floor**: 92%.
 - **`assert` is fine in tests.**
 
 ## 15. Packaging
