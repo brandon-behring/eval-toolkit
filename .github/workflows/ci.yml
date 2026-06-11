@@ -48,7 +48,15 @@ jobs:
         # Excludes the benchmark suite — see nightly-benchmarks.yml
         # Excludes integration (network-dependent; per the pyproject marker
         # contract these never run in PR CI — opt in via `-m integration`)
-        run: uv run python -m pytest --cov=eval_toolkit --cov-fail-under=92 -m "not monte_carlo and not benchmark and not integration"
+        run: uv run python -m pytest --cov=eval_toolkit --cov-report=term --cov-report=json --cov-fail-under=92 -m "not monte_carlo and not benchmark and not integration"
+
+      - name: Per-module coverage floors
+        # Ubuntu only (one reference platform): per-module percentages can
+        # drift across OSes via platform-conditional branches, and the
+        # FLOORS overrides in the script are calibrated against linux
+        # dev-install reality (issue #102).
+        if: matrix.os == 'ubuntu-latest'
+        run: uv run python scripts/check_module_floors.py
 
       - name: Run doctests on math kernels + utility modules
         # Reads .doctest-modules (canonical list, shared with Makefile /

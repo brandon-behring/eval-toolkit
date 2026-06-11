@@ -9,7 +9,7 @@ DOCTEST_MODULES := $(shell tr '\n' ' ' < .doctest-modules)
 
 help:
 	@echo "Targets:"
-	@echo "  install       Create .venv via uv and install dev + docs dependencies"
+	@echo "  install       Create .venv via uv sync (lock-faithful) with dev + docs extras"
 	@echo "  hooks         Install pre-commit hooks (ruff+black at commit, mypy at push)"
 	@echo "  lint          ruff check + black --check + mypy"
 	@echo "  format        black + ruff --fix"
@@ -27,9 +27,12 @@ help:
 	@echo "  pre-push      mirror CI doc-execution gate: pytest (NO path arg) + sphinx-build + --doctest-modules"
 	@echo "  dogfood       run an audit_* validator against its consumer, emit residual findings as JSON"
 
+# Lock-faithful install (issue #102): `uv pip install -e` resolves fresh and
+# drifts from uv.lock (observed: black 26.5.1 resolved vs 26.3.1 locked/CI).
+# `uv sync` creates .venv, installs the project editable, and resolves from
+# uv.lock — matching what CI runs.
 install:
-	uv venv
-	uv pip install -e ".[dev,docs]"
+	uv sync --extra dev --extra docs
 	@echo "Activate: source $(VENV)/bin/activate"
 
 hooks:
