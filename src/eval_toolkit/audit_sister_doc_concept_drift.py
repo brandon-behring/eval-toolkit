@@ -61,6 +61,8 @@ from pathlib import Path
 
 import numpy as np
 
+from eval_toolkit._narrative import _line_starts, _position_to_line
+
 __all__ = [
     "DriftCluster",
     "SisterDocDriftReport",
@@ -356,21 +358,9 @@ def _split_sentences(text: str) -> list[_SentenceSpan]:
         stripped_lines.append(line if not in_fence else "\n")
     cleaned = "".join(stripped_lines)
 
-    # Compute (line_start_pos -> line_no) map
-    line_starts = [0]
-    for i, ch in enumerate(cleaned):
-        if ch == "\n":
-            line_starts.append(i + 1)
-
-    def pos_to_line(pos: int) -> int:
-        lo, hi = 0, len(line_starts) - 1
-        while lo < hi:
-            mid = (lo + hi + 1) // 2
-            if line_starts[mid] <= pos:
-                lo = mid
-            else:
-                hi = mid - 1
-        return lo + 1
+    # Compute (line_start_pos -> line_no) map via the shared
+    # `_narrative` positional helpers (#99 consolidation).
+    line_starts = _line_starts(cleaned)
 
     # Split into rough sentences. Markdown headings + lists are
     # treated as standalone sentences.
@@ -385,13 +375,17 @@ def _split_sentences(text: str) -> list[_SentenceSpan]:
             continue
         # If line starts with #, treat as a sentence on its own
         if line_text.startswith("#") or line_text.startswith("- ") or line_text.startswith("* "):
-            spans.append(_SentenceSpan(text=line_text, line=pos_to_line(line_start_pos)))
+            spans.append(
+                _SentenceSpan(text=line_text, line=_position_to_line(line_starts, line_start_pos))
+            )
             continue
         # Else split on sentence-ish delimiters
         for piece in _SENTENCE_SPLIT_RE.split(line_text):
             piece = piece.strip()
             if piece:
-                spans.append(_SentenceSpan(text=piece, line=pos_to_line(line_start_pos)))
+                spans.append(
+                    _SentenceSpan(text=piece, line=_position_to_line(line_starts, line_start_pos))
+                )
     return spans
 
 

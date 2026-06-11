@@ -423,3 +423,37 @@ def _has_keyword_in_window(
     start = max(0, val_start - before_chars)
     end = min(len(text), val_start + after_chars)
     return bool(pattern.search(text, start, end))
+
+
+# ---------------------------------------------------------------------------
+# Positional helpers (line-number bookkeeping). Shared by all three
+# audit_* validators since v1.11.0 (#99); previously triplicated.
+# ---------------------------------------------------------------------------
+
+
+def _line_starts(text: str) -> list[int]:
+    """Return character positions where each line starts.
+
+    Line ``i`` (0-indexed) starts at ``_line_starts(text)[i]``. Companion
+    :func:`_position_to_line` converts a position back to a 1-indexed line.
+    """
+    starts = [0]
+    for i, ch in enumerate(text):
+        if ch == "\n":
+            starts.append(i + 1)
+    return starts
+
+
+def _position_to_line(line_starts: Sequence[int], pos: int) -> int:
+    """Convert a 0-indexed character position to a 1-indexed line number.
+
+    Binary search over the sorted output of :func:`_line_starts`.
+    """
+    lo, hi = 0, len(line_starts) - 1
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if line_starts[mid] <= pos:
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo + 1

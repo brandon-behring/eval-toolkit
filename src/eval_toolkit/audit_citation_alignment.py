@@ -49,6 +49,7 @@ from typing import Final, Literal
 from eval_toolkit._narrative import (
     _build_exclusion_ranges,
     _is_excluded,
+    _line_starts,
     _sentence_boundary_positions,
 )
 
@@ -264,15 +265,6 @@ def _infer_claim_category(
             if keyword.lower() in haystack:
                 return category
     return None
-
-
-def _line_starts(text: str) -> list[int]:
-    """Return character positions where each line starts."""
-    starts = [0]
-    for i, ch in enumerate(text):
-        if ch == "\n":
-            starts.append(i + 1)
-    return starts
 
 
 def _extract_sentence_context(

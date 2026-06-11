@@ -654,3 +654,19 @@ def test_dataclasses_define_slots() -> None:
         assert "__slots__" in cls.__dict__
     s = ADRSubject(adr_id="029", title="t", slug="s", category=None)
     assert not hasattr(s, "__dict__")
+
+
+@pytest.mark.unit
+def test_positional_helpers_shared_from_narrative() -> None:
+    """_line_starts/_position_to_line are single-sourced in _narrative (#99 V4)."""
+    from eval_toolkit import _narrative as _narr
+    from eval_toolkit.audit_citation_alignment import _line_starts as _aca_ls
+    from eval_toolkit.audit_value_bindings import (
+        _line_starts as _avb_ls,
+    )
+    from eval_toolkit.audit_value_bindings import (
+        _position_to_line as _avb_ptl,
+    )
+
+    assert _aca_ls is _avb_ls is _narr._line_starts
+    assert _avb_ptl is _narr._position_to_line

@@ -61,12 +61,19 @@ private flat module `eval_toolkit/_narrative.py`:
 - Sentence-boundary helpers: `_is_sentence_terminator_dot`,
   `_sentence_boundary_positions`, `_sentence_id_of`,
   `_crosses_sentence_boundary`.
-- Value-context helpers: `_is_signed_value`, `_has_keyword_in_window`.
+- Value-context helpers: `_is_signed_value` (imported by
+  `audit_value_bindings` since v1.11.0; previously inventory-listed
+  with zero importers), `_has_keyword_in_window`.
+- Positional helpers: `_line_starts`, `_position_to_line`
+  (consolidated v1.11.0, #99 — previously triplicated across the
+  three validators; `audit_sister_doc_concept_drift` now imports
+  from `_narrative` too).
 
-Both `audit_value_bindings` (v1.4.0+ refactor; signature-preserving)
-and `audit_citation_alignment` (v1.4.0+ new adoption) import from
-this module. Future audit validators add their own context-aware
-behavior on top.
+All three validators import from this module (`audit_value_bindings`
+v1.4.0+ refactor, signature-preserving; `audit_citation_alignment`
+v1.4.0+ new adoption; `audit_sister_doc_concept_drift` v1.11.0+ for
+the positional helpers). Future audit validators add their own
+context-aware behavior on top.
 
 The module is **private** (underscore-prefixed name, not in the
 package's `_EXPORTS` resolver). Consumers don't import directly;

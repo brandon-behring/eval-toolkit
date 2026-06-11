@@ -56,6 +56,9 @@ from eval_toolkit._narrative import (
     _crosses_sentence_boundary,
     _has_keyword_in_window,
     _is_excluded,
+    _is_signed_value,
+    _line_starts,
+    _position_to_line,
     _sentence_boundary_positions,
     _sentence_id_of,
 )
@@ -576,16 +579,18 @@ def validate_reader_value_bindings(
                     # picking up e.g., "0.974" inside "10.974" or version
                     # strings like "1.0.974"). Simple heuristic: the
                     # character before the match (if any) must not be a
-                    # digit or dot. v1.2.0 T1a (narrative-scope only):
-                    # also skip values immediately preceded by `+` or
-                    # `-` (delta-magnitude markers like "-0.071 AUPRC").
+                    # digit or dot.
                     val_start_in_full = window_offset + val_match.start()
                     if val_start_in_full > 0:
                         prev_char = text[val_start_in_full - 1]
                         if prev_char.isdigit() or prev_char == ".":
                             continue
-                        if scope == "narrative" and prev_char in "+-":
-                            continue
+                    # v1.2.0 T1a (narrative-scope only): skip values
+                    # immediately preceded by `+`/`-` (delta-magnitude
+                    # markers like "-0.071 AUPRC"). v1.11.0: via the
+                    # shared `_narrative._is_signed_value` helper.
+                    if scope == "narrative" and _is_signed_value(text, val_start_in_full):
+                        continue
 
                     val_str = val_match.group(0)
                     try:
@@ -976,15 +981,6 @@ def _build_pattern(
     return re.compile(pattern, flags)
 
 
-def _line_starts(text: str) -> list[int]:
-    """Return character positions where each line starts. line[i] starts at line_starts[i]."""
-    starts = [0]
-    for i, ch in enumerate(text):
-        if ch == "\n":
-            starts.append(i + 1)
-    return starts
-
-
 def _nearest_canonical_key(
     positions: Sequence[tuple[int, str]],
     value_pos: int,
@@ -1031,16 +1027,3 @@ def _nearest_canonical_key(
         if pos >= value_pos and (pos - value_pos) <= max_distance:
             return (key, pos)
     return None
-
-
-def _position_to_line(line_starts: list[int], pos: int) -> int:
-    """Convert a 0-indexed character position to a 1-indexed line number."""
-    # Binary-search-like; line_starts is sorted.
-    lo, hi = 0, len(line_starts) - 1
-    while lo < hi:
-        mid = (lo + hi + 1) // 2
-        if line_starts[mid] <= pos:
-            lo = mid
-        else:
-            hi = mid - 1
-    return lo + 1
