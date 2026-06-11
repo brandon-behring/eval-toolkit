@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checklist now carry a step 2b — classify the snapshot diff against ADR 0003
   tiers and label the CHANGELOG entry to match.
 
+### Build / Infra ([#102](https://github.com/brandon-behring/eval-toolkit/issues/102))
+
+- **Per-module coverage floors now run in CI** (ubuntu reference platform):
+  the CI coverage step emits `coverage.json` and `scripts/check_module_floors.py`
+  gates on it. The previously-empty `FLOORS` dict now documents dev-install
+  reality for the modules whose tests skip on the documented `[dev]` install
+  (`losses.py`, `probes.py`, `loaders.py` — their heavy extras are deliberately
+  excluded from `[dev]`/`[all]`): floors sit just below observed dev-install
+  coverage — no-regression gates, not aspiration. Declined for now: a nightly
+  heavy-extras coverage job (revisit if torch-path regressions bite).
+- **`make install` is now lock-faithful**: `uv sync --extra dev --extra docs`
+  resolves from `uv.lock` (closing the observed drift: fresh-resolved black
+  26.5.1 locally vs 26.3.1 locked/CI) and still installs the project editable.
+
 ## [1.9.0] — 2026-06-10 — resample distribution + silent-NaN hardening + UTF-8 batch (#93, #96, #97)
 
 ### Fixed — pre-tag adversarial-review completion (silent-NaN gaps in `bootstrap_ci` itself)
