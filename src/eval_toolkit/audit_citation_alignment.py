@@ -205,7 +205,17 @@ def _extract_sentence_context(
     citation_pos: int,
     sentence_positions: Sequence[int],
 ) -> str:
-    """Return the sentence containing ``citation_pos``, ≤300 chars.
+    """Return a ≤300-char window from the sentence containing ``citation_pos``.
+
+    v1.11.0 (#99): when the sentence exceeds 300 chars, the window is
+    the 300-char slice CENTERED on the citation, clamped to the
+    sentence bounds. The pre-v1.11.0 trailing ``[:300]`` truncation
+    anchored at the sentence start, so a citation past char 300 of its
+    own sentence fell OUTSIDE the window that classifies it (5 of the
+    37 dogfood residuals). The no-sentence-positions fallback
+    (defensive; unreachable from :func:`validate_citations`, which
+    always passes a non-empty list) is reconciled to the same cap: a
+    ±150-char window centered on the citation.
 
     v1.4.0 Layer 3 rule γ per ADR 0007: the category-keyword
     extraction window for an ADR citation must not cross sentence
@@ -220,12 +230,15 @@ def _extract_sentence_context(
     semantically apply to the citation.
     """
     if not sentence_positions:
-        return text[max(0, citation_pos - 120) : citation_pos + 120].strip()[:300]
+        return text[max(0, citation_pos - 150) : citation_pos + 150].strip()
     sent_idx = max(0, bisect.bisect_right(sentence_positions, citation_pos) - 1)
     sent_start = sentence_positions[sent_idx] if sent_idx < len(sentence_positions) else 0
     next_idx = sent_idx + 1
     sent_end = sentence_positions[next_idx] if next_idx < len(sentence_positions) else len(text)
-    return text[sent_start:sent_end].strip()[:300]
+    if sent_end - sent_start <= 300:
+        return text[sent_start:sent_end].strip()
+    start = max(sent_start, min(citation_pos - 150, sent_end - 300))
+    return text[start : start + 300].strip()
 
 
 def _infer_claim_categories_multi(

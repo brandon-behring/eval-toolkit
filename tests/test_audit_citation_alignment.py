@@ -469,3 +469,41 @@ def test_invalid_scope_raises_value_error() -> None:
             category_keywords=SEED_CATEGORY_KEYWORDS,
             scope="narative",  # type: ignore[arg-type]
         )
+
+
+@pytest.mark.unit
+def test_long_sentence_window_centers_on_citation() -> None:
+    """Rule-γ window is citation-centered when the sentence exceeds 300 chars (#99 V11).
+
+    Pre-v1.11.0 the window was the sentence's leading 300 chars, so the
+    keyword next to this citation (at the sentence's END) was invisible
+    and the misalignment silently skipped.
+    """
+    filler = "lorem ipsum dolor sit amet, consectetur adipiscing elit, " * 7
+    text = filler + "and the two-tier reproducibility lock is recorded via ADR-029.\n"
+    result = validate_citations(
+        markdown_text=text,
+        markdown_path=Path("test.md"),
+        adr_subjects=SEED_ADR_SUBJECTS,
+        category_keywords=SEED_CATEGORY_KEYWORDS,
+        scope="narrative",
+    )
+    assert len(result) == 1
+    assert result[0].cited_adr_id == "029"
+    assert result[0].claim_category == "reproducibility"
+    assert "ADR-029" in result[0].surrounding_text
+
+
+@pytest.mark.unit
+def test_long_sentence_head_keywords_fall_outside_centered_window() -> None:
+    """Pins the centering trade-off: keywords >150 chars BEFORE the citation no longer match."""
+    filler = "lorem ipsum dolor sit amet, consectetur adipiscing elit, " * 7
+    text = "the reproducibility lock intro, " + filler + "is recorded via ADR-029.\n"
+    result = validate_citations(
+        markdown_text=text,
+        markdown_path=Path("test.md"),
+        adr_subjects=SEED_ADR_SUBJECTS,
+        category_keywords=SEED_CATEGORY_KEYWORDS,
+        scope="narrative",
+    )
+    assert result == []  # no keyword in the centered window -> no basis to flag
