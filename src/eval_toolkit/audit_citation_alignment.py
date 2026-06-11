@@ -118,7 +118,10 @@ class CitationMisalignment:
     cited_adr_id : str
         3-digit-zero-padded ADR id from the citation.
     surrounding_text : str
-        ≤120 chars of context around the citation (for human review).
+        ≤300 chars of context around the citation (for human review).
+        Under ``scope="all"``: the ±``context_lines`` line window.
+        Under ``scope="narrative"``: the citation's sentence, centered
+        on the citation when the sentence exceeds 300 chars.
     claim_category : str | None
         Category inferred from the surrounding text (None if no
         category keyword matched).
@@ -248,7 +251,7 @@ def _extract_context_text(
     line_index: int,
     context_lines: int,
 ) -> str:
-    """Return ≤120-char snippet of context around `line_index` (1-indexed)."""
+    """Return ≤300-char snippet of the ±`context_lines` window around `line_index` (1-indexed)."""
     start = max(0, line_index - 1 - context_lines)
     end = min(len(lines), line_index + context_lines)
     return " ".join(line.strip() for line in lines[start:end])[:300]
@@ -413,14 +416,13 @@ def validate_citations(
           abbreviation-guarded boundaries), not from a fixed
           ±line-window. Prevents the validator from pulling
           keywords across sentence boundaries.
-        - **Layer 3 rule α**: when MULTIPLE ADR citations appear in
-          the same sentence (e.g.,
-          ``"per ADR-A + ADR-B + ADR-C + ADR-D"``), each ADR is
-          checked against the SET of all categories matched in the
-          sentence (not just first-match). Accepts the citation if
-          the ADR's actual category is in the set. Catches the
-          dense multi-ADR list pattern where each ADR addresses a
-          different topic in multi-topic prose.
+        - **Layer 3 rule α**: when the citation's sentence matches
+          MULTIPLE category keywords (multi-topic prose — common in
+          dense multi-ADR lists like ``"per ADR-A + ADR-B + ADR-C"``,
+          but applied to ANY multi-topic sentence regardless of
+          citation count), the citation is accepted if the ADR's
+          actual category set intersects the SET of matched
+          categories, not just the first match.
         - **Layer 2 symmetric-``None`` skip**: citations to an ADR
           whose effective category set is unpopulated (``categories``
           ``None``/empty AND ``category`` ``None``) are skipped — the

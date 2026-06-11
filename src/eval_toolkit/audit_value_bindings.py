@@ -210,18 +210,21 @@ class ValueBindingsReport:
         metric)`` across multiple slices each contribute to the
         denominator).
     unmatched_slice_count : int, default 0
-        Count of (detector, metric, value) triples that matched the
-        detector+metric+value triple BUT had a slice-scoped
-        :class:`BindingKey` whose ``slice`` did not appear within
-        ``slice_window_chars`` of the value. These triples are
-        suppressed (no violation, no match) on the assumption that
-        the prose context (e.g., a paired-delta cell or a
-        random-floor mention) does not carry the slice
-        determination. A nonzero count is informational — it flags
-        prose where the value couldn't be slice-disambiguated; it is
-        NOT a validation failure. Always ``0`` when no slice-scoped
-        ``BindingKey`` is present in ``bindings`` (i.e., when all
-        keys are legacy 2-tuples or have ``slice="any"``).
+        Count of (detector, metric, value) candidate triples that had
+        a slice-scoped :class:`BindingKey` but NO slice mention of ANY
+        slice-scoped binding within ``slice_window_chars`` of the
+        value (slice-ambiguous prose). Candidates whose nearest slice
+        mention belongs to a DIFFERENT binding are skipped silently
+        and NOT counted — the other binding's own loop iteration
+        claims them. Counted triples are suppressed (no violation, no
+        match) on the assumption that the prose context (e.g., a
+        paired-delta cell or a random-floor mention) does not carry
+        the slice determination. A nonzero count is informational —
+        it flags prose where the value couldn't be
+        slice-disambiguated; it is NOT a validation failure. Always
+        ``0`` when no slice-scoped ``BindingKey`` is present in
+        ``bindings`` (i.e., when all keys are legacy 2-tuples or have
+        ``slice="any"``).
     """
 
     violations: tuple[Violation, ...]
