@@ -279,10 +279,14 @@ class _Scorer:
 
 
 # Bootstrap CIs require n >= 30; use a bigger slice than the toy 3-row.
+# Lengths overlap between classes — perfectly separable scores would
+# degenerate the bootstrap (AUC = 1.0 on every resample), which
+# bootstrap_ci rejects with a ValueError.
 rng = np.random.default_rng(0)
 n = 40
 labels = rng.integers(0, 2, size=n)
-texts = ["x" * (3 + int(label) * 8) for label in labels]
+lengths = 3 + labels * 4 + rng.integers(0, 6, size=n)
+texts = ["x" * int(k) for k in lengths]
 df = pd.DataFrame({"text": texts, "label": labels})
 result = evaluate({"m": _Scorer()}, [EvalSlice(name="dev", df=df)], run_id="r", n_resamples=20)
 

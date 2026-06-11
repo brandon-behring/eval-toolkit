@@ -9,6 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.9.0] — 2026-06-10 — resample distribution + silent-NaN hardening + UTF-8 batch (#93, #96, #97)
 
+### Fixed — pre-tag adversarial-review completion (silent-NaN gaps in `bootstrap_ci` itself)
+
+The pre-tag review panel (whole-repo re-audit + independent reviewers +
+self-refutation) found the #96 class surviving in `bootstrap_ci` — the
+most-used entry point, outside #96's enumerated scope:
+
+- **Studentized path**: a NaN outer statistic was accepted as a *valid*
+  resample, bypassing the 95%-valid gate and poisoning the pivots into a
+  silent all-NaN `BootstrapCI` with zero warnings. NaN/inf outer statistics
+  (and inner-jackknife LOO values) now count as degenerate draws.
+- **Non-finite CI bounds now raise for ANY method** — the degeneracy check
+  was gated to `method="BCa"`, so `percentile` returned NaN bounds with only
+  scipy's misdirecting `DegenerateDataWarning` (which always names BCa).
+  The finite BCa-collapse case (`ci_low == ci_high == point`) keeps the R9
+  `UserWarning` contract. Behavior change: BCa NaN-bounds previously
+  warned-and-returned; they now raise (the scorecard/harness per-cell
+  isolation converts this into an error/reason cell as before).
+- **Point estimate guarded**: a metric returning NaN on the full data
+  previously yielded `point_estimate=nan` beside a finite CI, silently.
+- `analysis.load_prediction_arrays`: labels are now domain-checked before
+  the int cast — `dtype=int` coercion silently **truncated** float labels
+  (`0.7 → 0`), flipping ground truth with in-domain values no downstream
+  gate could catch.
+- Docs: `sweep()` Raises now documents the reachable pandas `ImportError`
+  and its Returns lists the always-present `strategy_id` column; STYLE.md
+  Tier-2 quick reference corrected to the ten strict Protocols (v1.0.2
+  `SimilarityStrategy` promotion).
+- Tests: mutation-verified gap closed (per-stratum NaN filter pinned via a
+  non-NaN-propagating `combine`); `samples`↔quantile consistency pinned at
+  non-default confidence.
+
 ### Added — resample-distribution exposure on the cluster bootstraps (#93)
 
 Tier-1 strictly-appended optional parameters, SemVer-MINOR per the

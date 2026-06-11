@@ -233,3 +233,16 @@ def test_samples_excluded_from_eq_and_to_dict() -> None:
     assert plain == with_samples  # equality ignores samples
     assert "samples" not in with_samples.to_dict()
     assert plain.to_dict() == with_samples.to_dict()
+
+
+@pytest.mark.unit
+def test_return_samples_consistent_at_nondefault_confidence() -> None:
+    """v1.9.0 pre-tag review (F2): samples↔quantile consistency holds off the 0.95 default."""
+    y, s, g = _clustered_inputs()
+    ci = cluster_bootstrap_ci(
+        y, s, g, roc_auc, n_resamples=200, rng=0, confidence=0.8, return_samples=True
+    )
+    assert ci.confidence == 0.8
+    lo, hi = np.quantile(ci.samples, [0.1, 0.9])
+    assert ci.ci_low == pytest.approx(float(lo))
+    assert ci.ci_high == pytest.approx(float(hi))

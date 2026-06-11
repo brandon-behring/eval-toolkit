@@ -332,3 +332,12 @@ def test_jsonl_reader_utf8_content(tmp_path: Path) -> None:
         str(path), columns={"label": "label", "score": "score", "row_id": "row_id"}
     )
     assert list(table["row_id"]) == ["Δ§é-1"]
+
+
+@pytest.mark.unit
+def test_load_prediction_arrays_rejects_non_binary_labels(tmp_path: Path) -> None:
+    """v1.9.0 pre-tag review (S4): float labels must not silently truncate (0.7 → 0)."""
+    path = tmp_path / "preds.jsonl"
+    _write_jsonl(path, [{"label": 0.7, "score": 0.2}, {"label": 1, "score": 0.9}])
+    with pytest.raises(ValueError, match="non-binary label"):
+        load_prediction_arrays(_jsonl_ref(path))

@@ -315,3 +315,60 @@ def test_paired_bootstrap_op_point_diff_non_finite_delta_point_raises() -> None:
             n_resamples=50,
             rng=0,
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v1.9.0 pre-tag review completion: bootstrap_ci's own silent-NaN gaps
+# (S1 studentized step, S2 method-gated bounds check, S3 unguarded point).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _bootstrap_ci_nan_inputs() -> tuple[np.ndarray, np.ndarray]:
+    rng = np.random.default_rng(0)
+    y = np.array([0, 1] * 20)
+    s = rng.normal(size=40)
+    return y, s
+
+
+def test_bootstrap_ci_non_finite_point_estimate_raises() -> None:
+    """S3: a metric that is NaN on the full data raises instead of a silent NaN point."""
+    y, s = _bootstrap_ci_nan_inputs()
+
+    def metric(y_t: np.ndarray, y_s: np.ndarray) -> float:
+        if y_s.shape == s.shape and np.array_equal(y_s, s):
+            return float("nan")
+        return 0.5
+
+    with pytest.raises(ValueError, match="non-finite point estimate"):
+        bootstrap_ci(y, s, metric, n_resamples=50, rng=0)
+
+
+def test_bootstrap_ci_percentile_nan_resamples_raise() -> None:
+    """S2: percentile-method NaN bounds raise (previously only BCa was checked)."""
+    y, s = _bootstrap_ci_nan_inputs()
+
+    def metric(y_t: np.ndarray, y_s: np.ndarray) -> float:
+        # Finite on the full arrays (point estimate), NaN on every resample.
+        if y_s.shape == s.shape and np.array_equal(y_s, s):
+            return 0.5
+        return float("nan")
+
+    with pytest.raises(ValueError, match="non-finite CI bounds"):
+        bootstrap_ci(y, s, metric, n_resamples=50, rng=0, method="percentile")
+
+
+def test_bootstrap_ci_studentized_nan_resamples_hit_degenerate_gate() -> None:
+    """S1: NaN outer statistics count as degenerate draws in the studentized path.
+
+    Pre-fix a NaN theta_b passed the 95%-valid gate and poisoned the pivots
+    into a silent all-NaN BootstrapCI with zero warnings.
+    """
+    y, s = _bootstrap_ci_nan_inputs()
+
+    def metric(y_t: np.ndarray, y_s: np.ndarray) -> float:
+        if y_s.shape == s.shape and np.array_equal(y_s, s):
+            return 0.5
+        return float("nan")
+
+    with pytest.raises(ValueError, match="degenerate|non-finite"):
+        bootstrap_ci(y, s, metric, n_resamples=50, rng=0, method="studentized")

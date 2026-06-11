@@ -133,12 +133,12 @@ Examples:
   exist or are planned. The authoritative Tier-2-stable set is `_TIER2_PROTOCOLS` in
 `tests/test_public_api.py` plus
 [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md):
-the nine strict Tier-2 Protocols are `Scorer`, `LeakageCheck`, `Splitter`,
+the ten strict Tier-2 Protocols are `Scorer`, `LeakageCheck`, `Splitter`,
 `ThresholdSelector`, `DatasetLoader`, `MetricSpec`, `MetaLearner`, `Probe`,
-`TextTransform`. The seams below are illustrative detail —
-`SliceAwareScorer` is an opt-in subprotocol of `Scorer`, and
-`SimilarityStrategy` / `Versioned` are real seams that are **not** in the
-Tier-2 frozenset:
+`TextTransform`, and `SimilarityStrategy` (promoted 10th at v1.0.2, #76
+RC2). The seams below are illustrative detail — `SliceAwareScorer` is an
+opt-in subprotocol of `Scorer`, and `Versioned` is a real seam that is
+**not** in the Tier-2 frozenset:
   - `Scorer` + `SliceAwareScorer` (`harness.py`) — anything with
     `predict_proba(X) -> np.ndarray`. `SliceAwareScorer` adds opt-in
     `should_score_slice(name)` for cost-controlled skipping.
