@@ -9,6 +9,7 @@ validator must flag this misalignment.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ import pytest
 from eval_toolkit.audit_citation_alignment import (
     ADRSubject,
     CitationMisalignment,
+    extract_adr_subject_categories,
     extract_adr_subject_category,
     validate_citations,
 )
@@ -507,3 +509,139 @@ def test_long_sentence_head_keywords_fall_outside_centered_window() -> None:
         scope="narrative",
     )
     assert result == []  # no keyword in the centered window -> no basis to flag
+
+
+# ---- multi-category ADRSubject (#99 V12) + symmetric-None survivor ----
+
+
+@pytest.mark.unit
+def test_extract_adr_subject_categories_all_matches() -> None:
+    """Plural extractor returns EVERY matching category, not just the first."""
+    out = extract_adr_subject_categories(
+        title="Reproducibility tier lock and GPU cost envelope",
+        slug="reproducibility-tier-cost",
+        category_keywords=SEED_CATEGORY_KEYWORDS,
+    )
+    assert out == frozenset({"reproducibility", "cost"})
+
+
+@pytest.mark.unit
+def test_extract_adr_subject_categories_no_match_returns_empty() -> None:
+    out = extract_adr_subject_categories(
+        title="Unrelated subject",
+        slug="unrelated-subject",
+        category_keywords=SEED_CATEGORY_KEYWORDS,
+    )
+    assert out == frozenset()
+
+
+@pytest.mark.unit
+def test_scalar_extractor_is_insertion_order_first_of_plural() -> None:
+    """Pins the documented invariant between the scalar and plural extractors."""
+    title = "Reproducibility tier lock and GPU cost envelope"
+    slug = "reproducibility-tier-cost"
+    plural = extract_adr_subject_categories(title, slug, SEED_CATEGORY_KEYWORDS)
+    scalar = extract_adr_subject_category(title, slug, SEED_CATEGORY_KEYWORDS)
+    assert scalar == next(c for c in SEED_CATEGORY_KEYWORDS if c in plural)
+
+
+@pytest.mark.unit
+def test_adr_subject_positional_construction_unchanged() -> None:
+    """Tier-1 appended-optional guarantee: pre-v1.11.0 positional calls still work."""
+    positional = ADRSubject("029", "t", "s", "test_markers")
+    keyword = ADRSubject(adr_id="029", title="t", slug="s", category="test_markers")
+    assert positional == keyword
+    assert positional.categories is None
+
+
+_MULTI_TOPIC_SUBJECT = ADRSubject(
+    adr_id="045",
+    title="Reproducibility tier lock and cost envelope",
+    slug="reproducibility-tier-cost-envelope",
+    category="reproducibility",
+    categories=frozenset({"reproducibility", "cost"}),
+)
+
+
+@pytest.mark.unit
+def test_multi_category_subject_accepted_when_claim_in_set_narrative() -> None:
+    """A multi-topic ADR is accepted for ANY of its categories under narrative scope."""
+    common = {
+        "markdown_text": "GPU cost envelope locked via ADR-045.\n",
+        "markdown_path": Path("test.md"),
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+        "scope": "narrative",
+    }
+    assert validate_citations(**common, adr_subjects={"045": _MULTI_TOPIC_SUBJECT}) == []
+    control = replace(_MULTI_TOPIC_SUBJECT, categories=None)
+    flagged = validate_citations(**common, adr_subjects={"045": control})
+    assert len(flagged) == 1
+    assert flagged[0].adr_actual_category == "reproducibility"
+
+
+@pytest.mark.unit
+def test_multi_category_multi_topic_intersection_narrative() -> None:
+    """Rule-alpha uses set INTERSECTION when the subject carries multiple categories."""
+    subject = ADRSubject(
+        adr_id="050",
+        title="Calibration sweep and cost budget",
+        slug="calibration-cost",
+        category="calibration",
+        categories=frozenset({"calibration", "cost"}),
+    )
+    common = {
+        "markdown_text": "Reproducibility tier and cost envelope locked via ADR-050.\n",
+        "markdown_path": Path("test.md"),
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+        "scope": "narrative",
+    }
+    assert validate_citations(**common, adr_subjects={"050": subject}) == []
+    control = replace(subject, categories=None)
+    flagged = validate_citations(**common, adr_subjects={"050": control})
+    assert len(flagged) == 1
+
+
+@pytest.mark.unit
+def test_multi_category_set_membership_under_scope_all() -> None:
+    """scope='all' also honors a populated categories set (no silent scalar trap)."""
+    common = {
+        "markdown_text": "GPU cost envelope locked via ADR-045.\n",
+        "markdown_path": Path("test.md"),
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+        "scope": "all",
+    }
+    assert validate_citations(**common, adr_subjects={"045": _MULTI_TOPIC_SUBJECT}) == []
+    control = replace(_MULTI_TOPIC_SUBJECT, categories=None)
+    assert len(validate_citations(**common, adr_subjects={"045": control})) == 1
+
+
+@pytest.mark.unit
+def test_empty_categories_skips_narrative_flags_under_all() -> None:
+    """Explicit empty categories == scalar None: skip under narrative, flag under all."""
+    subject = replace(SEED_ADR_SUBJECTS["029"], category=None, categories=frozenset())
+    common = {
+        "markdown_text": "Two-tier reproduction via ADR-029.\n",
+        "markdown_path": Path("test.md"),
+        "adr_subjects": {"029": subject},
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+    }
+    assert validate_citations(**common, scope="narrative") == []
+    flagged = validate_citations(**common, scope="all")
+    assert len(flagged) == 1
+    assert flagged[0].adr_actual_category is None
+
+
+@pytest.mark.unit
+def test_symmetric_none_skip_narrative_vs_all() -> None:
+    """Pre-tag survivor: scalar-None subjects skip under narrative, flag under all."""
+    subject = ADRSubject(adr_id="029", title="Unclassifiable", slug="unclassifiable", category=None)
+    common = {
+        "markdown_text": "Two-tier reproduction via ADR-029.\n",
+        "markdown_path": Path("test.md"),
+        "adr_subjects": {"029": subject},
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+    }
+    assert validate_citations(**common, scope="narrative") == []
+    flagged = validate_citations(**common, scope="all")
+    assert len(flagged) == 1
+    assert flagged[0].adr_actual_category is None

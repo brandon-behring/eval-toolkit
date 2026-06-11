@@ -10,5 +10,6 @@
    ADRSubject
    CitationMisalignment
    extract_adr_subject_category
+   extract_adr_subject_categories
    validate_citations
 ```
