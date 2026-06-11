@@ -319,6 +319,17 @@ def test_csv_reader_sparse_row_id_raises(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_csv_reader_duplicate_header_raises(tmp_path: Path) -> None:
+    """A duplicated declared column in the header fails fast: csv.DictReader keeps
+    only the last duplicate's value per row, silently dropping the earlier one."""
+    path = tmp_path / "p.csv"
+    path.write_text("score,label,score\n0.9,1,0.3\n", encoding="utf-8")
+    reader = CsvPredictionReader()
+    with pytest.raises(ValueError, match=r"duplicate header column\(s\) \['score'\]"):
+        reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
+
+
+@pytest.mark.unit
 def test_csv_reader_short_row_raises(tmp_path: Path) -> None:
     """A physically short row (DictReader fills None) raises the same error."""
     path = tmp_path / "p.csv"

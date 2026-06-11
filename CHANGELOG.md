@@ -26,7 +26,10 @@ v1.9.0 #96 batch):
   `{0, 1}` membership (loader labels are generic ints). NaN/`pd.NA` labels get
   a dedicated diagnostic (slice id + count + first row index); integral floats
   from parquet (`1.0`/`0.0`) and bools still pass; string labels keep the
-  existing "no label_map provided" error.
+  existing "no label_map provided" error. Integer dtypes take an exact
+  non-float path (labels ≥ 2⁵³ are not corrupted by a float64 round-trip) and
+  float labels ≥ 2⁵³ raise rather than pass an inexact integrality check
+  (pre-merge silent-failure review).
 - **`ood_dataset_from_manifest`**: YAML parse errors are re-raised as
   `ValueError` with the manifest path + parse detail — the documented
   "ValueError on YAML parse error" contract was false (raw `yaml.YAMLError`
@@ -36,7 +39,9 @@ v1.9.0 #96 batch):
   the #96 JSONL check) — previously a declared-but-sparse
   `row_id`/`content_hash` loaded `""` placeholders that silently weakened
   paired-diff row alignment, and a sparse `score` died downstream without row
-  context.
+  context. A duplicated declared column in the header also raises —
+  `csv.DictReader` keeps only the last duplicate's value, silently dropping
+  the earlier one (pre-merge silent-failure review).
 
 ### Added ([#98](https://github.com/brandon-behring/eval-toolkit/issues/98))
 

@@ -71,6 +71,10 @@ class CsvPredictionReader:
             ``""`` placeholders that silently weakened
             :func:`paired_diff_from_prediction_refs` row alignment, and a
             sparse ``score`` died downstream without row context.
+
+            Also raised when the header declares a wanted column name more
+            than once — ``csv.DictReader`` keeps only the *last* duplicate's
+            value per row, silently dropping the earlier one.
         """
         wanted = set(columns.values())
         out: dict[str, list[object]] = {col: [] for col in wanted}
@@ -79,12 +83,20 @@ class CsvPredictionReader:
             # R8-F3: validate the header up-front so missing columns
             # surface as a clear ValueError rather than as a cryptic
             # dtype-conversion failure downstream.
-            header = set(reader.fieldnames or [])
+            names = list(reader.fieldnames or [])
+            header = set(names)
             missing = sorted(wanted - header)
             if missing:
                 raise ValueError(
                     f"CSV file at {uri!r} is missing required column(s) "
                     f"{missing}; available columns: {sorted(header)}"
+                )
+            dupes = sorted({c for c in names if names.count(c) > 1} & wanted)
+            if dupes:
+                raise ValueError(
+                    f"CSV file at {uri!r} has duplicate header column(s) {dupes}; "
+                    f"csv.DictReader keeps only the last occurrence, silently "
+                    f"dropping the earlier value(s) — deduplicate the header"
                 )
             for row_no, row in enumerate(reader, start=2):  # header is file row 1
                 empty = sorted(col for col in wanted if row.get(col) is None or row.get(col) == "")

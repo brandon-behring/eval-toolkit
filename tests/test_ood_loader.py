@@ -306,6 +306,39 @@ def test_apply_label_map_nullable_int64() -> None:
 
 
 @pytest.mark.unit
+def test_apply_label_map_inf_raises() -> None:
+    """Direct unit: inf labels hit the same missing/non-finite diagnostic as NaN."""
+    from eval_toolkit.loaders import _apply_label_map
+
+    with pytest.raises(ValueError, match=r"slice 'inf'.*missing/non-finite"):
+        _apply_label_map(pd.Series([1.0, float("inf")]), None, slice_id="inf")
+
+
+@pytest.mark.unit
+def test_apply_label_map_large_ints_exact() -> None:
+    """Integer dtypes skip the float64 round-trip: labels >= 2**53 stay exact.
+
+    A float64 round-trip would silently corrupt 2**53 + 1 to 2**53
+    (off-by-one) — the silent-failure review of #98 caught this in the
+    first guard implementation.
+    """
+    from eval_toolkit.loaders import _apply_label_map
+
+    big = 2**53 + 1
+    out = _apply_label_map(pd.Series([0, big]), None, slice_id="big")
+    assert list(out) == [0, big]
+
+
+@pytest.mark.unit
+def test_apply_label_map_float_magnitude_guard_raises() -> None:
+    """Float labels >= 2**53 raise: integrality can't be checked exactly in float64."""
+    from eval_toolkit.loaders import _apply_label_map
+
+    with pytest.raises(ValueError, match=r"slice 'huge'.*2\*\*53"):
+        _apply_label_map(pd.Series([0.0, 2.0**53]), None, slice_id="huge")
+
+
+@pytest.mark.unit
 def test_sample_size_without_seed_raises(tmp_path: Path) -> None:
     rows = [{"prompt": f"row{i}", "lbl": i % 2} for i in range(20)]
     pq = tmp_path / "twenty.parquet"

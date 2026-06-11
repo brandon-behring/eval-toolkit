@@ -359,7 +359,14 @@ class ParquetGlobLoader:
         return out
 
     def describe(self) -> dict[str, object]:
-        """Croissant-subset metadata with per-file SHA-256 in ``distribution``."""
+        """Croissant-subset metadata with per-file SHA-256 in ``distribution``.
+
+        Raises
+        ------
+        FileNotFoundError
+            If any split's glob pattern matches no files (same resolution
+            as :meth:`load_splits`).
+        """
         files_by_split = self._resolve_files()
         distribution: list[dict[str, object]] = []
         for split_name, files in files_by_split.items():
@@ -902,13 +909,22 @@ def _apply_label_map(
     ValueError
         If ``label_map`` is None and the label column contains non-numeric
         values (strings etc.), missing / non-finite values (NaN, inf,
-        ``pd.NA``), or numeric values with a fractional part; or if
+        ``pd.NA``), numeric values with a fractional part, or float values
+        too large for an exact float64 integrality check (>= 2**53); or if
         ``label_map`` is given and any value is missing from the map. Every
-        message carries the slice id and the offending values.
+        message carries the slice id and diagnostic context (offending
+        values, or count + first row index for missing values).
     """
     if label_map is None:
         import numpy as np
+        import pandas as pd
 
+        if pd.api.types.is_integer_dtype(series) and not series.isna().any():
+            # Exact path: integer dtypes (incl. nullable Int64) skip the
+            # float64 round-trip below, which would silently corrupt labels
+            # >= 2**53 (float64 exactness limit). Nullable ints WITH NA fall
+            # through to the float path so they hit the missing-value raise.
+            return series.astype(int)
         try:
             as_float = series.astype("float64")
         except (TypeError, ValueError) as exc:
@@ -927,6 +943,14 @@ def _apply_label_map(
                 f"value(s) (NaN/inf/NA) and no label_map provided; first at row index "
                 f"{first_bad}. Fix the source data or remap via label_map."
             )
+        too_large = np.abs(values) >= 2.0**53
+        if too_large.any():
+            first_bad = int(np.flatnonzero(too_large)[0])
+            raise ValueError(
+                f"OOD slice {slice_id!r}: label column contains value(s) with magnitude "
+                f">= 2**53, which cannot be integrality-checked exactly in float64; "
+                f"first at row index {first_bad}. Use an integer dtype for the label column."
+            )
         non_integral = values != np.trunc(values)
         if non_integral.any():
             offending = sorted(set(values[non_integral].tolist()))[:10]
@@ -938,10 +962,10 @@ def _apply_label_map(
         return as_float.astype(int)
     mapped = series.map(label_map)
     if mapped.isna().any():
-        missing = sorted(set(series[mapped.isna()].unique()))
+        missing = sorted(set(series[mapped.isna()].unique()), key=str)
         raise ValueError(
             f"OOD slice {slice_id!r}: label_map missing keys {missing!r}; "
-            f"map covers {sorted(label_map.keys())!r}"
+            f"map covers {sorted(label_map.keys(), key=str)!r}"
         )
     return mapped.astype(int)
 
@@ -999,7 +1023,11 @@ def ood_dataset_from_manifest(
         ``text_field`` / ``label_field`` is missing from the loaded data.
     ValueError
         On YAML parse error, sha256 mismatch (with expected vs actual +
-        remediation hint), unsupported ``format``, or label_map missing keys.
+        remediation hint), unsupported ``format``, ``sample_size`` without
+        ``seed``, or label_map missing keys. Also — when a slice omits
+        ``label_map`` — on label values that are non-numeric, non-finite
+        (NaN/inf), non-integral (a bare int cast would silently truncate
+        ``0.7 -> 0``), or too large for an exact float64 integrality check.
     ImportError
         If the optional ``[yaml]`` extra is not installed (PyYAML).
 
