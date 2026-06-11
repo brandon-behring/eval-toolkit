@@ -15,6 +15,8 @@ see [DEPRECATION.md](DEPRECATION.md). For ongoing contributor flow
                                      # public_api snapshot in one step,
                                      # then prints the remaining steps
 2. Edit CHANGELOG.md: convert [Unreleased] → [X.Y.Z] header with date
+2b. Classify the snapshot diff against ADR 0003 tiers (Tier-1/2/3) and
+    label the CHANGELOG entry to match — see the v1.5.0 erratum (#101)
 3. Commit: chore(release): vX.Y.Z — <short description>
 4. Push to main; wait for CI green (CI + CodeQL + Deploy docs)
 5. Tag: git tag -a vX.Y.Z -m "vX.Y.Z — <short description>"
