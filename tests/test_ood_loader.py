@@ -173,11 +173,13 @@ def test_cache_hit_on_second_call(
 
 
 @pytest.mark.unit
-def test_yaml_parse_error_raises(tmp_path: Path) -> None:
+def test_yaml_parse_error_raises_value_error(tmp_path: Path) -> None:
+    """#98: parse errors surface as ValueError (the documented contract) with path + detail."""
     bad = tmp_path / "bad.yaml"
     bad.write_text(": this is :: not :: valid", encoding="utf-8")
-    with pytest.raises(yaml.YAMLError):
+    with pytest.raises(ValueError, match="not valid YAML") as excinfo:
         ood_dataset_from_manifest(bad, cache_dir=tmp_path / "cache")
+    assert "bad.yaml" in str(excinfo.value)
 
 
 @pytest.mark.unit
@@ -218,6 +220,122 @@ def test_label_map_missing_key_raises(tmp_path: Path) -> None:
     msg = str(excinfo.value)
     assert "weird_label_value" in msg
     assert "clean" in msg  # available keys surfaced
+
+
+# --- label pass-through integrality guard (#98) ---
+
+
+def _single_slice_manifest(tmp_path: Path, slice_id: str, rows: list[dict[str, Any]]) -> Path:
+    """Write one parquet slice + a map-free manifest pointing at it; return manifest path."""
+    pq = tmp_path / f"{slice_id}.parquet"
+    _, sha = _write_parquet(pq, rows)
+    manifest = {
+        "slices": {
+            slice_id: {
+                "url": f"file://{pq}",
+                "sha256": sha,
+                "text_field": "prompt",
+                "label_field": "lbl",
+            }
+        }
+    }
+    mp = tmp_path / f"{slice_id}_manifest.yaml"
+    mp.write_text(yaml.safe_dump(manifest), encoding="utf-8")
+    return mp
+
+
+@pytest.mark.unit
+def test_label_float_integral_values_pass(tmp_path: Path) -> None:
+    """Integral floats (0.0/1.0, e.g. from parquet) pass the guard and load as ints."""
+    mp = _single_slice_manifest(
+        tmp_path, "intfloat", [{"prompt": "a", "lbl": 0.0}, {"prompt": "b", "lbl": 1.0}]
+    )
+    df = ood_dataset_from_manifest(mp, cache_dir=tmp_path / "cache")
+    assert set(df["label"]) == {0, 1}
+    assert pd.api.types.is_integer_dtype(df["label"])
+
+
+@pytest.mark.unit
+def test_label_float_non_integral_raises(tmp_path: Path) -> None:
+    """#98 headline: 0.7 must raise, not silently truncate to 0."""
+    mp = _single_slice_manifest(
+        tmp_path, "frac", [{"prompt": "a", "lbl": 0.7}, {"prompt": "b", "lbl": 1.0}]
+    )
+    with pytest.raises(ValueError, match=r"slice 'frac'.*non-integer numeric.*0\.7"):
+        ood_dataset_from_manifest(mp, cache_dir=tmp_path / "cache")
+
+
+@pytest.mark.unit
+def test_label_nan_raises(tmp_path: Path) -> None:
+    """Missing labels get a dedicated diagnostic, not the misleading non-integer message."""
+    mp = _single_slice_manifest(
+        tmp_path, "gappy", [{"prompt": "a", "lbl": None}, {"prompt": "b", "lbl": 1.0}]
+    )
+    with pytest.raises(ValueError, match=r"slice 'gappy'.*missing/non-finite"):
+        ood_dataset_from_manifest(mp, cache_dir=tmp_path / "cache")
+
+
+@pytest.mark.unit
+def test_label_bool_passes(tmp_path: Path) -> None:
+    mp = _single_slice_manifest(
+        tmp_path, "boolish", [{"prompt": "a", "lbl": True}, {"prompt": "b", "lbl": False}]
+    )
+    df = ood_dataset_from_manifest(mp, cache_dir=tmp_path / "cache")
+    assert set(df["label"]) == {0, 1}
+
+
+@pytest.mark.unit
+def test_label_string_without_map_raises(tmp_path: Path) -> None:
+    """The pre-#98 except-path contract is preserved for non-numeric labels."""
+    mp = _single_slice_manifest(
+        tmp_path, "stringy", [{"prompt": "a", "lbl": "clean"}, {"prompt": "b", "lbl": "injected"}]
+    )
+    with pytest.raises(ValueError, match="non-integer values and no label_map"):
+        ood_dataset_from_manifest(mp, cache_dir=tmp_path / "cache")
+
+
+@pytest.mark.unit
+def test_apply_label_map_nullable_int64() -> None:
+    """Direct unit: pandas nullable Int64 passes without NA, raises with pd.NA."""
+    from eval_toolkit.loaders import _apply_label_map
+
+    ok = _apply_label_map(pd.Series([0, 1], dtype="Int64"), None, slice_id="ok")
+    assert list(ok) == [0, 1]
+    with pytest.raises(ValueError, match=r"slice 'na'.*missing/non-finite"):
+        _apply_label_map(pd.Series([1, pd.NA], dtype="Int64"), None, slice_id="na")
+
+
+@pytest.mark.unit
+def test_apply_label_map_inf_raises() -> None:
+    """Direct unit: inf labels hit the same missing/non-finite diagnostic as NaN."""
+    from eval_toolkit.loaders import _apply_label_map
+
+    with pytest.raises(ValueError, match=r"slice 'inf'.*missing/non-finite"):
+        _apply_label_map(pd.Series([1.0, float("inf")]), None, slice_id="inf")
+
+
+@pytest.mark.unit
+def test_apply_label_map_large_ints_exact() -> None:
+    """Integer dtypes skip the float64 round-trip: labels >= 2**53 stay exact.
+
+    A float64 round-trip would silently corrupt 2**53 + 1 to 2**53
+    (off-by-one) — the silent-failure review of #98 caught this in the
+    first guard implementation.
+    """
+    from eval_toolkit.loaders import _apply_label_map
+
+    big = 2**53 + 1
+    out = _apply_label_map(pd.Series([0, big]), None, slice_id="big")
+    assert list(out) == [0, big]
+
+
+@pytest.mark.unit
+def test_apply_label_map_float_magnitude_guard_raises() -> None:
+    """Float labels >= 2**53 raise: integrality can't be checked exactly in float64."""
+    from eval_toolkit.loaders import _apply_label_map
+
+    with pytest.raises(ValueError, match=r"slice 'huge'.*2\*\*53"):
+        _apply_label_map(pd.Series([0.0, 2.0**53]), None, slice_id="huge")
 
 
 @pytest.mark.unit

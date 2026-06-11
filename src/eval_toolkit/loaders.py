@@ -332,6 +332,9 @@ class ParquetGlobLoader:
         KeyError
             If any split's loaded DataFrame is missing ``feature_col`` or
             ``label_col``.
+        FileNotFoundError
+            If any split's glob pattern matches no files (the error names
+            the pattern and the split).
         """
         import pandas as pd  # function-local: pandas is in the [parquet]/[dataframe] extra
 
@@ -356,7 +359,14 @@ class ParquetGlobLoader:
         return out
 
     def describe(self) -> dict[str, object]:
-        """Croissant-subset metadata with per-file SHA-256 in ``distribution``."""
+        """Croissant-subset metadata with per-file SHA-256 in ``distribution``.
+
+        Raises
+        ------
+        FileNotFoundError
+            If any split's glob pattern matches no files (same resolution
+            as :meth:`load_splits`).
+        """
         files_by_split = self._resolve_files()
         distribution: list[dict[str, object]] = []
         for split_name, files in files_by_split.items():
@@ -412,8 +422,27 @@ class HFDatasetsLoader:
     label_col : str, optional
         Column name. Default ``"label"``.
     strata_col : str or None, optional
+        Column carrying per-row stratum labels, propagated to each
+        :class:`EvalSlice` for stratified slicing. ``None`` (default)
+        disables strata propagation.
     config_name : str or None, optional
         HF dataset config name (some datasets have multiple configs).
+    feature_cols : sequence of str or None, optional
+        Multiple feature columns stringified and joined (in order) into one
+        synthesized feature column, e.g. a system+user prompt pair. When
+        set, takes precedence over ``feature_col``. Any missing/NaN cell
+        raises ``ValueError`` at :meth:`load_splits`. Added in v1.5.0.
+    feature_join : str, optional
+        Separator joining the ``feature_cols`` values. Default: two
+        newlines. Added in v1.5.0.
+    label_map : mapping or None, optional
+        Remap raw label values to ints (e.g. ``{"benign": 0,
+        "injection": 1}``); any uncovered value raises ``ValueError``.
+        Added in v1.5.0.
+    revision : str or None, optional
+        Git revision (tag, branch, or commit sha) forwarded to
+        ``datasets.load_dataset``; echoed in :meth:`describe` output —
+        see its Notes for the tree-hash limitation. Added in v1.5.0.
     name, description, cite_as, license, url : str, optional
         Croissant metadata overrides. If empty, :meth:`describe` will
         fall back to fetching from HF Hub's Croissant endpoint.
@@ -480,7 +509,13 @@ class HFDatasetsLoader:
             If any split's DataFrame is missing a required feature/label column
             (the error lists the observed columns).
         ValueError
-            If ``label_map`` leaves any label value unmapped.
+            If ``label_map`` leaves any label value unmapped, or if any
+            ``feature_cols`` cell is missing/NaN — the join never fabricates
+            empty strings; the error carries the split name and per-column
+            NaN counts.
+        ImportError
+            If the optional ``datasets`` package is not installed (raised by
+            the soft import with an install hint).
         """
         ds = self._load_dataset()
         ds_splits = list(ds.keys()) if self.splits is None else list(self.splits)
@@ -496,9 +531,21 @@ class HFDatasetsLoader:
             if self.feature_cols:
                 df = df.copy()
                 synth = "\x00".join(feat_cols)  # collision-proof synthesized name
-                # NaN-safe: fill missing then stringify per column (pandas 3.0 keeps
-                # NaN as a float through a bare astype(str), which breaks str.join).
-                cols = df[feat_cols].apply(lambda s: s.fillna("").astype(str))
+                # Fail-fast on missing prompt parts (#98, STYLE §1): pre-#98 a
+                # fillna("") here silently fabricated empty strings, shipping
+                # truncated prompts while the label path eight lines down
+                # fail-fasted. Valid data keeps the pandas-3.0-safe per-column
+                # astype(str) before the join.
+                na_counts = df[feat_cols].isna().sum()
+                if int(na_counts.sum()) > 0:
+                    per_col = {str(c): int(n) for c, n in na_counts.items() if int(n) > 0}
+                    raise ValueError(
+                        f"HFDatasetsLoader: split {split_name!r} has missing values in "
+                        f"feature_cols; NaN counts per column: {per_col}. The join does "
+                        f"not fabricate empty strings — fix or drop these rows upstream, "
+                        f"or exclude the sparse column from feature_cols."
+                    )
+                cols = df[feat_cols].apply(lambda s: s.astype(str))
                 df[synth] = cols.apply(lambda row: self.feature_join.join(row.tolist()), axis=1)
                 feature_col = synth
             else:
@@ -540,6 +587,17 @@ class HFDatasetsLoader:
         Network failures degrade gracefully (warning emitted; sha256
         empty as in pre-v0.41 behavior). See class docstring for the
         dual-source rationale (MLCommons Croissant issue #80).
+
+        Notes
+        -----
+        ``revision`` is echoed verbatim into the output (``None`` when
+        unpinned). Limitation: the tree-API fetch hardcodes the
+        ``refs/convert/parquet`` ref (HF Hub's auto-converted parquet
+        branch), so the per-file ``sha256`` entries always describe the
+        *latest* parquet conversion — when ``revision`` pins an older
+        snapshot, those hashes may not correspond to the pinned
+        revision's data. The ``revision`` key makes a pinned load
+        distinguishable from an unpinned one in downstream manifests.
         """
         remote_meta: dict[str, object] = {}
         distribution: list[dict[str, object]] = []
@@ -572,6 +630,7 @@ class HFDatasetsLoader:
             "url": self.url or f"https://huggingface.co/datasets/{self.repo_id}",
             "distribution": distribution,
             "config_name": self.config_name,
+            "revision": self.revision,
         }
 
     def _fetch_croissant_metadata_safe(self) -> dict[str, object]:
@@ -653,7 +712,11 @@ def _load_yaml_manifest(yaml_path: str | Path) -> dict[str, Any]:
     """Read and parse a YAML manifest file with explicit UTF-8 encoding.
 
     Soft-imports ``yaml`` (PyYAML); raises ``ImportError`` with install
-    hint if the optional ``[yaml]`` extra is not installed.
+    hint if the optional ``[yaml]`` extra is not installed. Raises
+    ``FileNotFoundError`` if the path does not exist, and ``ValueError``
+    on YAML parse error (honoring the contract documented in
+    :func:`ood_dataset_from_manifest`) or on a structurally invalid
+    manifest.
     """
     try:
         import yaml
@@ -666,7 +729,13 @@ def _load_yaml_manifest(yaml_path: str | Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"OOD manifest not found: {path}")
     with path.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
+        try:
+            data = yaml.safe_load(f)
+        except yaml.YAMLError as exc:
+            # Honor the documented contract: ood_dataset_from_manifest's
+            # Raises section promises ValueError on YAML parse error, and
+            # callers should not need to import third-party exception types.
+            raise ValueError(f"OOD manifest {path} is not valid YAML: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError(
             f"OOD manifest {path} must be a YAML mapping at the top level; got {type(data).__name__}"
@@ -828,23 +897,75 @@ def _apply_label_map(
 ) -> pd.Series:
     """Apply ``label_map`` (or pass-through if None) and cast to int.
 
-    Raises ``ValueError`` on any value not in the map; surfaces both the
-    offending value and the available keys to make debugging fast.
+    With ``label_map=None``, the pass-through path verifies every value is
+    finite and exactly integral before the int cast — a bare ``astype(int)``
+    silently truncates numeric non-integers (``0.7 -> 0``), the same
+    silent-truncation class fixed in ``analysis.load_prediction_arrays`` at
+    v1.9.0. Loader labels are generic ints (not necessarily binary), so the
+    check is integrality + finiteness, not {0, 1} membership.
+
+    Raises
+    ------
+    ValueError
+        If ``label_map`` is None and the label column contains non-numeric
+        values (strings etc.), missing / non-finite values (NaN, inf,
+        ``pd.NA``), numeric values with a fractional part, or float values
+        too large for an exact float64 integrality check (>= 2**53); or if
+        ``label_map`` is given and any value is missing from the map. Every
+        message carries the slice id and diagnostic context (offending
+        values, or count + first row index for missing values).
     """
     if label_map is None:
-        try:
+        import numpy as np
+        import pandas as pd
+
+        if pd.api.types.is_integer_dtype(series) and not series.isna().any():
+            # Exact path: integer dtypes (incl. nullable Int64) skip the
+            # float64 round-trip below, which would silently corrupt labels
+            # >= 2**53 (float64 exactness limit). Nullable ints WITH NA fall
+            # through to the float path so they hit the missing-value raise.
             return series.astype(int)
+        try:
+            as_float = series.astype("float64")
         except (TypeError, ValueError) as exc:
             raise ValueError(
-                f"OOD slice {slice_id!r}: label column has non-integer values and no label_map provided; "
-                f"unique values: {sorted(set(series.unique()))[:10]}"
+                f"OOD slice {slice_id!r}: label column has non-integer values and no "
+                f"label_map provided; unique values: "
+                f"{sorted(set(series.unique()), key=str)[:10]}"
             ) from exc
+        values = np.asarray(as_float, dtype=np.float64)
+        non_finite = ~np.isfinite(values)
+        if non_finite.any():
+            n_bad = int(non_finite.sum())
+            first_bad = int(np.flatnonzero(non_finite)[0])
+            raise ValueError(
+                f"OOD slice {slice_id!r}: label column contains {n_bad} missing/non-finite "
+                f"value(s) (NaN/inf/NA) and no label_map provided; first at row index "
+                f"{first_bad}. Fix the source data or remap via label_map."
+            )
+        too_large = np.abs(values) >= 2.0**53
+        if too_large.any():
+            first_bad = int(np.flatnonzero(too_large)[0])
+            raise ValueError(
+                f"OOD slice {slice_id!r}: label column contains value(s) with magnitude "
+                f">= 2**53, which cannot be integrality-checked exactly in float64; "
+                f"first at row index {first_bad}. Use an integer dtype for the label column."
+            )
+        non_integral = values != np.trunc(values)
+        if non_integral.any():
+            offending = sorted(set(values[non_integral].tolist()))[:10]
+            raise ValueError(
+                f"OOD slice {slice_id!r}: label column contains non-integer numeric "
+                f"value(s) {offending} and no label_map provided; an int cast would "
+                f"silently truncate (0.7 -> 0). Provide a label_map or fix the labels."
+            )
+        return as_float.astype(int)
     mapped = series.map(label_map)
     if mapped.isna().any():
-        missing = sorted(set(series[mapped.isna()].unique()))
+        missing = sorted(set(series[mapped.isna()].unique()), key=str)
         raise ValueError(
             f"OOD slice {slice_id!r}: label_map missing keys {missing!r}; "
-            f"map covers {sorted(label_map.keys())!r}"
+            f"map covers {sorted(label_map.keys(), key=str)!r}"
         )
     return mapped.astype(int)
 
@@ -902,7 +1023,11 @@ def ood_dataset_from_manifest(
         ``text_field`` / ``label_field`` is missing from the loaded data.
     ValueError
         On YAML parse error, sha256 mismatch (with expected vs actual +
-        remediation hint), unsupported ``format``, or label_map missing keys.
+        remediation hint), unsupported ``format``, ``sample_size`` without
+        ``seed``, or label_map missing keys. Also — when a slice omits
+        ``label_map`` — on label values that are non-numeric, non-finite
+        (NaN/inf), non-integral (a bare int cast would silently truncate
+        ``0.7 -> 0``), or too large for an exact float64 integrality check.
     ImportError
         If the optional ``[yaml]`` extra is not installed (PyYAML).
 

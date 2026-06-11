@@ -192,9 +192,10 @@ def test_hf_loader_feature_cols_joins_multiple_columns(monkeypatch) -> None:
 
 
 @pytest.mark.unit
-def test_hf_loader_feature_cols_nan_safe(monkeypatch) -> None:
-    # A missing value in one feature column must not break the join (pandas 3.0
-    # keeps NaN as float through astype(str)); it should render as empty.
+def test_hf_loader_feature_cols_nan_raises(monkeypatch) -> None:
+    # #98: a missing value in any feature_cols column fails fast with the split
+    # name + per-column NaN counts (pre-#98, fillna("") silently fabricated
+    # empty prompt parts and shipped truncated prompts into the eval).
     df = pd.DataFrame(
         {"System Prompt": ["sys", None], "User Prompt": ["usr", "u2"], "label": [0, 1]}
     )
@@ -204,9 +205,20 @@ def test_hf_loader_feature_cols_nan_safe(monkeypatch) -> None:
     monkeypatch.setattr(
         HFDatasetsLoader, "_load_dataset", lambda self: {"train": _FakeHFDataset(df)}
     )
+    with pytest.raises(ValueError, match=r"split 'train'.*'System Prompt': 1"):
+        loader.load_splits()
+
+
+@pytest.mark.unit
+def test_hf_loader_feature_cols_stringifies_valid_non_string_values(monkeypatch) -> None:
+    # Valid numeric cells keep the per-column astype(str) join (pandas 3.0 path).
+    df = pd.DataFrame({"a": [1], "b": [2.5], "label": [0]})
+    loader = HFDatasetsLoader(repo_id="x", feature_cols=["a", "b"], feature_join=" | ")
+    monkeypatch.setattr(
+        HFDatasetsLoader, "_load_dataset", lambda self: {"train": _FakeHFDataset(df)}
+    )
     sl = loader.load_splits()["train"]
-    assert sl.df[sl.feature_col].iloc[0] == "sys | usr"
-    assert sl.df[sl.feature_col].iloc[1] == " | u2"  # missing System Prompt -> empty
+    assert sl.df[sl.feature_col].iloc[0] == "1 | 2.5"
 
 
 @pytest.mark.unit

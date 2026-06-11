@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — loaders + prediction-reader contract hardening, silent-failure class ([#98](https://github.com/brandon-behring/eval-toolkit/issues/98))
+
+All four are new raises on garbage input that previously produced
+silently-wrong results (STYLE §1 *never fail silently*; same class as the
+v1.9.0 #96 batch):
+
+- **`HFDatasetsLoader.load_splits`**: a missing/NaN cell in any `feature_cols`
+  column now raises `ValueError` with the split name + per-column NaN counts —
+  previously `fillna("")` silently fabricated empty prompt parts (truncated
+  system/user prompts shipped into the eval) while the `label_map` path eight
+  lines down fail-fasted. Valid data keeps the pandas-3.0 per-column
+  `astype(str)` join.
+- **`ood_dataset_from_manifest` label pass-through** (`label_map` omitted):
+  numeric non-integer labels now raise instead of silently truncating
+  (`0.7 → 0` flipped ground truth) — the loader twin of v1.9.0's
+  `load_prediction_arrays` fix, but integrality + finiteness rather than
+  `{0, 1}` membership (loader labels are generic ints). NaN/`pd.NA` labels get
+  a dedicated diagnostic (slice id + count + first row index); integral floats
+  from parquet (`1.0`/`0.0`) and bools still pass; string labels keep the
+  existing "no label_map provided" error. Integer dtypes take an exact
+  non-float path (labels ≥ 2⁵³ are not corrupted by a float64 round-trip) and
+  float labels ≥ 2⁵³ raise rather than pass an inexact integrality check
+  (pre-merge silent-failure review).
+- **`ood_dataset_from_manifest`**: YAML parse errors are re-raised as
+  `ValueError` with the manifest path + parse detail — the documented
+  "ValueError on YAML parse error" contract was false (raw `yaml.YAMLError`
+  escaped). Callers catching `yaml.YAMLError` must catch `ValueError` now.
+- **`analysis.CsvPredictionReader`**: a missing or empty-string cell in any
+  declared column now fails fast with file + row context (per-row parity with
+  the #96 JSONL check) — previously a declared-but-sparse
+  `row_id`/`content_hash` loaded `""` placeholders that silently weakened
+  paired-diff row alignment, and a sparse `score` died downstream without row
+  context. A duplicated declared column in the header also raises —
+  `csv.DictReader` keeps only the last duplicate's value, silently dropping
+  the earlier one (pre-merge silent-failure review).
+
+### Added ([#98](https://github.com/brandon-behring/eval-toolkit/issues/98))
+
+Tier-2 ADDITIVE per ADR 0003 — no constructor signature changes; public-API
+snapshot unchanged:
+
+- **`HFDatasetsLoader.describe()` output gains a `"revision"` key** echoing the
+  constructor's `revision` (`None` when unpinned), so revision-pinned loads are
+  no longer indistinguishable from unpinned ones in provenance manifests.
+
+### Documentation ([#98](https://github.com/brandon-behring/eval-toolkit/issues/98))
+
+Tier-3:
+
+- `HFDatasetsLoader` Parameters now documents the four v1.5.0 fields
+  (`feature_cols`, `feature_join`, `label_map`, `revision`, each "Added in
+  v1.5.0") and gives `strata_col` its missing description line.
+- `describe()` documents the `refs/convert/parquet` tree-hash limitation:
+  per-file sha256 always reflects the latest parquet conversion, which may not
+  correspond to a pinned `revision`.
+- Raises completeness: `ParquetGlobLoader.load_splits` gains
+  `FileNotFoundError`; `HFDatasetsLoader.load_splits` gains the feature_cols
+  `ValueError` + the soft-import `ImportError`; `_apply_label_map` gains a full
+  Raises section.
+
 ### Documentation / Process ([#101](https://github.com/brandon-behring/eval-toolkit/issues/101))
 
 - **CHANGELOG v1.5.0 erratum appended** (history not rewritten): the #85 loader
