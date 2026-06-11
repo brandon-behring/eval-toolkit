@@ -1005,6 +1005,11 @@ def _nearest_canonical_key(
     so callers can apply position-dependent secondary checks (e.g.,
     T4 sentence-boundary detector-pair reject). The slice-pairing
     call site discards the position.
+
+    A raw-distance variant for SLICE pairing (prepositional-adjunct
+    grammar) was prototyped but never wired; it was removed in
+    v1.11.0 (#99) — slice pairing deliberately shares this text-order
+    rule, and the rejected alternative lives in git history.
     """
     if not positions:
         return None
@@ -1022,40 +1027,6 @@ def _nearest_canonical_key(
         if pos >= value_pos and (pos - value_pos) <= max_distance:
             return (key, pos)
     return None
-
-
-def _nearest_slice_key_by_distance(
-    positions: Sequence[tuple[int, str]],
-    value_pos: int,
-    max_distance: int,
-) -> str | None:
-    """Return the canonical slice key paired with ``value_pos`` by raw distance.
-
-    Unlike :func:`_nearest_canonical_key` (which uses text-order to
-    handle the subject-verb-object English prose pattern for
-    detectors), slice context is a prepositional adjunct: "On
-    <slice>, X scored Y" (pre-value) and "X scored Y on <slice>"
-    (post-value) are both common. A raw-distance nearest rule
-    handles both naturally: the slice mention closer to the value
-    in characters wins.
-
-    Mitigates the cross-paragraph slice-bleed false positive (e.g.,
-    "cross-family distribution shift, finding that... reaches 0.971
-    AUPRC on direct+benign validation" — the text-order rule would
-    mis-attribute 0.971 to the "cross-family" topic introduced
-    earlier; raw-distance correctly attributes to the
-    "direct+benign validation" mention 30 chars after the value).
-    """
-    if not positions:
-        return None
-    best_key: str | None = None
-    best_dist = max_distance + 1
-    for pos, key in positions:
-        dist = abs(pos - value_pos)
-        if dist <= max_distance and dist < best_dist:
-            best_key = key
-            best_dist = dist
-    return best_key
 
 
 def _position_to_line(line_starts: list[int], pos: int) -> int:

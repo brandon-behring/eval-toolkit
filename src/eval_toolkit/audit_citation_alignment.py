@@ -507,15 +507,6 @@ def validate_citations(
     )
     sentence_positions = _sentence_boundary_positions(markdown_text) if scope == "narrative" else []
 
-    # v1.4.0 Layer 3 rule α: collect citation positions per sentence so
-    # the inner loop can detect multi-ADR-citation sentences and switch
-    # to multi-category matching.
-    citations_per_sentence: dict[int, int] = {}
-    if scope == "narrative":
-        for match in citation_re.finditer(markdown_text):
-            sent_id = max(0, bisect.bisect_right(sentence_positions, match.start()) - 1)
-            citations_per_sentence[sent_id] = citations_per_sentence.get(sent_id, 0) + 1
-
     for line_no, line in enumerate(lines, start=1):
         for match in citation_re.finditer(line):
             adr_id = match.group(1)
