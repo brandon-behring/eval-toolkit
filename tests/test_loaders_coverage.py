@@ -176,3 +176,18 @@ def test_hf_datasets_loader_describe_with_explicit_url() -> None:
     )
     out = loader.describe()
     assert out["url"] == "https://example.com"
+
+
+@pytest.mark.unit
+def test_hf_datasets_loader_describe_includes_revision() -> None:
+    """#98 Tier-2 ADDITIVE: revision-pinned loads are distinguishable in provenance output."""
+    loader = HFDatasetsLoader(
+        repo_id="dummy/example", revision="abc123", fetch_remote_metadata=False
+    )
+    assert loader.describe()["revision"] == "abc123"
+
+
+@pytest.mark.unit
+def test_hf_datasets_loader_describe_revision_defaults_none() -> None:
+    loader = HFDatasetsLoader(repo_id="dummy/example", fetch_remote_metadata=False)
+    assert loader.describe()["revision"] is None

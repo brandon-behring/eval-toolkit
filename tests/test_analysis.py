@@ -289,6 +289,73 @@ def test_jsonl_reader_missing_key_raises(tmp_path: Path) -> None:
         reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
 
 
+# --- per-row CSV validation + reader parity on sparse identity columns (#98) ---
+
+
+@pytest.mark.unit
+def test_csv_reader_empty_cell_raises(tmp_path: Path) -> None:
+    """#98: an empty cell in a declared column fails fast with file + row context."""
+    path = tmp_path / "p.csv"
+    path.write_text("label,score\n0,0.4\n1,\n", encoding="utf-8")
+    reader = CsvPredictionReader()
+    with pytest.raises(ValueError, match=r"row 3 is missing value\(s\).*\['score'\]"):
+        reader.read_predictions(str(path), columns={"label": "label", "score": "score"})
+
+
+@pytest.mark.unit
+def test_csv_reader_sparse_row_id_raises(tmp_path: Path) -> None:
+    """#98: a declared-but-sparse identity column raises instead of loading ''.
+
+    Pre-#98 the empty cell loaded a ``""`` placeholder that silently weakened
+    paired-diff row alignment (two rows aligning on ``""``).
+    """
+    path = tmp_path / "p.csv"
+    path.write_text("label,score,row_id\n0,0.4,r0\n1,0.7,\n", encoding="utf-8")
+    reader = CsvPredictionReader()
+    with pytest.raises(ValueError, match=r"row 3.*\['row_id'\]"):
+        reader.read_predictions(
+            str(path), columns={"label": "label", "score": "score", "row_id": "row_id"}
+        )
+
+
+@pytest.mark.unit
+def test_csv_reader_short_row_raises(tmp_path: Path) -> None:
+    """A physically short row (DictReader fills None) raises the same error."""
+    path = tmp_path / "p.csv"
+    path.write_text("label,score,content_hash\n0,0.4\n", encoding="utf-8")
+    reader = CsvPredictionReader()
+    with pytest.raises(ValueError, match=r"row 2.*\['content_hash'\]"):
+        reader.read_predictions(
+            str(path),
+            columns={"label": "label", "score": "score", "content_hash": "content_hash"},
+        )
+
+
+@pytest.mark.unit
+def test_jsonl_reader_sparse_row_id_raises(tmp_path: Path) -> None:
+    """#98 parity pin: JSONL raises on a declared-but-sparse identity column."""
+    path = tmp_path / "p.jsonl"
+    _write_jsonl(path, [{"label": 0, "score": 0.2, "row_id": "r0"}, {"label": 1, "score": 0.9}])
+    reader = JsonlPredictionReader()
+    with pytest.raises(ValueError, match=r"row 2 is missing required key\(s\) \['row_id'\]"):
+        reader.read_predictions(
+            str(path), columns={"label": "label", "score": "score", "row_id": "row_id"}
+        )
+
+
+@pytest.mark.unit
+def test_jsonl_reader_null_content_hash_raises(tmp_path: Path) -> None:
+    """#98 parity pin: an explicit ``null`` identity value counts as missing."""
+    path = tmp_path / "p.jsonl"
+    _write_jsonl(path, [{"label": 0, "score": 0.2, "content_hash": None}])
+    reader = JsonlPredictionReader()
+    with pytest.raises(ValueError, match=r"row 1.*\['content_hash'\]"):
+        reader.read_predictions(
+            str(path),
+            columns={"label": "label", "score": "score", "content_hash": "content_hash"},
+        )
+
+
 @pytest.mark.unit
 def test_jsonl_reader_null_value_raises(tmp_path: Path) -> None:
     """A JSON null for a declared key is treated the same as a missing key."""
