@@ -305,9 +305,19 @@ def _extract_sentence_context(
     sent_start = sentence_positions[sent_idx] if sent_idx < len(sentence_positions) else 0
     next_idx = sent_idx + 1
     sent_end = sentence_positions[next_idx] if next_idx < len(sentence_positions) else len(text)
-    if sent_end - sent_start <= 300:
-        return text[sent_start:sent_end].strip()
-    start = max(sent_start, min(citation_pos - 150, sent_end - 300))
+    # Measure the STRIPPED sentence, not the raw inter-sentence span:
+    # `sent_end` is the next sentence's first char, so terminator +
+    # blank-line whitespace inflates the raw span. A sentence whose
+    # text fits in 300 chars must always return whole (review finding,
+    # #99): the centered clamp below operates on the whitespace-trimmed
+    # core so trailing padding can never clip the sentence head.
+    raw = text[sent_start:sent_end]
+    stripped = raw.strip()
+    if len(stripped) <= 300:
+        return stripped
+    core_start = sent_start + (len(raw) - len(raw.lstrip()))
+    core_end = core_start + len(stripped)
+    start = max(core_start, min(citation_pos - 150, core_end - 300))
     return text[start : start + 300].strip()
 
 
@@ -424,12 +434,14 @@ def validate_citations(
           actual category set intersects the SET of matched
           categories, not just the first match.
         - **Layer 2 symmetric-``None`` skip**: citations to an ADR
-          whose effective category set is unpopulated (``categories``
-          ``None``/empty AND ``category`` ``None``) are skipped — the
-          consumer's ``category_keywords`` map gives no basis for
-          comparison, mirroring the claim-side ``None`` skip described
-          in Notes. Under ``scope="all"`` such citations are still
-          flagged (legacy v1.0.1 behavior).
+          whose effective category set is empty (``categories`` is the
+          empty set, or ``categories`` is ``None`` with ``category``
+          ``None`` — see the ``categories`` precedence rule on
+          :class:`ADRSubject`) are skipped — the consumer's
+          ``category_keywords`` map gives no basis for comparison,
+          mirroring the claim-side ``None`` skip described in Notes.
+          Under ``scope="all"`` such citations are still flagged
+          (legacy v1.0.1 behavior).
 
         Tier-1 ADDITIVE per ADR 0003; ``scope="all"`` (the default)
         guarantees byte-identical behavior to v1.3.x for subjects

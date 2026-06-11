@@ -707,3 +707,21 @@ def test_pattern_beta_fenced_code_citation_excluded_under_narrative() -> None:
     r_nar = validate_citations(**common, scope="narrative")
     assert len(r_nar) == 1
     assert r_nar[0].line == 4
+
+
+@pytest.mark.unit
+def test_window_measures_stripped_sentence_not_raw_span() -> None:
+    """Boundary pin (review finding): a sentence whose STRIPPED text fits in 300
+    chars returns whole even when trailing blank-line whitespace inflates the raw
+    inter-sentence span past 300 — the head keyword must survive."""
+    from eval_toolkit._narrative import _sentence_boundary_positions
+    from eval_toolkit.audit_citation_alignment import _extract_sentence_context
+
+    # Stripped sentence: 'cost ' + filler + 'via ADR-020.' — tune to ~298 chars.
+    body = "cost " + ("x" * (298 - len("cost ") - len(" via ADR-020."))) + " via ADR-020."
+    assert len(body) <= 300
+    text = body + "\n\n\n\n\nNext sentence starts here.\n"
+    positions = _sentence_boundary_positions(text)
+    citation_pos = text.index("ADR-020")
+    window = _extract_sentence_context(text, citation_pos, positions)
+    assert window == body  # whole sentence, head 'cost' included
