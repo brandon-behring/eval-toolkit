@@ -50,9 +50,14 @@ def _build_fixture(n: int = 200, seed: int = 0) -> tuple[EvalSlice, _Determinist
     """
     rng = np.random.default_rng(seed)
     y = rng.integers(0, 2, size=n)
-    # Discriminative scores — y=1 rows skewed high, y=0 skewed low
+    # Discriminative but OVERLAPPING scores — y=1 skewed high, y=0 skewed
+    # low, with class overlap in [0.45, 0.55]. Perfect separation would
+    # degenerate the BCa bootstrap (AUC ≡ 1.0 on every resample), which
+    # bootstrap_ci raises on since the v1.9.0 pre-tag hardening — and
+    # pre-hardening it silently made this file's negative control pass
+    # via NaN != NaN comparison artifacts.
     base = rng.uniform(0.0, 1.0, size=n)
-    scores = (0.4 * base + 0.6 * y).clip(0.0, 1.0)
+    scores = (0.55 * base + 0.45 * y).clip(0.0, 1.0)
     df = pd.DataFrame({"text": [f"row{i}" for i in range(n)], "label": y})
     return EvalSlice(name="repro_test_slice", df=df), _DeterministicScorer(scores)
 

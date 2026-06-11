@@ -236,3 +236,25 @@ def test_return_samples_bit_identical_across_njobs() -> None:
         strata, roc_auc, _mean_combine, n_resamples=100, rng=7, n_jobs=2, return_samples=True
     )
     assert np.array_equal(ci1.samples, ci2.samples)
+
+
+@pytest.mark.unit
+def test_nan_per_stratum_metric_counts_as_degenerate() -> None:
+    """v1.9.0 pre-tag review (F1): the per-stratum NaN filter is pinned even when
+    ``combine`` would NOT propagate the NaN (mutation-unkilled before this test)."""
+    strata = {0: _stratum(0), 1: _stratum(1)}
+    originals = tuple(v[1] for v in strata.values())
+
+    def nan_on_resamples_metric(y_t: np.ndarray, y_s: np.ndarray) -> float:
+        for o in originals:
+            if y_s.shape == o.shape and np.array_equal(y_s, o):
+                return 0.5
+        return float("nan")
+
+    def count_combine(m: dict) -> float:  # non-NaN-propagating reduce
+        return float(len(m))
+
+    with pytest.raises(ValueError, match="degenerate"):
+        stratified_cluster_bootstrap_ci(
+            strata, nan_on_resamples_metric, count_combine, n_resamples=50, rng=0
+        )

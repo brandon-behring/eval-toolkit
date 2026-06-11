@@ -144,10 +144,12 @@ def load_prediction_arrays(
     ValueError
         If ``ref`` lacks a ``columns`` mapping, lacks a non-empty ``uri``,
         its ``columns`` mapping is missing the ``label`` / ``score`` keys
-        (re-raised from :func:`_required_column`), or the loaded scores
+        (re-raised from :func:`_required_column`), the loaded scores
         contain non-finite values (a bare ``NaN`` token in JSONL or a
         ``"nan"`` cell in CSV passes the readers' per-row key checks but
-        must not flow into metrics as a silent NaN).
+        must not flow into metrics as a silent NaN), or the loaded labels
+        are not all in ``{0, 1}`` (an int cast would silently truncate
+        ``0.7 → 0``, flipping ground truth).
     """
     columns = ref.get("columns")
     if not isinstance(columns, Mapping):
@@ -160,7 +162,19 @@ def load_prediction_arrays(
     selected_reader = reader or _reader_for_ref(ref)
     reader_columns = {str(k): str(v) for k, v in columns.items() if isinstance(v, str)}
     table = selected_reader.read_predictions(uri, columns=reader_columns)
-    labels = np.asarray(table[label_col], dtype=int)
+    # Load labels as float first: np.asarray(..., dtype=int) silently
+    # TRUNCATES numeric non-integers (0.7 → 0), flipping ground truth with
+    # in-domain values no downstream gate can catch (v1.9.0 pre-tag review).
+    labels_raw = np.asarray(table[label_col], dtype=float)
+    bad_labels = ~np.isin(labels_raw, (0.0, 1.0))
+    if bad_labels.any():
+        first_bad = int(np.flatnonzero(bad_labels)[0])
+        raise ValueError(
+            f"prediction artifact at {uri!r} column {label_col!r} contains "
+            f"non-binary label(s); first bad value {labels_raw[first_bad]!r} "
+            f"at data row index {first_bad}"
+        )
+    labels = labels_raw.astype(int)
     scores = np.asarray(table[score_col], dtype=float)
     if not np.isfinite(scores).all():
         first_bad = int(np.flatnonzero(~np.isfinite(scores))[0])

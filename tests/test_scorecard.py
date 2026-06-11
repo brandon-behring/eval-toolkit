@@ -742,11 +742,15 @@ def test_non_finite_metric_value_becomes_error_status(
 
 
 def test_bootstrap_non_finite_ci_bounds_not_attached() -> None:
-    """#96: BCa-degenerate NaN bounds are recorded in reason, never attached as a CI."""
+    """#96 + v1.9.0 pre-tag hardening: degenerate NaN bounds never attach as a CI.
+
+    bootstrap_ci now raises on non-finite bounds (any method); the scorecard's
+    per-cell isolation converts that into an ok cell with the reason recorded
+    and ci=None — the point estimate is still valid.
+    """
     y = np.array([0] * 30 + [1] * 30)
     s = y.astype(float)  # perfect separation → pr_auc ≡ 1.0 → BCa NaN bounds
-    with pytest.warns(UserWarning, match="BCa degenerated"):
-        r = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=100, rng=0)
+    r = scorecard(y, s, metrics=[ms.pr_auc], bootstrap=True, n_resamples=100, rng=0)
     cell = r["pr_auc"]
     assert cell.status == "ok"
     assert cell.value == pytest.approx(1.0)

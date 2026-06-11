@@ -81,8 +81,9 @@ def sweep(
     pandas.DataFrame
         Columns vary by which optional kwargs are passed:
 
-        - Always: ``text_id`` (int), ``variant`` (str — from
-          ``strategy.name``), ``transformed_text`` (str).
+        - Always: ``text_id`` (int), ``strategy_id`` (str —
+          configured-instance identity, Decision R7-B), ``variant`` (str —
+          from ``strategy.name``), ``transformed_text`` (str).
         - With ``scorer``: also ``original_score`` (float) +
           ``transformed_score`` (float).
         - With ``scorer`` AND ``attack_threshold``: also ``asr`` (bool —
@@ -92,6 +93,8 @@ def sweep(
 
     Raises
     ------
+    ImportError
+        If pandas is not installed (install the ``dataframe`` extra).
     ValueError
         - If ``strategies`` is empty.
         - If ``attack_threshold`` is provided without ``scorer``.

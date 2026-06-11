@@ -290,8 +290,13 @@ def bootstrap_ci(
     Raises
     ------
     ValueError
-        If shapes mismatch, ``n < 10``, ``confidence ∉ (0, 1)``, or
-        ``n_jobs != 1`` is supplied with a non-studentized ``method``.
+        If shapes mismatch, ``n < 10``, ``confidence ∉ (0, 1)``,
+        ``n_jobs != 1`` is supplied with a non-studentized ``method``,
+        the metric returns a non-finite point estimate on the full data,
+        the BCa/percentile bounds come back non-finite (the metric
+        returned NaN/inf on resamples, or the BCa correction
+        degenerated), or > 5% of studentized resamples are degenerate
+        (metric raised or returned non-finite).
 
     Examples
     --------
@@ -346,6 +351,11 @@ def bootstrap_ci(
     )
 
     point = float(metric(y_true_arr, y_score_arr))
+    if not np.isfinite(point):
+        raise ValueError(
+            f"bootstrap_ci: metric returned non-finite point estimate {point} "
+            "on the full (non-resampled) data"
+        )
 
     def _statistic(yt: np.ndarray, ys: np.ndarray) -> float:
         return float(metric(yt, ys))
@@ -374,21 +384,25 @@ def bootstrap_ci(
         )
         ci_low = float(res.confidence_interval.low)
         ci_high = float(res.confidence_interval.high)
-        # R9 follow-on (F-bootstrap-1): scipy.stats.bootstrap with BCa can
-        # degenerate at small n with ceiling/floor metrics or skewed
-        # distributions — the jackknife acceleration constant blows up or
-        # produces NaN bounds. scipy emits DegenerateDataWarning but does
-        # NOT raise; the returned CI has ci_low == ci_high == point OR
-        # NaN bounds. Pre-v0.51 the R8-C4(b) RNG bug spuriously varied
-        # bootstrap streams and could mask degeneracy; post-v0.51 with
-        # correct RNG the brittleness is exposed. Surface a UserWarning
-        # so callers know to switch to method='percentile' OR use a
-        # larger n. (R9 third-audit finding F-bootstrap-1; my hunt of
-        # modules neither auditor cited; verified at
-        # audit-verification-round-9-v0.51.0.md Part 2.)
-        if method == "BCa" and (
-            not np.isfinite(ci_low) or not np.isfinite(ci_high) or (ci_low == ci_high == point)
-        ):
+        # R9 follow-on (F-bootstrap-1), tightened at the v1.9.0 pre-tag
+        # review: scipy.stats.bootstrap can degenerate at small n with
+        # ceiling/floor metrics or skewed distributions — scipy emits
+        # DegenerateDataWarning (always naming BCa, even under
+        # method="percentile") but does NOT raise. Non-finite bounds are
+        # garbage under ANY method (a NaN bound silently poisons every
+        # downstream comparison), so they now raise; the finite
+        # BCa-collapse case (ci_low == ci_high == point) keeps the R9
+        # UserWarning contract.
+        if not (np.isfinite(ci_low) and np.isfinite(ci_high)):
+            raise ValueError(
+                f"bootstrap_ci: non-finite CI bounds [{ci_low}, {ci_high}] "
+                f"(metric={getattr(metric, '__name__', repr(metric))!r} returned NaN/inf "
+                f"on resamples, or the BCa correction degenerated; method={method!r}, "
+                f"n={n}). Common causes: small n with ceiling/floor metric or "
+                "near-constant scores. Use a larger n or a row-level metric that is "
+                "finite on resamples."
+            )
+        if method == "BCa" and ci_low == ci_high == point:
             warnings.warn(
                 f"bootstrap_ci: BCa degenerated on n={n} "
                 f"(metric={getattr(metric, '__name__', repr(metric))!r}; "
@@ -440,6 +454,11 @@ def _bootstrap_t_step(
         theta_b = float(metric(y_b, s_b))
     except (ValueError, RuntimeError) as exc:
         return None, f"{type(exc).__name__}: {exc}"
+    # Sibling convention (#96): a non-finite outer statistic is a degenerate
+    # draw — without this filter it passes the 95%-valid gate and poisons
+    # the pivots into a silent all-NaN CI.
+    if not np.isfinite(theta_b):
+        return None, f"non-finite outer statistic theta_b={theta_b}"
     loo = np.full(n, np.nan, dtype=np.float64)
     for i in range(n):
         try:
@@ -447,7 +466,7 @@ def _bootstrap_t_step(
         except (ValueError, RuntimeError) as exc:
             if first_failure is None:
                 first_failure = f"{type(exc).__name__}: {exc}"
-    valid = ~np.isnan(loo)
+    valid = np.isfinite(loo)
     if int(valid.sum()) < 2:
         return None, first_failure
     loo_mean = float(np.nanmean(loo))

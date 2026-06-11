@@ -310,47 +310,25 @@ def test_mde_from_ci_rejects_nan_width() -> None:
 
 
 @pytest.mark.unit
-def test_bootstrap_ci_bca_degeneracy_emits_warning() -> None:
-    """R9 follow-on (F-bootstrap-1): BCa degeneracy emits UserWarning.
+def test_bootstrap_ci_bca_non_finite_bounds_raise() -> None:
+    """v1.9.0 pre-tag hardening: non-finite scipy bounds raise instead of warn.
 
-    Pre-v0.51 the R8-C4(b) RNG bug spuriously varied bootstrap streams
-    and could mask BCa degeneracy (ci_low == ci_high == point on small
-    n with ceiling/floor metrics); post-v0.51 with correct RNG, the
-    brittleness is exposed. v0.51 R9 follow-on adds UserWarning so
-    callers know to switch to method='percentile' or use larger n.
-    audit-verification-round-9-v0.51.0.md Part 2.
+    History: R9 F-bootstrap-1 added a UserWarning for BCa degeneracy
+    (covering both NaN bounds and the finite low==high==point collapse);
+    the v1.9.0 pre-tag review found percentile NaN bounds slipped through
+    the BCa-gated check entirely. Non-finite bounds now raise for ANY
+    method (a NaN bound silently poisons every downstream comparison);
+    the finite BCa collapse keeps the R9 UserWarning contract.
+
+    Constant scores + a mean metric give an all-constant bootstrap
+    distribution, which deterministically degenerates scipy's BCa
+    correction into NaN bounds.
     """
-    import warnings as _warnings
-
-    # Construct a small-n + ceiling-metric scenario that degenerates BCa.
-    # Constant-1 scores on alternating labels → no variance in resamples.
     rng = np.random.default_rng(7)
     y = np.array([0, 1] * 10)
-    s = np.ones(20)  # constant scores → degenerate
-    with _warnings.catch_warnings(record=True) as ws:
-        _warnings.simplefilter("always")
-        # Use a metric that produces near-constant output on constant scores.
-        ci = bootstrap_ci(y, s, metric=lambda yt, ys: float(ys.mean()), n_resamples=50, rng=rng)
-    # R10 follow-on (F2): mirror the production predicate at
-    # bootstrap.py:376-388 — the warning fires for ANY of three degeneracy
-    # modes: non-finite low, non-finite high, OR low==high==point. The
-    # previous test used only the equality clause and silently no-op'd on
-    # NaN bounds (NaN == NaN is False in IEEE float), so a regression that
-    # removed the non-finite-bound branch could pass the test. Codex R10
-    # Option A.
-    degenerated = (
-        (not np.isfinite(ci.ci_low))
-        or (not np.isfinite(ci.ci_high))
-        or (ci.ci_low == ci.ci_high == ci.point_estimate)
-    )
-    if degenerated:
-        user_warnings = [w for w in ws if issubclass(w.category, UserWarning)]
-        assert len(user_warnings) >= 1, (
-            f"BCa degenerated (low={ci.ci_low}, high={ci.ci_high}, "
-            f"point={ci.point_estimate}) but no UserWarning emitted. "
-            "F-bootstrap-1 fix should catch this."
-        )
-        assert "BCa degenerated" in str(user_warnings[0].message)
+    s = np.ones(20)  # constant scores → all-constant bootstrap distribution
+    with pytest.raises(ValueError, match="non-finite CI bounds"):
+        bootstrap_ci(y, s, metric=lambda yt, ys: float(ys.mean()), n_resamples=50, rng=rng)
 
 
 @pytest.mark.unit
