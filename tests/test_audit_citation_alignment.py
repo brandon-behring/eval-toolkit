@@ -456,3 +456,16 @@ def test_citation_misalignment_is_frozen_dataclass() -> None:
     )
     with pytest.raises(FrozenInstanceError):
         m.line = 2  # type: ignore[misc]
+
+
+@pytest.mark.unit
+def test_invalid_scope_raises_value_error() -> None:
+    """A scope typo raises instead of silently disabling Layers 2+3 (#99 V6)."""
+    with pytest.raises(ValueError, match="scope must be 'all' or 'narrative'"):
+        validate_citations(
+            markdown_text="Two-tier reproduction via ADR-029.\n",
+            markdown_path=Path("test.md"),
+            adr_subjects=SEED_ADR_SUBJECTS,
+            category_keywords=SEED_CATEGORY_KEYWORDS,
+            scope="narative",  # type: ignore[arg-type]
+        )

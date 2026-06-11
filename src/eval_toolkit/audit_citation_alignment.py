@@ -332,6 +332,13 @@ def validate_citations(
         One :class:`CitationMisalignment` per misaligned citation.
         Empty if no misalignments OR no citations matched the pattern.
 
+    Raises
+    ------
+    ValueError
+        If ``scope`` is not ``"all"`` or ``"narrative"``. A typo would
+        otherwise silently disable Layers 2+3 and fall through to the
+        legacy line-window path.
+
     Notes
     -----
     A citation with ``claim_category=None`` (no category keyword
@@ -370,6 +377,8 @@ def validate_citations(
     >>> result[0].adr_actual_category
     'test_markers'
     """
+    if scope not in {"all", "narrative"}:
+        raise ValueError(f"scope must be 'all' or 'narrative', got {scope!r}")
     exempt_set = {(str(p), ln, adr) for (p, ln, adr) in known_exempt_citations}
     misalignments: list[CitationMisalignment] = []
     lines = markdown_text.splitlines()

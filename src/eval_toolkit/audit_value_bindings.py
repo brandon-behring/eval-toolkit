@@ -344,7 +344,9 @@ def validate_reader_value_bindings(
     Raises
     ------
     ValueError
-        If any file in ``files`` is not valid UTF-8.
+        If ``scope`` is not ``"all"`` or ``"narrative"`` (a typo would
+        otherwise silently revert to legacy matching), or if any file in
+        ``files`` is not valid UTF-8.
     TypeError
         If a ``bindings`` key is not a recognized shape (2-tuple,
         3-tuple, or :class:`BindingKey`).
@@ -394,6 +396,8 @@ def validate_reader_value_bindings(
     eval_toolkit.audit_citation_alignment.validate_citations :
         Sibling validator catching ADR-citation alignment drift.
     """
+    if scope not in {"all", "narrative"}:
+        raise ValueError(f"scope must be 'all' or 'narrative', got {scope!r}")
     files_resolved = tuple(Path(f) for f in files)
 
     # Normalize all bindings keys (legacy 2-tuple, sugar 3-tuple, or
