@@ -59,6 +59,7 @@ _EXPORTS: dict[str, str] = {
     "ADRSubject": "eval_toolkit.audit_citation_alignment",
     "CitationMisalignment": "eval_toolkit.audit_citation_alignment",
     "extract_adr_subject_category": "eval_toolkit.audit_citation_alignment",
+    "extract_adr_subject_categories": "eval_toolkit.audit_citation_alignment",
     "validate_citations": "eval_toolkit.audit_citation_alignment",
     # --- audit_value_bindings ---
     # Flat-module per ADR 0001. Closes #71. Motivated by consumer V1.3.1

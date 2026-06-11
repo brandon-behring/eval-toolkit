@@ -165,6 +165,7 @@
     "evaluate_folded",
     "evaluate_scorer_on_slice",
     "external_diagnostic_gate",
+    "extract_adr_subject_categories",
     "extract_adr_subject_category",
     "fdr_bh_correct",
     "figure_metadata",
@@ -268,7 +269,7 @@
       ],
       "doc_first_line": "Subject category of a single ADR.",
       "kind": "class",
-      "signature": "(adr_id: 'str', title: 'str', slug: 'str', category: 'str | None') -> None"
+      "signature": "(adr_id: 'str', title: 'str', slug: 'str', category: 'str | None', categories: 'frozenset[str] | None' = None) -> None"
     },
     "ADVANCED_TECHNIQUES": {
       "doc_first_line": "Built-in immutable sequence.",
@@ -1562,6 +1563,11 @@
       "doc_first_line": "Require an external diagnostic payload, optionally thresholded.",
       "kind": "function",
       "signature": "(path: 'str', *, op: \"Literal['<', '<=', '>', '>=', '=='] | None\" = None, threshold: 'float | None' = None, severity: 'GateSeverity' = 'error') -> 'EvidenceGate'"
+    },
+    "extract_adr_subject_categories": {
+      "doc_first_line": "Infer ALL of an ADR's claim-taxonomy categories from its title + slug.",
+      "kind": "function",
+      "signature": "(title: 'str', slug: 'str', category_keywords: 'dict[str, list[str]]') -> 'frozenset[str]'"
     },
     "extract_adr_subject_category": {
       "doc_first_line": "Infer an ADR's claim-taxonomy category from its title + slug.",

@@ -1275,3 +1275,21 @@ def test_non_utf8_file_raises_valueerror(tmp_path: Path) -> None:
             detector_aliases=SEED_DETECTOR_ALIASES,
             metric_aliases=SEED_METRIC_ALIASES,
         )
+
+
+@pytest.mark.unit
+def test_invalid_scope_raises_value_error() -> None:
+    """A scope typo raises instead of silently reverting to legacy matching (#99 V6)."""
+    with pytest.raises(ValueError, match="scope must be 'all' or 'narrative'"):
+        validate_reader_value_bindings(
+            files=[], bindings={}, scope="narratives"  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.unit
+def test_dataclasses_define_slots() -> None:
+    """STYLE §5: family dataclasses are slotted — no per-instance __dict__ (#99 V9)."""
+    for cls in (BindingKey, Match, Violation, ValueBindingsReport):
+        assert "__slots__" in cls.__dict__
+    m = Match(file=Path("x"), line=1, detector="d", metric="me", value=0.5)
+    assert not hasattr(m, "__dict__")

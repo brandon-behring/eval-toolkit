@@ -56,6 +56,9 @@ from eval_toolkit._narrative import (
     _crosses_sentence_boundary,
     _has_keyword_in_window,
     _is_excluded,
+    _is_signed_value,
+    _line_starts,
+    _position_to_line,
     _sentence_boundary_positions,
     _sentence_id_of,
 )
@@ -86,7 +89,7 @@ DEFAULT_TOLERANCE: float = 1e-4
 # they are imported at the top of this module.
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BindingKey:
     """Canonical identity for a `(detector, metric, slice)` measurement.
 
@@ -125,7 +128,7 @@ class BindingKey:
     slice: str = "any"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Match:
     """A reader-prose (detector, metric, value) triple that matches the canonical binding.
 
@@ -151,7 +154,7 @@ class Match:
     value: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Violation:
     """A reader-prose (detector, metric, value) triple where the value disagrees with the canonical binding.
 
@@ -184,7 +187,7 @@ class Violation:
     surrounding_text: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ValueBindingsReport:
     """Result of :func:`validate_reader_value_bindings`.
 
@@ -207,18 +210,21 @@ class ValueBindingsReport:
         metric)`` across multiple slices each contribute to the
         denominator).
     unmatched_slice_count : int, default 0
-        Count of (detector, metric, value) triples that matched the
-        detector+metric+value triple BUT had a slice-scoped
-        :class:`BindingKey` whose ``slice`` did not appear within
-        ``slice_window_chars`` of the value. These triples are
-        suppressed (no violation, no match) on the assumption that
-        the prose context (e.g., a paired-delta cell or a
-        random-floor mention) does not carry the slice
-        determination. A nonzero count is informational — it flags
-        prose where the value couldn't be slice-disambiguated; it is
-        NOT a validation failure. Always ``0`` when no slice-scoped
-        ``BindingKey`` is present in ``bindings`` (i.e., when all
-        keys are legacy 2-tuples or have ``slice="any"``).
+        Count of (detector, metric, value) candidate triples that had
+        a slice-scoped :class:`BindingKey` but NO slice mention of ANY
+        slice-scoped binding within ``slice_window_chars`` of the
+        value (slice-ambiguous prose). Candidates whose nearest slice
+        mention belongs to a DIFFERENT binding are skipped silently
+        and NOT counted — the other binding's own loop iteration
+        claims them. Counted triples are suppressed (no violation, no
+        match) on the assumption that the prose context (e.g., a
+        paired-delta cell or a random-floor mention) does not carry
+        the slice determination. A nonzero count is informational —
+        it flags prose where the value couldn't be
+        slice-disambiguated; it is NOT a validation failure. Always
+        ``0`` when no slice-scoped ``BindingKey`` is present in
+        ``bindings`` (i.e., when all keys are legacy 2-tuples or have
+        ``slice="any"``).
     """
 
     violations: tuple[Violation, ...]
@@ -344,10 +350,16 @@ def validate_reader_value_bindings(
     Raises
     ------
     ValueError
-        If any file in ``files`` is not valid UTF-8.
+        If ``scope`` is not ``"all"`` or ``"narrative"`` (a typo would
+        otherwise silently revert to legacy matching), or if any file in
+        ``files`` is not valid UTF-8.
     TypeError
         If a ``bindings`` key is not a recognized shape (2-tuple,
         3-tuple, or :class:`BindingKey`).
+    FileNotFoundError
+        If any path in ``files`` does not exist (propagates from the
+        underlying read; ``files`` is an explicit list, not a glob
+        result).
 
     Examples
     --------
@@ -394,6 +406,8 @@ def validate_reader_value_bindings(
     eval_toolkit.audit_citation_alignment.validate_citations :
         Sibling validator catching ADR-citation alignment drift.
     """
+    if scope not in {"all", "narrative"}:
+        raise ValueError(f"scope must be 'all' or 'narrative', got {scope!r}")
     files_resolved = tuple(Path(f) for f in files)
 
     # Normalize all bindings keys (legacy 2-tuple, sugar 3-tuple, or
@@ -568,16 +582,18 @@ def validate_reader_value_bindings(
                     # picking up e.g., "0.974" inside "10.974" or version
                     # strings like "1.0.974"). Simple heuristic: the
                     # character before the match (if any) must not be a
-                    # digit or dot. v1.2.0 T1a (narrative-scope only):
-                    # also skip values immediately preceded by `+` or
-                    # `-` (delta-magnitude markers like "-0.071 AUPRC").
+                    # digit or dot.
                     val_start_in_full = window_offset + val_match.start()
                     if val_start_in_full > 0:
                         prev_char = text[val_start_in_full - 1]
                         if prev_char.isdigit() or prev_char == ".":
                             continue
-                        if scope == "narrative" and prev_char in "+-":
-                            continue
+                    # v1.2.0 T1a (narrative-scope only): skip values
+                    # immediately preceded by `+`/`-` (delta-magnitude
+                    # markers like "-0.071 AUPRC"). v1.11.0: via the
+                    # shared `_narrative._is_signed_value` helper.
+                    if scope == "narrative" and _is_signed_value(text, val_start_in_full):
+                        continue
 
                     val_str = val_match.group(0)
                     try:
@@ -968,15 +984,6 @@ def _build_pattern(
     return re.compile(pattern, flags)
 
 
-def _line_starts(text: str) -> list[int]:
-    """Return character positions where each line starts. line[i] starts at line_starts[i]."""
-    starts = [0]
-    for i, ch in enumerate(text):
-        if ch == "\n":
-            starts.append(i + 1)
-    return starts
-
-
 def _nearest_canonical_key(
     positions: Sequence[tuple[int, str]],
     value_pos: int,
@@ -1001,6 +1008,11 @@ def _nearest_canonical_key(
     so callers can apply position-dependent secondary checks (e.g.,
     T4 sentence-boundary detector-pair reject). The slice-pairing
     call site discards the position.
+
+    A raw-distance variant for SLICE pairing (prepositional-adjunct
+    grammar) was prototyped but never wired; it was removed in
+    v1.11.0 (#99) — slice pairing deliberately shares this text-order
+    rule, and the rejected alternative lives in git history.
     """
     if not positions:
         return None
@@ -1018,50 +1030,3 @@ def _nearest_canonical_key(
         if pos >= value_pos and (pos - value_pos) <= max_distance:
             return (key, pos)
     return None
-
-
-def _nearest_slice_key_by_distance(
-    positions: Sequence[tuple[int, str]],
-    value_pos: int,
-    max_distance: int,
-) -> str | None:
-    """Return the canonical slice key paired with ``value_pos`` by raw distance.
-
-    Unlike :func:`_nearest_canonical_key` (which uses text-order to
-    handle the subject-verb-object English prose pattern for
-    detectors), slice context is a prepositional adjunct: "On
-    <slice>, X scored Y" (pre-value) and "X scored Y on <slice>"
-    (post-value) are both common. A raw-distance nearest rule
-    handles both naturally: the slice mention closer to the value
-    in characters wins.
-
-    Mitigates the cross-paragraph slice-bleed false positive (e.g.,
-    "cross-family distribution shift, finding that... reaches 0.971
-    AUPRC on direct+benign validation" — the text-order rule would
-    mis-attribute 0.971 to the "cross-family" topic introduced
-    earlier; raw-distance correctly attributes to the
-    "direct+benign validation" mention 30 chars after the value).
-    """
-    if not positions:
-        return None
-    best_key: str | None = None
-    best_dist = max_distance + 1
-    for pos, key in positions:
-        dist = abs(pos - value_pos)
-        if dist <= max_distance and dist < best_dist:
-            best_key = key
-            best_dist = dist
-    return best_key
-
-
-def _position_to_line(line_starts: list[int], pos: int) -> int:
-    """Convert a 0-indexed character position to a 1-indexed line number."""
-    # Binary-search-like; line_starts is sorted.
-    lo, hi = 0, len(line_starts) - 1
-    while lo < hi:
-        mid = (lo + hi + 1) // 2
-        if line_starts[mid] <= pos:
-            lo = mid
-        else:
-            hi = mid - 1
-    return lo + 1

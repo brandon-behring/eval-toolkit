@@ -5,6 +5,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed — audit-validator family correctness ([#99](https://github.com/brandon-behring/eval-toolkit/issues/99))
+
+- **`validate_citations` / `validate_reader_value_bindings`: `scope` is
+  runtime-validated** — a typo (e.g. `"narative"`) now raises `ValueError`
+  instead of silently disabling Layers 2+3 (the `calibration.py` `strategy`
+  precedent).
+- **Layer-3 rule-γ window centering** — `_extract_sentence_context` now centers
+  its 300-char window on the citation when the sentence exceeds 300 chars;
+  previously the leading truncation could exclude the very citation it was
+  classifying (5 of 37 dogfood residuals). The no-sentence-positions fallback is
+  reconciled to the same ±150 cap. Trade-off: keywords more than 150 chars
+  BEFORE the citation in an over-long sentence no longer match (pinned by test).
+- **`validate_sister_doc_concept_drift`: missing files raise
+  `FileNotFoundError`** — `files` is an explicit caller-supplied list, not a
+  glob result; the error was previously swallowed by the OSError warn-skip
+  (which is retained for other `OSError`s / non-UTF-8 files). The family-wide
+  file-read policy is now documented in both modules.
+
+### Added ([#99](https://github.com/brandon-behring/eval-toolkit/issues/99))
+
+Tier-1 strictly-appended trailing optional field (SemVer-MINOR per ADR 0003,
+2026-06-10 amendment; public-API snapshot regenerated in the same commit):
+
+- **`ADRSubject.categories: frozenset[str] | None = None`** — multi-topic ADRs
+  carry their full category set (8 of 37 dogfood residuals were multi-topic
+  titles no single category fits); all four matching sites in
+  `validate_citations` use set membership when populated, including
+  `scope="all"` (byte-identical for subjects without `categories`). The scalar
+  `category` remains the diagnostic display in
+  `CitationMisalignment.adr_actual_category`.
+
+Tier-2 ADDITIVE:
+
+- **`extract_adr_subject_categories(title, slug, category_keywords) ->
+  frozenset[str]`** — plural sibling of `extract_adr_subject_category` (now
+  reimplemented on top of it; invariant: the scalar is the
+  insertion-order-first element of the plural set).
+- `scripts/dogfood_audit.py` citation adapter populates `categories` via the
+  plural extractor on top of the consumer's `build_adr_subjects()` — dogfood
+  residuals drop 37 → 16 with zero consumer-side changes (13 stable survivors
+  + 3 newly surfaced by the centering fix).
+
+### Changed — internal ([#99](https://github.com/brandon-behring/eval-toolkit/issues/99))
+
+No public-surface impact:
+
+- `slots=True` on all 9 audit-family dataclasses (STYLE §5; the family was the
+  only systematic deviation).
+- `_line_starts` / `_position_to_line` consolidated into `_narrative`
+  (previously triplicated); `_is_signed_value` now imported at its single use
+  site instead of being inlined.
+- Dead code removed: `_nearest_slice_key_by_distance` (prototyped, never
+  wired) and the unused `citations_per_sentence` scan.
+
+### Documentation ([#99](https://github.com/brandon-behring/eval-toolkit/issues/99))
+
+Tier-3:
+
+- rule-α scope bullet corrected (multi-topic, not multi-citation);
+  `surrounding_text` ≤300-char scope-conditional doc; `unmatched_slice_count`
+  semantics corrected (counts only slice-ambiguous candidates —
+  different-slice candidates skip uncounted).
+- `ADRSubject.category` None-handling doc fixed (narrative scope skips,
+  `scope="all"` flags — not "caller decides") + 4th `scope` activation bullet
+  documenting the symmetric-None skip.
+- ADR 0007 shared-helper inventory amended (positional helpers; `_is_signed_value`
+  importer).
+
 ## [1.10.0] — 2026-06-11 — loaders contract: fail-fast feature_cols/labels + reader parity (#98)
 
 ### Fixed — loaders + prediction-reader contract hardening, silent-failure class ([#98](https://github.com/brandon-behring/eval-toolkit/issues/98))

@@ -9,6 +9,7 @@ validator must flag this misalignment.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ import pytest
 from eval_toolkit.audit_citation_alignment import (
     ADRSubject,
     CitationMisalignment,
+    extract_adr_subject_categories,
     extract_adr_subject_category,
     validate_citations,
 )
@@ -438,8 +440,10 @@ def test_combined_consumer_residuals_resolve_narrative() -> None:
     flagged_ids = {m.cited_adr_id for m in r_nar}
     # Only the LEGITIMATE last-line citation is flagged. (Note: the
     # "via ADR-029" in the multi-ADR sentence is in alpha-mode, so it's
-    # accepted because test_markers is in the matched set.)
-    assert flagged_ids <= {"029"}
+    # accepted because test_markers is in the matched set.) Strict
+    # equality (#99 V8): `<=` was vacuously satisfiable by the empty
+    # set, so a recall regression could not fail this test.
+    assert flagged_ids == {"029"}
 
 
 def test_citation_misalignment_is_frozen_dataclass() -> None:
@@ -456,3 +460,268 @@ def test_citation_misalignment_is_frozen_dataclass() -> None:
     )
     with pytest.raises(FrozenInstanceError):
         m.line = 2  # type: ignore[misc]
+
+
+@pytest.mark.unit
+def test_invalid_scope_raises_value_error() -> None:
+    """A scope typo raises instead of silently disabling Layers 2+3 (#99 V6)."""
+    with pytest.raises(ValueError, match="scope must be 'all' or 'narrative'"):
+        validate_citations(
+            markdown_text="Two-tier reproduction via ADR-029.\n",
+            markdown_path=Path("test.md"),
+            adr_subjects=SEED_ADR_SUBJECTS,
+            category_keywords=SEED_CATEGORY_KEYWORDS,
+            scope="narative",  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.unit
+def test_long_sentence_window_centers_on_citation() -> None:
+    """Rule-γ window is citation-centered when the sentence exceeds 300 chars (#99 V11).
+
+    Pre-v1.11.0 the window was the sentence's leading 300 chars, so the
+    keyword next to this citation (at the sentence's END) was invisible
+    and the misalignment silently skipped.
+    """
+    filler = "lorem ipsum dolor sit amet, consectetur adipiscing elit, " * 7
+    text = filler + "and the two-tier reproducibility lock is recorded via ADR-029.\n"
+    result = validate_citations(
+        markdown_text=text,
+        markdown_path=Path("test.md"),
+        adr_subjects=SEED_ADR_SUBJECTS,
+        category_keywords=SEED_CATEGORY_KEYWORDS,
+        scope="narrative",
+    )
+    assert len(result) == 1
+    assert result[0].cited_adr_id == "029"
+    assert result[0].claim_category == "reproducibility"
+    assert "ADR-029" in result[0].surrounding_text
+
+
+@pytest.mark.unit
+def test_long_sentence_head_keywords_fall_outside_centered_window() -> None:
+    """Pins the centering trade-off: keywords >150 chars BEFORE the citation no longer match."""
+    filler = "lorem ipsum dolor sit amet, consectetur adipiscing elit, " * 7
+    text = "the reproducibility lock intro, " + filler + "is recorded via ADR-029.\n"
+    result = validate_citations(
+        markdown_text=text,
+        markdown_path=Path("test.md"),
+        adr_subjects=SEED_ADR_SUBJECTS,
+        category_keywords=SEED_CATEGORY_KEYWORDS,
+        scope="narrative",
+    )
+    assert result == []  # no keyword in the centered window -> no basis to flag
+
+
+# ---- multi-category ADRSubject (#99 V12) + symmetric-None survivor ----
+
+
+@pytest.mark.unit
+def test_extract_adr_subject_categories_all_matches() -> None:
+    """Plural extractor returns EVERY matching category, not just the first."""
+    out = extract_adr_subject_categories(
+        title="Reproducibility tier lock and GPU cost envelope",
+        slug="reproducibility-tier-cost",
+        category_keywords=SEED_CATEGORY_KEYWORDS,
+    )
+    assert out == frozenset({"reproducibility", "cost"})
+
+
+@pytest.mark.unit
+def test_extract_adr_subject_categories_no_match_returns_empty() -> None:
+    out = extract_adr_subject_categories(
+        title="Unrelated subject",
+        slug="unrelated-subject",
+        category_keywords=SEED_CATEGORY_KEYWORDS,
+    )
+    assert out == frozenset()
+
+
+@pytest.mark.unit
+def test_scalar_extractor_is_insertion_order_first_of_plural() -> None:
+    """Pins the documented invariant between the scalar and plural extractors."""
+    title = "Reproducibility tier lock and GPU cost envelope"
+    slug = "reproducibility-tier-cost"
+    plural = extract_adr_subject_categories(title, slug, SEED_CATEGORY_KEYWORDS)
+    scalar = extract_adr_subject_category(title, slug, SEED_CATEGORY_KEYWORDS)
+    assert scalar == next(c for c in SEED_CATEGORY_KEYWORDS if c in plural)
+
+
+@pytest.mark.unit
+def test_adr_subject_positional_construction_unchanged() -> None:
+    """Tier-1 appended-optional guarantee: pre-v1.11.0 positional calls still work."""
+    positional = ADRSubject("029", "t", "s", "test_markers")
+    keyword = ADRSubject(adr_id="029", title="t", slug="s", category="test_markers")
+    assert positional == keyword
+    assert positional.categories is None
+
+
+_MULTI_TOPIC_SUBJECT = ADRSubject(
+    adr_id="045",
+    title="Reproducibility tier lock and cost envelope",
+    slug="reproducibility-tier-cost-envelope",
+    category="reproducibility",
+    categories=frozenset({"reproducibility", "cost"}),
+)
+
+
+@pytest.mark.unit
+def test_multi_category_subject_accepted_when_claim_in_set_narrative() -> None:
+    """A multi-topic ADR is accepted for ANY of its categories under narrative scope."""
+    common = {
+        "markdown_text": "GPU cost envelope locked via ADR-045.\n",
+        "markdown_path": Path("test.md"),
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+        "scope": "narrative",
+    }
+    assert validate_citations(**common, adr_subjects={"045": _MULTI_TOPIC_SUBJECT}) == []
+    control = replace(_MULTI_TOPIC_SUBJECT, categories=None)
+    flagged = validate_citations(**common, adr_subjects={"045": control})
+    assert len(flagged) == 1
+    assert flagged[0].adr_actual_category == "reproducibility"
+
+
+@pytest.mark.unit
+def test_multi_category_multi_topic_intersection_narrative() -> None:
+    """Rule-alpha uses set INTERSECTION when the subject carries multiple categories."""
+    subject = ADRSubject(
+        adr_id="050",
+        title="Calibration sweep and cost budget",
+        slug="calibration-cost",
+        category="calibration",
+        categories=frozenset({"calibration", "cost"}),
+    )
+    common = {
+        "markdown_text": "Reproducibility tier and cost envelope locked via ADR-050.\n",
+        "markdown_path": Path("test.md"),
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+        "scope": "narrative",
+    }
+    assert validate_citations(**common, adr_subjects={"050": subject}) == []
+    control = replace(subject, categories=None)
+    flagged = validate_citations(**common, adr_subjects={"050": control})
+    assert len(flagged) == 1
+
+
+@pytest.mark.unit
+def test_multi_category_set_membership_under_scope_all() -> None:
+    """scope='all' also honors a populated categories set (no silent scalar trap)."""
+    common = {
+        "markdown_text": "GPU cost envelope locked via ADR-045.\n",
+        "markdown_path": Path("test.md"),
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+        "scope": "all",
+    }
+    assert validate_citations(**common, adr_subjects={"045": _MULTI_TOPIC_SUBJECT}) == []
+    control = replace(_MULTI_TOPIC_SUBJECT, categories=None)
+    assert len(validate_citations(**common, adr_subjects={"045": control})) == 1
+
+
+@pytest.mark.unit
+def test_empty_categories_skips_narrative_flags_under_all() -> None:
+    """Explicit empty categories == scalar None: skip under narrative, flag under all."""
+    subject = replace(SEED_ADR_SUBJECTS["029"], category=None, categories=frozenset())
+    common = {
+        "markdown_text": "Two-tier reproduction via ADR-029.\n",
+        "markdown_path": Path("test.md"),
+        "adr_subjects": {"029": subject},
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+    }
+    assert validate_citations(**common, scope="narrative") == []
+    flagged = validate_citations(**common, scope="all")
+    assert len(flagged) == 1
+    assert flagged[0].adr_actual_category is None
+
+
+@pytest.mark.unit
+def test_symmetric_none_skip_narrative_vs_all() -> None:
+    """Pre-tag survivor: scalar-None subjects skip under narrative, flag under all."""
+    subject = ADRSubject(adr_id="029", title="Unclassifiable", slug="unclassifiable", category=None)
+    common = {
+        "markdown_text": "Two-tier reproduction via ADR-029.\n",
+        "markdown_path": Path("test.md"),
+        "adr_subjects": {"029": subject},
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+    }
+    assert validate_citations(**common, scope="narrative") == []
+    flagged = validate_citations(**common, scope="all")
+    assert len(flagged) == 1
+    assert flagged[0].adr_actual_category is None
+
+
+@pytest.mark.unit
+def test_dataclasses_define_slots() -> None:
+    """STYLE §5: family dataclasses are slotted — no per-instance __dict__ (#99 V9)."""
+    for cls in (ADRSubject, CitationMisalignment):
+        assert "__slots__" in cls.__dict__
+    s = ADRSubject(adr_id="029", title="t", slug="s", category=None)
+    assert not hasattr(s, "__dict__")
+
+
+@pytest.mark.unit
+def test_positional_helpers_shared_from_narrative() -> None:
+    """_line_starts/_position_to_line are single-sourced in _narrative (#99 V4)."""
+    from eval_toolkit import _narrative as _narr
+    from eval_toolkit.audit_citation_alignment import _line_starts as _aca_ls
+    from eval_toolkit.audit_value_bindings import (
+        _line_starts as _avb_ls,
+    )
+    from eval_toolkit.audit_value_bindings import (
+        _position_to_line as _avb_ptl,
+    )
+
+    assert _aca_ls is _avb_ls is _narr._line_starts
+    assert _avb_ptl is _narr._position_to_line
+
+
+@pytest.mark.unit
+def test_pattern_beta_bracketed_citation_excluded_under_narrative() -> None:
+    """Layer 2: citations inside [...] are excluded under scope='narrative' (#99 V7)."""
+    text = "Reproducibility tier locked [per ADR-029] at Phase 0.\n"
+    common = {
+        "markdown_text": text,
+        "markdown_path": Path("test.md"),
+        "adr_subjects": SEED_ADR_SUBJECTS,
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+    }
+    assert len(validate_citations(**common, scope="all")) == 1  # legacy: bracket not excluded
+    assert validate_citations(**common, scope="narrative") == []
+
+
+@pytest.mark.unit
+def test_pattern_beta_fenced_code_citation_excluded_under_narrative() -> None:
+    """Layer 2: citations inside ``` fenced blocks are excluded under scope='narrative' (#99 V7)."""
+    text = (
+        "```\n"
+        "Two-tier reproduction via ADR-029\n"
+        "```\n"
+        "Reproducibility tier locked via ADR-029.\n"
+    )
+    common = {
+        "markdown_text": text,
+        "markdown_path": Path("test.md"),
+        "adr_subjects": SEED_ADR_SUBJECTS,
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+    }
+    assert len(validate_citations(**common, scope="all")) == 2  # fence not excluded under legacy
+    r_nar = validate_citations(**common, scope="narrative")
+    assert len(r_nar) == 1
+    assert r_nar[0].line == 4
+
+
+@pytest.mark.unit
+def test_window_measures_stripped_sentence_not_raw_span() -> None:
+    """Boundary pin (review finding): a sentence whose STRIPPED text fits in 300
+    chars returns whole even when trailing blank-line whitespace inflates the raw
+    inter-sentence span past 300 — the head keyword must survive."""
+    from eval_toolkit._narrative import _sentence_boundary_positions
+    from eval_toolkit.audit_citation_alignment import _extract_sentence_context
+
+    # Stripped sentence: 'cost ' + filler + 'via ADR-020.' — tune to ~298 chars.
+    body = "cost " + ("x" * (298 - len("cost ") - len(" via ADR-020."))) + " via ADR-020."
+    assert len(body) <= 300
+    text = body + "\n\n\n\n\nNext sentence starts here.\n"
+    positions = _sentence_boundary_positions(text)
+    citation_pos = text.index("ADR-020")
+    window = _extract_sentence_context(text, citation_pos, positions)
+    assert window == body  # whole sentence, head 'cost' included

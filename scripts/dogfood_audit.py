@@ -27,6 +27,7 @@ import argparse
 import json
 import sys
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -102,7 +103,10 @@ def _run_citation_alignment(
     sys.path.insert(0, str(consumer / "scripts"))
 
     # Lazy import: requires sys.path (above) to include the consumer + its scripts.
-    from eval_toolkit.audit_citation_alignment import validate_citations
+    from eval_toolkit.audit_citation_alignment import (
+        extract_adr_subject_categories,
+        validate_citations,
+    )
 
     script_path = consumer / "scripts" / "audit_citation_alignment.py"
     g = _load_consumer_module(script_path)
@@ -126,6 +130,24 @@ def _run_citation_alignment(
             f"cannot map ADRs without it"
         )
     adr_subjects = g["build_adr_subjects"]()
+
+    # v1.11.0 multi-category upgrade (#99): the consumer's
+    # build_adr_subjects() populates only the scalar first-match
+    # `category`. Re-derive the FULL category set per subject with the
+    # upstream plural extractor so multi-topic ADRs aren't collapsed to
+    # their first-match category — this clears the dominant L1 dogfood
+    # residual bucket with zero consumer-side changes. `category` is
+    # left exactly as the consumer computed it, so diagnostic display
+    # (adr_actual_category) is unchanged.
+    adr_subjects = {
+        adr_id: replace(
+            subject,
+            categories=extract_adr_subject_categories(
+                subject.title, subject.slug, category_keywords
+            ),
+        )
+        for adr_id, subject in adr_subjects.items()
+    }
 
     surfaces: list[Path] = []
     for pattern in surface_globs:
