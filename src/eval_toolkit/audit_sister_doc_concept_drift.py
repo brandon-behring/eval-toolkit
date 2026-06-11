@@ -180,9 +180,23 @@ def validate_sister_doc_concept_drift(
     ImportError
         If ``embedder=None`` and ``sentence_transformers`` is not
         installed. Install via ``pip install eval-toolkit[embeddings]``.
+    FileNotFoundError
+        If any path in ``files`` does not exist. ``files`` is an
+        explicit caller-supplied list, not a glob result, so a missing
+        entry is a caller bug. Other ``OSError``\\ s and non-UTF-8
+        files are warn-and-skipped (see Notes).
 
     Notes
     -----
+    File-read policy (family-wide, #99): both regex validators and this
+    one propagate ``FileNotFoundError`` (an explicit ``files`` list
+    means a missing file is caller misconfiguration).
+    ``audit_value_bindings`` additionally RAISES ``ValueError`` on a
+    non-UTF-8 file (a binding audit must not silently drop a surface);
+    this validator warn-and-skips non-UTF-8 / unreadable files instead
+    — the embedding scan tolerates partial input, and a loud
+    ``UserWarning`` keeps the skip visible.
+
     Clustering: single-linkage agglomerative on cosine similarity. Two
     occurrences land in the same cluster iff their similarity is
     ``>= similarity_threshold``. Transitive: ``a~b`` and ``b~c`` →
@@ -221,6 +235,13 @@ def validate_sister_doc_concept_drift(
     for path in files_resolved:
         try:
             file_texts[path] = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            # `files` is an explicit caller-supplied list (this validator
+            # does no glob discovery): a missing file is caller
+            # misconfiguration, not skippable noise. Propagate (STYLE §1
+            # never fail silently; matches audit_value_bindings, which
+            # also lets FileNotFoundError escape its read).
+            raise
         except (OSError, UnicodeDecodeError) as exc:
             # UnicodeDecodeError is a ValueError, not an OSError — without it a
             # single non-UTF-8 byte would crash the whole scan. Skip unreadable

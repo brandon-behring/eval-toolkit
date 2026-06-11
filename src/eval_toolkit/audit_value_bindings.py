@@ -350,6 +350,10 @@ def validate_reader_value_bindings(
     TypeError
         If a ``bindings`` key is not a recognized shape (2-tuple,
         3-tuple, or :class:`BindingKey`).
+    FileNotFoundError
+        If any path in ``files`` does not exist (propagates from the
+        underlying read; ``files`` is an explicit list, not a glob
+        result).
 
     Examples
     --------

@@ -354,3 +354,16 @@ def test_non_utf8_file_skipped_with_warning(tmp_path: Path) -> None:
     # bad.md dropped → only one T1 occurrence → no drift cluster, still consistent.
     assert report.drift_clusters == ()
     assert "T1" in report.consistent_tokens
+
+
+@pytest.mark.unit
+def test_missing_file_raises_file_not_found(tmp_path: Path) -> None:
+    """A nonexistent path in `files` raises — explicit list, not glob discovery (#99 V10)."""
+    good = _write(tmp_path, "good.md", "T1 is full GPU re-eval.")
+    embedder = _keyword_embedder({"GPU": GPU_VEC})
+    with pytest.raises(FileNotFoundError):
+        validate_sister_doc_concept_drift(
+            files=[good, tmp_path / "missing.md"],
+            concept_tokens=["T1"],
+            embedder=embedder,
+        )
