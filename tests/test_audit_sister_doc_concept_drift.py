@@ -367,3 +367,18 @@ def test_missing_file_raises_file_not_found(tmp_path: Path) -> None:
             concept_tokens=["T1"],
             embedder=embedder,
         )
+
+
+@pytest.mark.unit
+def test_dataclasses_define_slots() -> None:
+    """STYLE §5: family dataclasses are slotted — no per-instance __dict__ (#99 V9)."""
+    from eval_toolkit.audit_sister_doc_concept_drift import (
+        DriftCluster,
+        SisterDocDriftReport,
+        _SentenceSpan,
+    )
+
+    for cls in (DriftCluster, SisterDocDriftReport, _SentenceSpan):
+        assert "__slots__" in cls.__dict__
+    r = SisterDocDriftReport(drift_clusters=(), consistent_tokens=(), coverage=0.0)
+    assert not hasattr(r, "__dict__")

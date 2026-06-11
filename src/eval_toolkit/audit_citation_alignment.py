@@ -104,7 +104,7 @@ class ADRSubject:
     categories: frozenset[str] | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CitationMisalignment:
     """A "per ADR-NNN" citation whose category doesn't match the cited ADR's subject.
 

@@ -645,3 +645,12 @@ def test_symmetric_none_skip_narrative_vs_all() -> None:
     flagged = validate_citations(**common, scope="all")
     assert len(flagged) == 1
     assert flagged[0].adr_actual_category is None
+
+
+@pytest.mark.unit
+def test_dataclasses_define_slots() -> None:
+    """STYLE §5: family dataclasses are slotted — no per-instance __dict__ (#99 V9)."""
+    for cls in (ADRSubject, CitationMisalignment):
+        assert "__slots__" in cls.__dict__
+    s = ADRSubject(adr_id="029", title="t", slug="s", category=None)
+    assert not hasattr(s, "__dict__")

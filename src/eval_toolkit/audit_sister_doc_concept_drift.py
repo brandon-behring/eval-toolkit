@@ -79,7 +79,7 @@ DEFAULT_CONTEXT_WINDOW_SENTENCES: int = 1
 _SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\d`])")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class DriftCluster:
     """A concept token whose occurrences split into >1 semantic cluster.
 
@@ -103,7 +103,7 @@ class DriftCluster:
     divergence_score: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SisterDocDriftReport:
     """Result of :func:`validate_sister_doc_concept_drift`.
 
@@ -331,7 +331,7 @@ def _collect_occurrences(
     return occurrences
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class _SentenceSpan:
     text: str
     line: int  # 1-indexed line of the sentence's start

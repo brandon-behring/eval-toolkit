@@ -86,7 +86,7 @@ DEFAULT_TOLERANCE: float = 1e-4
 # they are imported at the top of this module.
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BindingKey:
     """Canonical identity for a `(detector, metric, slice)` measurement.
 
@@ -125,7 +125,7 @@ class BindingKey:
     slice: str = "any"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Match:
     """A reader-prose (detector, metric, value) triple that matches the canonical binding.
 
@@ -151,7 +151,7 @@ class Match:
     value: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Violation:
     """A reader-prose (detector, metric, value) triple where the value disagrees with the canonical binding.
 
@@ -184,7 +184,7 @@ class Violation:
     surrounding_text: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ValueBindingsReport:
     """Result of :func:`validate_reader_value_bindings`.
 

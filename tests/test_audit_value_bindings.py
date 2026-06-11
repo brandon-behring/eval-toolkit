@@ -1284,3 +1284,12 @@ def test_invalid_scope_raises_value_error() -> None:
         validate_reader_value_bindings(
             files=[], bindings={}, scope="narratives"  # type: ignore[arg-type]
         )
+
+
+@pytest.mark.unit
+def test_dataclasses_define_slots() -> None:
+    """STYLE §5: family dataclasses are slotted — no per-instance __dict__ (#99 V9)."""
+    for cls in (BindingKey, Match, Violation, ValueBindingsReport):
+        assert "__slots__" in cls.__dict__
+    m = Match(file=Path("x"), line=1, detector="d", metric="me", value=0.5)
+    assert not hasattr(m, "__dict__")
