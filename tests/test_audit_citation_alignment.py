@@ -440,8 +440,10 @@ def test_combined_consumer_residuals_resolve_narrative() -> None:
     flagged_ids = {m.cited_adr_id for m in r_nar}
     # Only the LEGITIMATE last-line citation is flagged. (Note: the
     # "via ADR-029" in the multi-ADR sentence is in alpha-mode, so it's
-    # accepted because test_markers is in the matched set.)
-    assert flagged_ids <= {"029"}
+    # accepted because test_markers is in the matched set.) Strict
+    # equality (#99 V8): `<=` was vacuously satisfiable by the empty
+    # set, so a recall regression could not fail this test.
+    assert flagged_ids == {"029"}
 
 
 def test_citation_misalignment_is_frozen_dataclass() -> None:
@@ -670,3 +672,38 @@ def test_positional_helpers_shared_from_narrative() -> None:
 
     assert _aca_ls is _avb_ls is _narr._line_starts
     assert _avb_ptl is _narr._position_to_line
+
+
+@pytest.mark.unit
+def test_pattern_beta_bracketed_citation_excluded_under_narrative() -> None:
+    """Layer 2: citations inside [...] are excluded under scope='narrative' (#99 V7)."""
+    text = "Reproducibility tier locked [per ADR-029] at Phase 0.\n"
+    common = {
+        "markdown_text": text,
+        "markdown_path": Path("test.md"),
+        "adr_subjects": SEED_ADR_SUBJECTS,
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+    }
+    assert len(validate_citations(**common, scope="all")) == 1  # legacy: bracket not excluded
+    assert validate_citations(**common, scope="narrative") == []
+
+
+@pytest.mark.unit
+def test_pattern_beta_fenced_code_citation_excluded_under_narrative() -> None:
+    """Layer 2: citations inside ``` fenced blocks are excluded under scope='narrative' (#99 V7)."""
+    text = (
+        "```\n"
+        "Two-tier reproduction via ADR-029\n"
+        "```\n"
+        "Reproducibility tier locked via ADR-029.\n"
+    )
+    common = {
+        "markdown_text": text,
+        "markdown_path": Path("test.md"),
+        "adr_subjects": SEED_ADR_SUBJECTS,
+        "category_keywords": SEED_CATEGORY_KEYWORDS,
+    }
+    assert len(validate_citations(**common, scope="all")) == 2  # fence not excluded under legacy
+    r_nar = validate_citations(**common, scope="narrative")
+    assert len(r_nar) == 1
+    assert r_nar[0].line == 4
