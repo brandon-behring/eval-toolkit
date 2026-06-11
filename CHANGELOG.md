@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation / Process ([#101](https://github.com/brandon-behring/eval-toolkit/issues/101))
+
+- **CHANGELOG v1.5.0 erratum appended** (history not rewritten): the #85 loader
+  parameters were a Tier-1 positional-compat break per ADR 0003, mislabeled
+  "Tier-2 ADDITIVE" at release.
+- **Release-prep tier check**: `make release-prep` and the RELEASING.md TL;DR
+  checklist now carry a step 2b — classify the snapshot diff against ADR 0003
+  tiers and label the CHANGELOG entry to match.
+
 ### Build / Infra ([#102](https://github.com/brandon-behring/eval-toolkit/issues/102))
 
 - **Per-module coverage floors now run in CI** (ubuntu reference platform):
@@ -272,6 +281,13 @@ Locked convention: always pass `encoding="utf-8"` on text-file IO.
 ## [1.5.0] — 2026-05-29 — Tier-2 `eda` layer (#83) + schema-aware `HFDatasetsLoader` (#85)
 
 Tier-2 / `loaders` ADDITIVE per [ADR 0003](docs/source/adr/0003-stability-contract-and-gate3-methodology.md) — backward-compatible.
+
+> **Erratum (2026-06-11, [#101](https://github.com/brandon-behring/eval-toolkit/issues/101)):**
+> the #85 loader parameters were inserted mid-signature *before* `name` on a
+> non-`kw_only` frozen dataclass, changing the meaning of positional argument 7 —
+> Tier-1 per ADR 0003, not "Tier-2 ADDITIVE" as labeled above. It should have
+> been a major. Policy since codified: the v1.9.0 ADR 0003 amendment admits only
+> *strictly-appended trailing* optional parameters to the minor path.
 
 - **`eda` Job-1 integrity gate (#83):** `audit_dataset` / `DataAudit` / `SplitSummary` + the
   `class_balance` / `no_cross_split_leakage` / `context_window_fit` gates + the §B2 obfuscation

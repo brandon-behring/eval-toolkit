@@ -136,6 +136,8 @@ release-prep:
 	@echo "[release-prep] DONE. Next steps:"
 	@echo "  1. Edit CHANGELOG.md: convert [Unreleased] header to '## [$(VERSION)] — $$(date +%Y-%m-%d) — <theme>'"
 	@echo "  2. Review diff: git diff src/eval_toolkit/_version.py tests/golden/public_api/snapshot.json CHANGELOG.md"
+	@echo "  2b. Classify the snapshot diff against ADR 0003 tiers (Tier-1/2/3) and label"
+	@echo "      the CHANGELOG entry to match — see the v1.5.0 erratum (#101)."
 	@echo "  3. Commit:      git add src/eval_toolkit/_version.py tests/golden/public_api/snapshot.json CHANGELOG.md"
 	@echo "                  git commit -m 'chore(release): v$(VERSION) — <theme>'"
 	@echo "  4. Push:        git push origin main"
