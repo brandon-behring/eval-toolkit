@@ -187,7 +187,9 @@ def set_plot_style() -> None:
 
     Idempotent. Call once per notebook or script before any plotting code.
     """
-    plt.rcParams.update(PLOT_STYLE)
+    # matplotlib 3.11 types RcParams.update with Literal rc-key names;
+    # PLOT_STYLE is a plain str-keyed dict, so cast at the stub boundary.
+    plt.rcParams.update(cast("Any", PLOT_STYLE))
 
 
 _DEFAULT_PERMITTED_SUFFIXES: frozenset[str] = frozenset({".png", ".pdf", ".svg"})

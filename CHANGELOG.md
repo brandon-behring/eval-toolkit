@@ -34,6 +34,12 @@ hard rename under the documented one-time-exception path (see
   `n_resamples` raises `ValueError`** instead of silently skipping the
   bootstrap and returning `ci_low=None` (pre-merge review finding;
   consistent with the neighboring `n_permutations < 1` guard).
+- **matplotlib 3.11 compatibility**: `set_plot_style` now casts
+  `PLOT_STYLE` at the typed-stub boundary — matplotlib 3.11.0 types
+  `RcParams.update` with Literal rc-key names, which rejected the plain
+  `str`-keyed dict under mypy strict (CI resolves matplotlib freshly
+  and broke on the 3.11.0 release; runtime behavior unchanged,
+  verified on 3.11.0).
 
 ### Documentation
 
