@@ -143,7 +143,14 @@ def test_paired_mde_decreases_with_n(seed: int) -> None:
 
 @pytest.mark.property
 @given(
-    y=_balanced_binary_array(60),
+    # min_per_class=15: with the default 5, P(single-class resample)
+    # ≈ (55/60)^60 ≈ 0.5% and for some 5-positive arrangements the
+    # library's own >5%-degenerate guard legitimately fires at
+    # n_resamples=50 (Hypothesis found one 2026-06-12). That guard is
+    # documented behavior tested elsewhere; the property here is
+    # metric-agnosticism, so exclude the degenerate-guard region
+    # (15 per class → P(single-class resample) ≈ e^-15, negligible).
+    y=_balanced_binary_array(60, min_per_class=15),
     s=_score_array(60),
 )
 @settings(deadline=None, max_examples=10, suppress_health_check=[HealthCheck.filter_too_much])
