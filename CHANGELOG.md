@@ -28,12 +28,24 @@ hard rename under the documented one-time-exception path (see
   seed differ from v1.11.0 values. Per-seed determinism is preserved —
   the same seed always gives the same result within a release.
 
+### Fixed
+
+- **`proxy_a_distance` / `maximum_mean_discrepancy`: negative
+  `n_resamples` raises `ValueError`** instead of silently skipping the
+  bootstrap and returning `ci_low=None` (pre-merge review finding;
+  consistent with the neighboring `n_permutations < 1` guard).
+
 ### Documentation
 
 - **`docs/source/DEPRECATION.md` reframed post-1.0**: the stale pre-1.0
   SemVer section now states the ADR 0003 tier contract (Tier-1 MAJOR /
   Tier-2 MINOR-with-policy / Tier-3 PATCH); the 2-minor warning window and
   exception criteria are unchanged.
+- **ADR 0003 Tier-2 amendment (2026-06-12)**: non-additive Tier-2 changes
+  (parameter renames; eventual removals) may ship in a SemVer-MINOR only
+  through the DEPRECATION.md process — the 2-minor warning window or the
+  documented one-time-exception criteria; symbols stay importable through
+  v1.x. First use: the eda renames in this release.
 
 ## [1.11.0] — 2026-06-11 — audit-validator family hardening R16: multi-category subjects + window centering (#99)
 

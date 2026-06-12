@@ -42,9 +42,11 @@ documented in `docs/api/`), we commit to:
 2. **Maintain in versions N+1, N+2, …**: the symbol continues to
    work, continues to warn.
 3. **Remove in version M** where `M >= N + 2 minor versions`.
-   Removal in a MINOR bump is appropriate for Tier-2/Tier-3 surfaces
-   per the tier contract; Tier-1 removals additionally wait for the
-   next MAJOR.
+   For Tier-2/Tier-3 surfaces, the completed warning window is what
+   licenses removal in a MINOR bump (ADR 0003's Tier-2 contract is
+   additive-only by default; its 2026-06-12 amendment routes
+   non-additive changes through this document's process). Tier-1
+   removals additionally wait for the next MAJOR.
 
 Concrete example: a function deprecated in `0.29.0` with
 `deadline="0.31.0"` works (with warnings) in `0.29.x`, `0.30.x`,
@@ -146,9 +148,10 @@ indefinitely so that downstream `pip` pins do not break.
 
 ## One-time exceptions to the 2-minor-version warning policy
 
-The 2-minor-version warning is a **policy**, not a hard SemVer rule (the
-tier contract allows Tier-2 changes in minor bumps; the policy is what we
-*commit to above* that floor). Rarely, an exception is justified when the cost of
+The 2-minor-version warning is a **policy**, not a hard SemVer rule
+(ADR 0003's Tier-2 contract is additive-only by default; its 2026-06-12
+amendment routes non-additive Tier-2 changes through this document —
+normally the warning window above). Rarely, an exception is justified when the cost of
 the warning window exceeds its benefit — known consumer set is small + the
 deprecation alias would carry forever-debt + every known consumer can be
 notified directly via cross-repo issue.

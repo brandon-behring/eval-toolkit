@@ -357,12 +357,30 @@ def test_rng_accepts_generator(separated: tuple[np.ndarray, np.ndarray]) -> None
 
 
 @pytest.mark.unit
-def test_rng_int_seed_is_deterministic(separated: tuple[np.ndarray, np.ndarray]) -> None:
-    """Same int seed → identical results (per-seed determinism survives the rename)."""
-    a, b = separated
+def test_rng_int_seed_is_deterministic(same_dist: tuple[np.ndarray, np.ndarray]) -> None:
+    """Same int seed → identical results; a different seed must change them.
+
+    Runs on ``same_dist``: on ``separated`` data PAD saturates at 2.0 and the
+    MMD permutation count saturates at 0, so the equality asserts would pass
+    even with seeding fully broken (vacuous). The cross-seed inequality pins
+    that the results are actually rng-sensitive here.
+    """
+    a, b = same_dist
     r1 = proxy_a_distance(a, b, n_folds=4, n_resamples=10, rng=7)
     r2 = proxy_a_distance(a, b, n_folds=4, n_resamples=10, rng=7)
     assert r1 == r2
+    assert proxy_a_distance(a, b, n_folds=4, n_resamples=10, rng=8) != r1
     m1 = maximum_mean_discrepancy(a, b, n_permutations=50, rng=7)
     m2 = maximum_mean_discrepancy(a, b, n_permutations=50, rng=7)
     assert m1 == m2
+    assert maximum_mean_discrepancy(a, b, n_permutations=50, rng=8) != m1
+
+
+@pytest.mark.unit
+def test_negative_n_resamples_raises(same_dist: tuple[np.ndarray, np.ndarray]) -> None:
+    """A negative n_resamples raises instead of silently skipping the bootstrap."""
+    a, b = same_dist
+    with pytest.raises(ValueError, match="n_resamples must be >= 0"):
+        proxy_a_distance(a, b, n_folds=4, n_resamples=-3)
+    with pytest.raises(ValueError, match="n_resamples must be >= 0"):
+        maximum_mean_discrepancy(a, b, n_permutations=5, n_resamples=-3)

@@ -363,8 +363,8 @@ def proxy_a_distance(
     Raises
     ------
     ValueError
-        On invalid feature matrices, or if fewer than 2 folds are possible
-        (each corpus needs >= 2 rows).
+        On invalid feature matrices, ``n_resamples < 0``, or if fewer
+        than 2 folds are possible (each corpus needs >= 2 rows).
 
     Examples
     --------
@@ -381,6 +381,8 @@ def proxy_a_distance(
     True
     """
     n_a, n_b = _validate_pair(x_a, x_b)
+    if n_resamples < 0:
+        raise ValueError(f"n_resamples must be >= 0, got {n_resamples}")
     folds = min(n_folds, n_a, n_b)
     if folds < 2:
         raise ValueError(
@@ -494,10 +496,10 @@ def maximum_mean_discrepancy(
     Raises
     ------
     ValueError
-        On invalid feature matrices, ``n_permutations < 1``, fewer than 2 rows in
-        either corpus, or a degenerate (σ = 0) or non-finite bandwidth (an ``inf``
-        bandwidth would yield γ = 0, an all-ones Gram matrix, MMD² = 0 and
-        ``p_value = 1.0`` — silently reading "no shift").
+        On invalid feature matrices, ``n_permutations < 1``, ``n_resamples < 0``,
+        fewer than 2 rows in either corpus, or a degenerate (σ = 0) or non-finite
+        bandwidth (an ``inf`` bandwidth would yield γ = 0, an all-ones Gram
+        matrix, MMD² = 0 and ``p_value = 1.0`` — silently reading "no shift").
 
     Examples
     --------
@@ -515,6 +517,8 @@ def maximum_mean_discrepancy(
     n_a, n_b = _validate_pair(x_a, x_b)
     if n_permutations < 1:
         raise ValueError(f"n_permutations must be >= 1, got {n_permutations}")
+    if n_resamples < 0:
+        raise ValueError(f"n_resamples must be >= 0, got {n_resamples}")
     if n_a < 2 or n_b < 2:
         raise ValueError(f"each corpus needs >= 2 rows for unbiased MMD, got {n_a}, {n_b}")
 
@@ -638,9 +642,10 @@ def distribution_shift(
         ``(n, d)`` feature matrices, same ``d``.
     pad_c, pad_folds, bandwidth, n_permutations, knn_k, n_resamples, rng
         Forwarded to :func:`proxy_a_distance`, :func:`maximum_mean_discrepancy`,
-        and :func:`knn_purity` (``rng`` per SPEC 7: an int seed gives each
-        sub-measure its own deterministic stream; a shared ``Generator`` is
-        consumed sequentially).
+        and :func:`knn_purity` (``rng`` per SPEC 7: an int seed re-seeds each
+        sub-measure from the *same* origin — the streams are identical, not
+        independent; pass a shared ``Generator`` for sequential consumption
+        or ``None`` for independent entropy).
 
     Returns
     -------
