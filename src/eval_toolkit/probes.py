@@ -257,9 +257,9 @@ class ActivationDeltaProbe:
     def _get_extractor(self) -> ActivationExtractor:
         """Lazy-build the extractor on first use."""
         if self.extractor is None:
-            object.__setattr__(self, "extractor", self._build_default_extractor())
-        # `extractor` is non-None after the assignment above.
-        assert self.extractor is not None
+            built = self._build_default_extractor()
+            object.__setattr__(self, "extractor", built)
+            return built
         return self.extractor
 
     def _extract_with_cache(self, texts: Sequence[str]) -> np.ndarray:
@@ -301,11 +301,10 @@ class ActivationDeltaProbe:
 
     def _compute_deltas(self, texts: Sequence[str]) -> np.ndarray:
         """Return ``(n, hidden)`` matrix of activation deltas vs the cached baseline."""
-        if self._baseline_cache is None:
+        baseline = self._baseline_cache
+        if baseline is None:
             baseline = self._extract_with_cache([self.clean_baseline_text])[0]
             object.__setattr__(self, "_baseline_cache", baseline)
-        baseline = self._baseline_cache
-        assert baseline is not None
         activations = self._extract_with_cache(list(texts))
         deltas: np.ndarray = activations - baseline[None, :]
         return deltas

@@ -347,17 +347,17 @@ def validate_source_roles(
     for idx, record in enumerate(source_roles):
         row = _source_role_to_dict(record)
         prefix = f"source_roles[{idx}]"
-        source = row.get("source")
-        role = row.get("role")
-        source_ok = isinstance(source, str) and source.strip()
-        role_ok = isinstance(role, str) and role.strip()
-        if not source_ok:
+        raw_source = row.get("source")
+        raw_role = row.get("role")
+        # None-on-invalid narrows the type for the pair build below without
+        # assert (STYLE §6 — asserts are stripped under python -O).
+        source = raw_source if isinstance(raw_source, str) and raw_source.strip() else None
+        role = raw_role if isinstance(raw_role, str) and raw_role.strip() else None
+        if source is None:
             errors.append(f"{prefix}: source must be a non-empty string")
-        if not role_ok:
+        if role is None:
             errors.append(f"{prefix}: role must be a non-empty string")
-        if source_ok and role_ok:
-            assert isinstance(source, str)
-            assert isinstance(role, str)
+        if source is not None and role is not None:
             pair = (source, role)
             if pair in seen_pairs:
                 errors.append(f"{prefix}: duplicate (source, role) pair " f"({source!r}, {role!r})")
