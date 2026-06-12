@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed ([#103](https://github.com/brandon-behring/eval-toolkit/issues/103))
+
+- **Warning channel: `logger.warning` → `warnings.warn`** at the 5
+  library sites where WARNING-level logging hid user-actionable events
+  behind the NullHandler (STYLE §11). Environmental degradations the
+  library auto-recovers from are `RuntimeWarning` (HF Croissant fetch
+  failed, tree-API sha256 unavailable, cached OOD slice sha mismatch);
+  caller-correctable inputs are `UserWarning` (`n_jobs` capped to
+  `os.cpu_count()`, ambiguous slice-scoped binding in
+  `validate_reader_value_bindings`). Consumers running `-W error` or
+  capturing via `caplog` will observe the channel change.
+
+### Fixed ([#103](https://github.com/brandon-behring/eval-toolkit/issues/103))
+
+- **The 9 remaining `assert` statements in `src/` removed** (STYLE §6 —
+  stripped under `python -O`): `stacking.py` ×5 (one
+  `_require_model()` helper now carries the documented ValueError),
+  `probes.py` ×2 and `manifest.py` ×2 (narrowed locals). Identical
+  error behavior under normal interpretation; under `-O` the guards
+  now still fire. ruff rule **S101** locks the class out of `src/` +
+  `scripts/` permanently (tests exempt).
+- **3 undocumented raises** surfaced by the now-recursive
+  `audit_raises_sections` script: `sweep` RuntimeError,
+  `metrics_at_threshold` ValueError, `PurgedKFoldSplitter.iter_folds`
+  ValueError — Raises sections added.
+
+### Documentation ([#100](https://github.com/brandon-behring/eval-toolkit/issues/100), [#103](https://github.com/brandon-behring/eval-toolkit/issues/103))
+
+- **Parameters/Returns completions**: both `read_predictions` methods,
+  `load_prediction_arrays`, `paired_diff_from_prediction_refs`,
+  `bootstrap_metric_from_predictions` (was a one-liner),
+  `fit_operating_points`, `apply_operating_points`; `paired_mde` gains
+  the compact `n_resamples, rng` sibling line + a `metric` description;
+  `correct_p_values` Notes/Raises order matches the §12 template;
+  `Scorecard.to_pandas` documents its ImportError in a structured
+  Raises section.
+- **75-col prose re-wraps**: `cluster_bootstrap_ci` +
+  `stratified_cluster_bootstrap_ci` full docstrings,
+  `eda/data_audit.py` + `eda/obfuscation.py`; 4 snapshot-pinned summary
+  lines shortened (`cluster_bootstrap_ci`,
+  `stratified_cluster_bootstrap_ci`, `Match`, `Violation`) with the
+  same-commit snapshot regen (Tier-3).
+- **ADR 0004 "Known deviations" note**: `cluster_bootstrap_ci(statistic=)`
+  recorded as the one remaining §D4 vocabulary deviation, Tier-1-frozen,
+  queued for v2.0 in the breaking-changes queue (#116).
+
+### Internal ([#100](https://github.com/brandon-behring/eval-toolkit/issues/100))
+
+- `scripts/audit_raises_sections.py` now recurses into subpackages
+  (`glob` → `rglob` — the `eda/` tree was invisible) and runs as part
+  of `make lint` (previously wired into no gate).
+
 ### Changed — BREAKING for `eval_toolkit.eda` (Tier-2 one-time exception, [#100](https://github.com/brandon-behring/eval-toolkit/issues/100))
 
 SPEC-7 canonical-vocabulary renames across the eda subpackage, shipped as a

@@ -171,7 +171,7 @@ target-version = "py313"
 # behavior changes. Locks the Windows-cp1252 mojibake class out permanently.
 preview = true
 explicit-preview-rules = true
-select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "C4", "PLW1514"]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "C4", "PLW1514", "S101"]
 ignore = [
     "E501",   # line length handled by black
     "N803",   # function arg lowercase — math kernels use π, T, etc. per Decision 14
@@ -179,7 +179,9 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["ARG001", "ARG002"]
+# S101: pytest's assert-based idiom is the point of tests; the §6 assert
+# ban (stripped under python -O) applies to src/ + scripts/ only (#103).
+"tests/**/*.py" = ["ARG001", "ARG002", "S101"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["eval_toolkit"]

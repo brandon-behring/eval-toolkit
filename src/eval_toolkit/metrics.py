@@ -465,6 +465,14 @@ def metrics_at_threshold(
         ``fpr`` (false-positive rate), ``fnr`` (false-negative rate),
         ``tn``, ``fp``, ``fn``, ``tp``.
 
+    Raises
+    ------
+    ValueError
+        If inputs fail shape/label validation, or if ``threshold`` is
+        non-scalar or non-finite (a NaN threshold would silently
+        produce all-zero predictions; ±inf silently degenerates to
+        all-zero / all-one).
+
     Examples
     --------
     >>> import numpy as np

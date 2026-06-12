@@ -783,6 +783,8 @@ class PurgedKFoldSplitter:
         ------
         KeyError
             If ``self.time_col`` is set but not present in ``slice_.df``.
+        ValueError
+            If ``n_splits`` is not smaller than the slice's row count.
         """
         if self.time_col is not None:
             if self.time_col not in slice_.df.columns:

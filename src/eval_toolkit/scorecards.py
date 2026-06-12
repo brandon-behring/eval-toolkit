@@ -259,8 +259,12 @@ class Scorecard(Mapping[str, MetricResult]):
     def to_pandas(self) -> Any:
         """One-row DataFrame with metric names as the (multi)column index.
 
-        Lazy pandas import — only available if pandas is installed. Raises
-        ``ImportError`` with an install hint when pandas is missing.
+        Lazy pandas import — only available if pandas is installed.
+
+        Returns
+        -------
+        pandas.DataFrame
+            1 row (one slice); 2-level column index as described below.
 
         The DataFrame has 1 row (one slice) and a 2-level column index:
         outer = metric name, inner = field name in ``{"value", "status",
@@ -275,9 +279,15 @@ class Scorecard(Mapping[str, MetricResult]):
         :meth:`BootstrapCI.to_dict` — trace provenance no longer drops in
         the DataFrame view.
 
+        Raises
+        ------
+        ImportError
+            If pandas is not installed; the message carries the
+            ``pip install eval-toolkit[dataframe]`` hint.
+
         Notes
         -----
-        **Dtype coercion: ``n_resamples`` is ``float64``, not ``Int64``.**
+        **Dtype coercion:** ``n_resamples`` is ``float64``, not ``Int64``.
         ``BootstrapCI.n_resamples`` is an ``int`` at the Python level, but
         pandas treats a mixed ``int`` + ``NaN`` column as ``float64`` —
         any row with ``status != "ok"`` or ``bootstrap=False`` carries

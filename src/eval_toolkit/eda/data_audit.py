@@ -1,11 +1,12 @@
 """Job-1 dataset integrity gate: thin per-split profiling + composable gates.
 
-This module is the **integrity gate** layer of an EDA-first research program.
-It answers a narrow question before any modelling: *is this dataset's split
-structure sound enough to trust downstream metrics?* It computes per-split
-shape (row counts, class balance, text-length quantiles) and runs the reused
-:mod:`eval_toolkit.leakage` dedup / cross-split checks, then folds the results
-into machine-readable :class:`~eval_toolkit.claims.GateResult` gates.
+This module is the **integrity gate** layer of an EDA-first research
+program. It answers a narrow question before any modelling: *is this
+dataset's split structure sound enough to trust downstream metrics?* It
+computes per-split shape (row counts, class balance, text-length quantiles)
+and runs the reused :mod:`eval_toolkit.leakage` dedup / cross-split checks,
+then folds the results into machine-readable
+:class:`~eval_toolkit.claims.GateResult` gates.
 
 Scope is deliberately thin and torch-free. There are **no embeddings, no
 semantic similarity, no contamination scoring, and no UMAP** here — those
@@ -13,8 +14,8 @@ distribution-shift concerns are deferred to a later ``distribution_shift``
 module. The near-duplicate / cross-split checks default to the lexical,
 torch-free :class:`~eval_toolkit.text_dedup.TfidfCosineStrategy`.
 
-Public access is ``eval_toolkit.eda.*`` (Tier-2 per ADR 0003): this layer is
-intentionally evolvable and is **not** part of the v2.0-frozen top-level
+Public access is ``eval_toolkit.eda.*`` (Tier-2 per ADR 0003): this layer
+is intentionally evolvable and is **not** part of the v2.0-frozen top-level
 surface.
 
 Reused v1.4.0 primitives
@@ -135,8 +136,8 @@ def class_balance(slice_: EvalSlice) -> dict[str, object]:
     dict
         Keys: ``n_rows``, ``n_positive``, ``n_negative``, ``pos_pct``
         (positive fraction in ``[0, 1]``, ``0.0`` for an empty slice),
-        ``neg_pos_ratio`` (negatives / positives; ``None`` when there are no
-        positives), and ``is_single_class`` (only one observed label).
+        ``neg_pos_ratio`` (negatives / positives; ``None`` when there are
+        no positives), and ``is_single_class`` (only one observed label).
 
     Examples
     --------
@@ -198,11 +199,11 @@ def length_quantiles(
 ) -> dict[str, dict[str, float | int | None]]:
     """Compute char / word (and optionally token) length quantiles.
 
-    Character and word length quantiles (p50 / p95 / max) are always computed.
-    Token-length quantiles are computed **only** when a ``tokenizer`` callable
-    is supplied — this module never imports ``transformers`` (mirrors the
-    caller-supplied-tokenizer contract of
-    :class:`eval_toolkit.leakage.TokenizationLeakageCheck`).
+    Character and word length quantiles (p50 / p95 / max) are always
+    computed. Token-length quantiles are computed **only** when a
+    ``tokenizer`` callable is supplied — this module never imports
+    ``transformers`` (mirrors the caller-supplied-tokenizer contract of
+    :class:`eval_toolkit.leakage.TokenizationLeakageCheck` ).
 
     Parameters
     ----------
@@ -400,9 +401,9 @@ def summarize_split(
 class DataAudit:
     """Aggregate Job-1 integrity-gate report for a dataset.
 
-    Bundles per-split summaries, the reused dedup / leakage report(s), and the
-    integrity gates (as :class:`~eval_toolkit.claims.GateResult`) into a single
-    auditable, JSON-serializable artifact.
+    Bundles per-split summaries, the reused dedup / leakage report(s), and
+    the integrity gates (as :class:`~eval_toolkit.claims.GateResult` ) into
+    a single auditable, JSON-serializable artifact.
 
     Parameters
     ----------
@@ -460,8 +461,8 @@ class DataAudit:
     def write(self, path: Path | str) -> Path:
         """Write the audit to ``path`` as strict RFC 8259 JSON.
 
-        Delegates to :func:`eval_toolkit.artifacts.write_json_strict`, which
-        sanitizes any non-finite floats before serialization.
+        Delegates to :func:`eval_toolkit.artifacts.write_json_strict` ,
+        which sanitizes any non-finite floats before serialization.
 
         Parameters
         ----------
@@ -479,8 +480,8 @@ class DataAudit:
 def _utc_now_iso8601() -> str:
     """Return current UTC time as ``YYYY-MM-DDTHH:MM:SSZ`` (1-second resolution).
 
-    Mirrors :func:`eval_toolkit.manifest._utc_now_iso8601` for cross-artifact
-    timestamp consistency.
+    Mirrors :func:`eval_toolkit.manifest._utc_now_iso8601` for
+    cross-artifact timestamp consistency.
     """
     return _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -504,9 +505,9 @@ def _class_balance_gate(
 ) -> GateResult:
     """Error gate: every non-single-class split's neg:pos ratio is in range.
 
-    Single-class splits cannot satisfy a balance bound (ratio is undefined or
-    infinite); they fail this gate with an explicit reason so the degeneracy
-    is surfaced rather than silently ignored.
+    Single-class splits cannot satisfy a balance bound (ratio is undefined
+    or infinite); they fail this gate with an explicit reason so the
+    degeneracy is surfaced rather than silently ignored.
     """
     offenders: dict[str, object] = {}
     for name, summary in summaries.items():
@@ -591,7 +592,8 @@ def _context_window_gate(
     """Error gate: every split keeps ``pct_over_context_window`` below threshold.
 
     Only meaningful when token lengths were computed (tokenizer +
-    context_window supplied); callers gate on its presence before adding it.
+    context_window supplied); callers gate on its presence before adding
+    it.
     """
     offenders: dict[str, float] = {}
     for name, summary in summaries.items():
@@ -633,11 +635,11 @@ def audit_dataset(
 ) -> DataAudit:
     """Run the Job-1 dataset integrity gate.
 
-    Thin orchestrator: loads splits via ``loader.load_splits()``, computes a
-    :class:`SplitSummary` per split, runs the reused dedup / leakage checks
-    (torch-free TF-IDF backend), evaluates integrity gates, and returns a
-    :class:`DataAudit`. Pure except for the gate work; performs no IO (call
-    :meth:`DataAudit.write` to persist).
+    Thin orchestrator: loads splits via ``loader.load_splits()``, computes
+    a :class:`SplitSummary` per split, runs the reused dedup / leakage
+    checks (torch-free TF-IDF backend), evaluates integrity gates, and
+    returns a :class:`DataAudit` . Pure except for the gate work; performs
+    no IO (call :meth:`DataAudit.write` to persist).
 
     Parameters
     ----------
@@ -649,20 +651,23 @@ def audit_dataset(
         never imports ``transformers``.
     context_window : int or None, optional
         Model context window in tokens. When supplied **with** a tokenizer,
-        enables ``pct_over_context_window`` + the ``context_window_fit`` gate.
+        enables ``pct_over_context_window`` + the ``context_window_fit``
+        gate.
     exact : bool, optional
-        Run :class:`~eval_toolkit.leakage.ExactDuplicateCheck` (within-split).
-        Default ``True``. Recorded as ``"warning"`` severity (informational —
-        does not gate ``gate_passed``).
+        Run :class:`~eval_toolkit.leakage.ExactDuplicateCheck`
+        (within-split). Default ``True``. Recorded as ``"warning"``
+        severity (informational — does not gate ``gate_passed``).
     near : bool, optional
-        Run :class:`~eval_toolkit.leakage.NearDuplicateCheck` (within-split,
-        TF-IDF). Default ``True``. ``"warning"`` severity (informational).
+        Run :class:`~eval_toolkit.leakage.NearDuplicateCheck`
+        (within-split, TF-IDF). Default ``True``. ``"warning"`` severity
+        (informational).
     near_threshold : float, optional
         Similarity threshold for the near-duplicate check. Default ``0.9``.
     cross_split : bool, optional
-        Run :class:`~eval_toolkit.leakage.CrossSplitLeakageCheck`. Default
-        ``True``. Requires a split named ``"train"``; otherwise skipped (the
-        ``no_cross_split_leakage`` gate then passes with a "skipped" note).
+        Run :class:`~eval_toolkit.leakage.CrossSplitLeakageCheck` . Default
+        ``True``. Requires a split named ``"train"``; otherwise skipped
+        (the ``no_cross_split_leakage`` gate then passes with a "skipped"
+        note).
     cross_split_threshold : float, optional
         Similarity threshold for cross-split leakage. Default ``0.9``.
     obfuscation : bool, optional
@@ -673,8 +678,8 @@ def audit_dataset(
         ``False`` to skip (e.g. on very large corpora where the single
         char-walk pass per detector is undesirable).
     min_neg_pos_ratio, max_neg_pos_ratio : float, optional
-        Inclusive bounds for the class-balance gate's neg:pos ratio. Defaults
-        ``0.1`` / ``10.0``.
+        Inclusive bounds for the class-balance gate's neg:pos ratio.
+        Defaults ``0.1`` / ``10.0``.
     pct_over_context_threshold : float, optional
         Ceiling for the fraction of rows over the context window. Default
         ``0.05``. Only used when a tokenizer + context window are supplied.
@@ -690,11 +695,11 @@ def audit_dataset(
 
     Notes
     -----
-    Only **error**-severity gates contribute to ``gate_passed``. The exact /
-    near within-split dedup checks are recorded at ``"warning"`` severity
-    because exact / lexical near-dupes are common in real corpora and rarely
-    invalidate a split *structure*; the genuinely dangerous signal —
-    train↔eval leakage — gates via ``no_cross_split_leakage``.
+    Only **error** -severity gates contribute to ``gate_passed``. The
+    exact / near within-split dedup checks are recorded at ``"warning"``
+    severity because exact / lexical near-dupes are common in real corpora
+    and rarely invalidate a split *structure*; the genuinely dangerous
+    signal — train↔eval leakage — gates via ``no_cross_split_leakage``.
     """
     splits = loader.load_splits()
     dataset_name = getattr(loader, "name", "") or ""

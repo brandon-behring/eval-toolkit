@@ -259,25 +259,19 @@ class LogisticStacker:
     @property
     def coef_(self) -> np.ndarray:
         """Fitted detector weights, shape ``(n_detectors,)``. Raises if unfit."""
-        self._assert_fitted()
-        assert self._model is not None  # narrowed by _assert_fitted; tell mypy
         # sklearn returns (1, n_features) for binary; flatten to (n_features,)
         # np.asarray() wraps sklearn's Any-typed attribute into a known ndarray.
-        return np.asarray(self._model.coef_).ravel()
+        return np.asarray(self._require_model().coef_).ravel()
 
     @property
     def classes_(self) -> np.ndarray:
         """Class labels, shape ``(2,)``. Raises if unfit."""
-        self._assert_fitted()
-        assert self._model is not None
-        return np.asarray(self._model.classes_)
+        return np.asarray(self._require_model().classes_)
 
     @property
     def intercept_(self) -> np.ndarray:
         """Fitted intercept, shape ``(1,)``. Raises if unfit."""
-        self._assert_fitted()
-        assert self._model is not None
-        return np.asarray(self._model.intercept_)
+        return np.asarray(self._require_model().intercept_)
 
     def fit(self, score_matrix: np.ndarray, y: np.ndarray) -> LogisticStacker:
         """Fit the stacker on a ``(n_samples, n_detectors)`` score matrix.
@@ -343,11 +337,10 @@ class LogisticStacker:
             If :meth:`fit` has not been called yet, or on shape / finiteness
             issues in ``score_matrix``.
         """
-        self._assert_fitted()
-        assert self._model is not None  # narrowed by _assert_fitted; tell mypy
+        model = self._require_model()
         sm = np.asarray(score_matrix, dtype=float)
         _validate_predict_inputs(sm, expected_n_features=self.coef_.shape[0])
-        return np.asarray(self._model.predict(sm))
+        return np.asarray(model.predict(sm))
 
     def predict_proba(self, score_matrix: np.ndarray) -> np.ndarray:
         """Return ``(n_samples, 2)`` probability matrix.
@@ -361,18 +354,23 @@ class LogisticStacker:
             If :meth:`fit` has not been called yet, or on shape / finiteness
             issues in ``score_matrix``.
         """
-        self._assert_fitted()
-        assert self._model is not None
+        model = self._require_model()
         sm = np.asarray(score_matrix, dtype=float)
         _validate_predict_inputs(sm, expected_n_features=self.coef_.shape[0])
-        return np.asarray(self._model.predict_proba(sm))
+        return np.asarray(model.predict_proba(sm))
 
-    def _assert_fitted(self) -> None:
-        """Raise if :meth:`fit` has not been called."""
+    def _require_model(self) -> LogisticRegression:
+        """Return the fitted model; raise if :meth:`fit` has not been called.
+
+        Returning the non-``None`` model narrows the optional for callers
+        without ``assert`` (STYLE §6 bans asserts in src — stripped under
+        ``python -O``).
+        """
         if not self._fitted or self._model is None:
             raise ValueError(
                 "LogisticStacker has not been fit yet. Call `.fit(score_matrix, y)` first."
             )
+        return self._model
 
 
 def _validate_fit_inputs(score_matrix: np.ndarray, y: np.ndarray) -> None:

@@ -94,27 +94,23 @@ def test_lambda_rejected_with_helpful_type_error() -> None:
 
 
 @pytest.mark.unit
-def test_n_jobs_caps_at_cpu_count_with_warning(caplog: pytest.LogCaptureFixture) -> None:
-    """n_jobs exceeding os.cpu_count() is capped (with WARNING log)."""
+def test_n_jobs_caps_at_cpu_count_with_warning() -> None:
+    """n_jobs exceeding os.cpu_count() is capped (with UserWarning)."""
     cpu_count = os.cpu_count() or 1
     excessive = cpu_count + 100
-    with caplog.at_level(logging.WARNING, logger="eval_toolkit._parallel"):
+    with pytest.warns(UserWarning, match="capping n_jobs"):
         result = parallel_map(_square, [1, 2, 3], n_jobs=excessive)
     assert result == [1, 4, 9]
-    assert any(
-        "capping n_jobs" in rec.message for rec in caplog.records
-    ), f"expected capping WARNING; got: {[r.message for r in caplog.records]}"
 
 
 @pytest.mark.unit
 def test_n_jobs_minus_one_does_not_trigger_cap_warning(
-    caplog: pytest.LogCaptureFixture,
+    recwarn: pytest.WarningsRecorder,
 ) -> None:
     """n_jobs=-1 is joblib's all-cores convention; no cap warning."""
-    with caplog.at_level(logging.WARNING, logger="eval_toolkit._parallel"):
-        result = parallel_map(_square, [1, 2, 3], n_jobs=-1)
+    result = parallel_map(_square, [1, 2, 3], n_jobs=-1)
     assert result == [1, 4, 9]
-    assert not any("capping n_jobs" in rec.message for rec in caplog.records)
+    assert not any("capping n_jobs" in str(w.message) for w in recwarn.list)
 
 
 @pytest.mark.unit

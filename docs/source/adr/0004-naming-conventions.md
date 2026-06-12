@@ -127,6 +127,19 @@ Locked at v1.0 — these names mean these things, everywhere:
 `alpha=` (instead of `confidence=`), or any deviation must justify it
 in the PR description or rename to the canonical name.
 
+**Known deviations (recorded 2026-06-12, v1.12.0):**
+`cluster_bootstrap_ci(statistic=)` (shipped v1.7.0) deviates from the
+canonical `metric` for the `(y_true, y_score) -> float` callable role
+— 7 siblings in `bootstrap.py` use `metric`. The signature is
+Tier-1-frozen per [ADR 0003](0003-stability-contract-and-gate3-methodology.md)
+(snapshot-pinned; a deprecation alias would itself mutate the Tier-1
+signature), so the rename is queued for v2.0 in the
+[v2.0 breaking-changes queue (#116)](https://github.com/brandon-behring/eval-toolkit/issues/116),
+which also carries the related `per_stratum_metric` naming
+discussion. The eda `random_state`/`n_bootstrap` deviations flagged
+by the same audit were closed at v1.12.0 via the DEPRECATION.md
+one-time-exception path (#100).
+
 ### D5 — Constants
 
 `UPPER_SNAKE_CASE` per PEP 8. Tier-1 constants in `_EXPORTS` include
@@ -199,7 +212,7 @@ the v0.49.0 audit:
   `rng: RNGLike | SeedLike | None` parameter convention (adopted in
   v0.50.0; documented here so the rule locks now).
 
-Eval-toolkit deviates from industry conventions in three places, all
+Eval-toolkit deviates from industry conventions in four places, all
 intentional and documented:
 
 1. **Unicode math identifiers** (`π`, `θ`, `μ`, `σ`, `α`, `β`) are
@@ -213,6 +226,11 @@ intentional and documented:
    they use Python's stdlib `random.Random(seed)`, not NumPy's
    `Generator`. SPEC 7's typing (`RNGLike = np.random.Generator | ...`)
    is strictly NumPy-scoped.
+4. **`cluster_bootstrap_ci(statistic=)`** keeps the scipy-flavored
+   `statistic` name (scipy.stats.bootstrap uses it) despite §D4
+   reserving `metric` for this callable role — not by intent but by
+   Tier-1 freeze; see the Known-deviations note under D4 and the
+   v2.0 queue ([#116](https://github.com/brandon-behring/eval-toolkit/issues/116)).
 
 ## Forward enforcement
 

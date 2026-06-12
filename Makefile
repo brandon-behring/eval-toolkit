@@ -57,6 +57,7 @@ lint:
 	$(PYTHON) -m ruff check src tests scripts
 	$(PYTHON) -m black --check src tests scripts
 	$(PYTHON) -m mypy src scripts
+	$(PYTHON) scripts/audit_raises_sections.py
 
 format:
 	$(PYTHON) -m black src tests scripts

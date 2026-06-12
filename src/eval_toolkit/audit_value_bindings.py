@@ -35,8 +35,8 @@ Closes upstream issue #71. v1.0.3.
 
 from __future__ import annotations
 
-import logging
 import re
+import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -70,9 +70,6 @@ __all__ = [
     "Violation",
     "validate_reader_value_bindings",
 ]
-
-
-_logger = logging.getLogger(__name__)
 
 
 DEFAULT_VALUE_PATTERN: str = r"\d+\.\d{2,4}"
@@ -130,7 +127,7 @@ class BindingKey:
 
 @dataclass(frozen=True, slots=True)
 class Match:
-    """A reader-prose (detector, metric, value) triple that matches the canonical binding.
+    """Reader-prose (detector, metric, value) triple matching the binding.
 
     Attributes
     ----------
@@ -156,7 +153,7 @@ class Match:
 
 @dataclass(frozen=True, slots=True)
 class Violation:
-    """A reader-prose (detector, metric, value) triple where the value disagrees with the canonical binding.
+    """Reader-prose triple whose value contradicts the canonical binding.
 
     Attributes
     ----------
@@ -794,16 +791,15 @@ def validate_reader_value_bindings(
                         )
                         if slice_match is None:
                             unmatched_slice_count += 1
-                            _logger.warning(
-                                "audit_value_bindings: no slice mention "
-                                "within ±%d chars of %s=%s in %s; binding "
-                                "key %r is slice-scoped and the prose "
-                                "context is ambiguous",
-                                slice_window_chars,
-                                det_key,
-                                val_str,
-                                file_path,
-                                canonical_key,
+                            warnings.warn(
+                                f"audit_value_bindings: no slice mention "
+                                f"within ±{slice_window_chars} chars of "
+                                f"{det_key}={val_str} in {file_path}; "
+                                f"binding key {canonical_key!r} is "
+                                f"slice-scoped and the prose context is "
+                                f"ambiguous",
+                                UserWarning,
+                                stacklevel=2,
                             )
                             continue
                         paired_slice = slice_match[0]
