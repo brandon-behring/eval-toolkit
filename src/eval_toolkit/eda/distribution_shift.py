@@ -58,6 +58,8 @@ from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from sklearn.neighbors import NearestNeighbors
 from sklearn.svm import LinearSVC
 
+from eval_toolkit._rng import RNGLike, SeedLike
+
 __all__ = [
     "DEFAULT_KNN_K",
     "DEFAULT_MMD_PERMUTATIONS",
@@ -258,7 +260,10 @@ class DistributionShiftResult:
 
 
 def median_bandwidth(
-    x: np.ndarray, *, max_samples: int = _BANDWIDTH_MAX_SAMPLES, random_state: int = 0
+    x: np.ndarray,
+    *,
+    max_samples: int = _BANDWIDTH_MAX_SAMPLES,
+    rng: RNGLike | SeedLike | None = 0,
 ) -> float:
     """Median-heuristic RBF bandwidth σ = median pairwise Euclidean distance.
 
@@ -272,8 +277,10 @@ def median_bandwidth(
         ``(n, d)`` feature matrix (typically the pooled A∪B reference).
     max_samples : int, optional
         Subsample cap for the pairwise-distance computation.
-    random_state : int, optional
-        Seed for the subsample.
+    rng : RNGLike | SeedLike | None, optional
+        RNG argument per `Scientific Python SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_
+        for the subsample. Int seed (default ``0``), ``Generator``, or
+        ``None`` (entropy).
 
     Returns
     -------
@@ -296,8 +303,8 @@ def median_bandwidth(
             "non-finite value(s) (NaN/inf)"
         )
     if x.shape[0] > max_samples:
-        rng = np.random.default_rng(random_state)
-        idx = rng.choice(x.shape[0], size=max_samples, replace=False)
+        gen = np.random.default_rng(rng)
+        idx = gen.choice(x.shape[0], size=max_samples, replace=False)
         x = x[idx]
     sigma = float(np.median(pdist(x)))
     # NaN compares False against <= 0.0, so guard finiteness explicitly even
@@ -316,8 +323,8 @@ def proxy_a_distance(
     *,
     c: float = DEFAULT_PAD_C,
     n_folds: int = DEFAULT_PAD_FOLDS,
-    n_bootstrap: int = 0,
-    random_state: int = 0,
+    n_resamples: int = 0,
+    rng: RNGLike | SeedLike | None = 0,
 ) -> PadResult:
     """Proxy-A-distance via a CV'd linear domain classifier (Ben-David 2010).
 
@@ -341,11 +348,13 @@ def proxy_a_distance(
     n_folds : int, optional
         Requested stratified CV folds; clamped to ``min(n_folds, n_a, n_b)`` and
         must end ``>= 2``. Default :data:`DEFAULT_PAD_FOLDS`.
-    n_bootstrap : int, optional
+    n_resamples : int, optional
         If ``> 0``, resample within each corpus that many times to attach a
         percentile 95% CI to ``pad``. Default ``0`` (skip).
-    random_state : int, optional
-        Seed for CV shuffling, the classifier, and the bootstrap. Default ``0``.
+    rng : RNGLike | SeedLike | None, optional
+        RNG argument per `Scientific Python SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_
+        for CV shuffling, the classifier, and the bootstrap. Int seed
+        (default ``0``), ``Generator``, or ``None`` (entropy).
 
     Returns
     -------
@@ -378,17 +387,22 @@ def proxy_a_distance(
             f"need >= 2 samples per corpus for >= 2 CV folds, got n_a={n_a}, n_b={n_b}"
         )
 
-    pad, error = _pad_once(x_a, x_b, c=c, folds=folds, random_state=random_state)
+    # Derive an int seed for sklearn at the boundary (sklearn's random_state
+    # does not accept Generator across supported versions) — the
+    # cross_validate_metric pattern.
+    gen = np.random.default_rng(rng)
+    sklearn_seed = int(gen.integers(0, 2**31 - 1))
+
+    pad, error = _pad_once(x_a, x_b, c=c, folds=folds, sklearn_seed=sklearn_seed)
 
     ci_low: float | None = None
     ci_high: float | None = None
-    if n_bootstrap > 0:
-        rng = np.random.default_rng(random_state)
-        boots = np.empty(n_bootstrap, dtype=float)
-        for i in range(n_bootstrap):
-            ia = rng.integers(0, n_a, size=n_a)
-            ib = rng.integers(0, n_b, size=n_b)
-            boots[i], _ = _pad_once(x_a[ia], x_b[ib], c=c, folds=folds, random_state=random_state)
+    if n_resamples > 0:
+        boots = np.empty(n_resamples, dtype=float)
+        for i in range(n_resamples):
+            ia = gen.integers(0, n_a, size=n_a)
+            ib = gen.integers(0, n_b, size=n_b)
+            boots[i], _ = _pad_once(x_a[ia], x_b[ib], c=c, folds=folds, sklearn_seed=sklearn_seed)
         ci_low = float(np.percentile(boots, 2.5))
         ci_high = float(np.percentile(boots, 97.5))
 
@@ -405,13 +419,13 @@ def proxy_a_distance(
 
 
 def _pad_once(
-    x_a: np.ndarray, x_b: np.ndarray, *, c: float, folds: int, random_state: int
+    x_a: np.ndarray, x_b: np.ndarray, *, c: float, folds: int, sklearn_seed: int
 ) -> tuple[float, float]:
     """Single PAD estimate; returns ``(pad, cv_error)``."""
     x = np.vstack([x_a, x_b])
     y = np.concatenate([np.zeros(x_a.shape[0], dtype=int), np.ones(x_b.shape[0], dtype=int)])
-    cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=random_state)
-    clf = LinearSVC(C=c, random_state=random_state)
+    cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=sklearn_seed)
+    clf = LinearSVC(C=c, random_state=sklearn_seed)
     preds = cross_val_predict(clf, x, y, cv=cv)
     error = float(np.mean(preds != y))
     pad = 2.0 * (1.0 - 2.0 * error)
@@ -443,8 +457,8 @@ def maximum_mean_discrepancy(
     *,
     bandwidth: float | None = None,
     n_permutations: int = DEFAULT_MMD_PERMUTATIONS,
-    n_bootstrap: int = 0,
-    random_state: int = 0,
+    n_resamples: int = 0,
+    rng: RNGLike | SeedLike | None = 0,
 ) -> MmdResult:
     """Unbiased RBF-kernel MMD² with a permutation-test p-value (Gretton 2012).
 
@@ -465,11 +479,13 @@ def maximum_mean_discrepancy(
         comparable across folds.
     n_permutations : int, optional
         Label permutations for the null. Default :data:`DEFAULT_MMD_PERMUTATIONS`.
-    n_bootstrap : int, optional
+    n_resamples : int, optional
         If ``> 0``, resample within each corpus to attach a percentile 95% CI to
         ``mmd_squared``. Default ``0`` (skip).
-    random_state : int, optional
-        Seed for the permutations and bootstrap. Default ``0``.
+    rng : RNGLike | SeedLike | None, optional
+        RNG argument per `Scientific Python SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_
+        for the bandwidth subsample, permutations, and bootstrap. Int seed
+        (default ``0``), ``Generator``, or ``None`` (entropy).
 
     Returns
     -------
@@ -502,10 +518,9 @@ def maximum_mean_discrepancy(
     if n_a < 2 or n_b < 2:
         raise ValueError(f"each corpus needs >= 2 rows for unbiased MMD, got {n_a}, {n_b}")
 
+    gen = np.random.default_rng(rng)
     pooled = np.vstack([x_a, x_b])
-    sigma = (
-        bandwidth if bandwidth is not None else median_bandwidth(pooled, random_state=random_state)
-    )
+    sigma = bandwidth if bandwidth is not None else median_bandwidth(pooled, rng=gen)
     if not np.isfinite(sigma) or sigma <= 0.0:
         raise ValueError(f"bandwidth must be finite and > 0, got {sigma}")
     gamma = 1.0 / (2.0 * sigma * sigma)
@@ -513,11 +528,10 @@ def maximum_mean_discrepancy(
 
     observed = _mmd2_from_kernel(k, n_a)
 
-    rng = np.random.default_rng(random_state)
     total = n_a + n_b
     count = 0
     for _ in range(n_permutations):
-        perm = rng.permutation(total)
+        perm = gen.permutation(total)
         kp = k[np.ix_(perm, perm)]
         if _mmd2_from_kernel(kp, n_a) >= observed:
             count += 1
@@ -525,11 +539,11 @@ def maximum_mean_discrepancy(
 
     ci_low: float | None = None
     ci_high: float | None = None
-    if n_bootstrap > 0:
-        boots = np.empty(n_bootstrap, dtype=float)
-        for i in range(n_bootstrap):
-            ia = rng.integers(0, n_a, size=n_a)
-            ib = rng.integers(0, n_b, size=n_b)
+    if n_resamples > 0:
+        boots = np.empty(n_resamples, dtype=float)
+        for i in range(n_resamples):
+            ia = gen.integers(0, n_a, size=n_a)
+            ib = gen.integers(0, n_b, size=n_b)
             kb = rbf_kernel(np.vstack([x_a[ia], x_b[ib]]), gamma=gamma)
             boots[i] = _mmd2_from_kernel(kb, n_a)
         ci_low = float(np.percentile(boots, 2.5))
@@ -608,8 +622,8 @@ def distribution_shift(
     bandwidth: float | None = None,
     n_permutations: int = DEFAULT_MMD_PERMUTATIONS,
     knn_k: int = DEFAULT_KNN_K,
-    n_bootstrap: int = 0,
-    random_state: int = 0,
+    n_resamples: int = 0,
+    rng: RNGLike | SeedLike | None = 0,
 ) -> DistributionShiftResult:
     """Run PAD + MMD + kNN-purity on one pair of feature populations.
 
@@ -622,9 +636,11 @@ def distribution_shift(
     ----------
     x_a, x_b : numpy.ndarray
         ``(n, d)`` feature matrices, same ``d``.
-    pad_c, pad_folds, bandwidth, n_permutations, knn_k, n_bootstrap, random_state
+    pad_c, pad_folds, bandwidth, n_permutations, knn_k, n_resamples, rng
         Forwarded to :func:`proxy_a_distance`, :func:`maximum_mean_discrepancy`,
-        and :func:`knn_purity`.
+        and :func:`knn_purity` (``rng`` per SPEC 7: an int seed gives each
+        sub-measure its own deterministic stream; a shared ``Generator`` is
+        consumed sequentially).
 
     Returns
     -------
@@ -640,16 +656,14 @@ def distribution_shift(
     >>> res.pad.pad > 1.0 and res.mmd.p_value < 0.05 and res.knn.mean_purity > 0.9
     True
     """
-    pad = proxy_a_distance(
-        x_a, x_b, c=pad_c, n_folds=pad_folds, n_bootstrap=n_bootstrap, random_state=random_state
-    )
+    pad = proxy_a_distance(x_a, x_b, c=pad_c, n_folds=pad_folds, n_resamples=n_resamples, rng=rng)
     mmd = maximum_mean_discrepancy(
         x_a,
         x_b,
         bandwidth=bandwidth,
         n_permutations=n_permutations,
-        n_bootstrap=n_bootstrap,
-        random_state=random_state,
+        n_resamples=n_resamples,
+        rng=rng,
     )
     knn = knn_purity(x_a, x_b, k=knn_k)
     return DistributionShiftResult(pad=pad, mmd=mmd, knn=knn)

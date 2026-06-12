@@ -3,20 +3,31 @@
 This document defines eval-toolkit's deprecation policy and how
 contributors mark public-API symbols for removal.
 
-## SemVer + pre-1.0 rules
+## SemVer + the v1.x tier contract
 
-eval-toolkit follows [Semantic Versioning](https://semver.org/). Per
-SemVer pre-1.0 expectations:
+eval-toolkit follows [Semantic Versioning](https://semver.org/). Since
+v1.0, what a version bump may change is defined by the
+[ADR 0003](adr/0003-stability-contract-and-gate3-methodology.md)
+stability tiers:
 
-- **Breaking changes** are allowed in **MINOR** bumps (`0.X.0`) during
-  the 0.x series.
-- **PATCH** bumps (`0.X.Y`) remain backward-compatible (security
-  fixes + bug fixes that don't change documented behavior).
+- **Tier 1 (STRICT)** — top-level `eval_toolkit.__all__` symbols and
+  their signatures: removing or renaming requires **MAJOR** (v2.0).
+- **Tier 2 (ADDITIVE-ONLY)** — submodule public symbols (e.g.,
+  `eval_toolkit.eda.*`, `eval_toolkit.metrics.*`): may evolve in
+  **MINOR** releases under the deprecation policy below.
+- **Tier 3 (FREE)** — internals, error-message wording, docstring
+  bodies: may change in any **PATCH**.
 
-This means: removing a public symbol in `0.29.0` is *technically*
-allowed without prior warning. But that's a bad citizen move for
+This means: a Tier-2 symbol could *technically* change in a MINOR
+release without prior warning. But that's a bad citizen move for
 users who have built on the library. **The deprecation policy below
-extends what SemVer permits with what we actually commit to.**
+extends what the tier contract permits with what we actually commit
+to.**
+
+(Historical note: through v0.x this section documented SemVer's
+pre-1.0 rules — breaking changes allowed in MINOR bumps during the
+0.x series. The 0.x examples below are retained for the record; the
+mechanics are unchanged.)
 
 ## Promise: minimum 2 minor versions of warning before removal
 
@@ -31,8 +42,9 @@ documented in `docs/api/`), we commit to:
 2. **Maintain in versions N+1, N+2, …**: the symbol continues to
    work, continues to warn.
 3. **Remove in version M** where `M >= N + 2 minor versions`.
-   Removal is a breaking change appropriate for a MINOR bump per
-   the SemVer pre-1.0 contract.
+   Removal in a MINOR bump is appropriate for Tier-2/Tier-3 surfaces
+   per the tier contract; Tier-1 removals additionally wait for the
+   next MAJOR.
 
 Concrete example: a function deprecated in `0.29.0` with
 `deadline="0.31.0"` works (with warnings) in `0.29.x`, `0.30.x`,
@@ -134,9 +146,9 @@ indefinitely so that downstream `pip` pins do not break.
 
 ## One-time exceptions to the 2-minor-version warning policy
 
-The 2-minor-version warning is a **policy**, not a hard SemVer rule (pre-1.0
-allows breaking changes in minor bumps; the policy is what we *commit to
-above* SemVer's floor). Rarely, an exception is justified when the cost of
+The 2-minor-version warning is a **policy**, not a hard SemVer rule (the
+tier contract allows Tier-2 changes in minor bumps; the policy is what we
+*commit to above* that floor). Rarely, an exception is justified when the cost of
 the warning window exceeds its benefit — known consumer set is small + the
 deprecation alias would carry forever-debt + every known consumer can be
 notified directly via cross-repo issue.
@@ -147,6 +159,7 @@ and notification mechanism.
 | Symbol | Renamed/removed | Version | Justification | Notification |
 |---|---|---|---|---|
 | `eval_toolkit.bootstrap.mde_from_ci(paired=...)` parameter rename | Renamed to `ci=...` and type widened to `BootstrapCI | PairedBootstrapCI` | v0.34.0 | Pre-1.0 SemVer; only 2 known consumers (`prompt-injection-detection-submission`, `post-transformers`), both use positional form per audit; deprecation alias would add forever-debt for a clean-API win. Cleaning the name now (before widespread adoption) beats living with the awkward `paired=` parameter name forever. | Cross-repo issues filed on both known consumers with explicit migration step: `mde_from_ci(paired=x)` → `mde_from_ci(ci=x)`. Positional `mde_from_ci(x)` unaffected. |
+| `eval_toolkit.eda.*` parameter renames: `random_state=` (5 functions: `median_bandwidth`, `proxy_a_distance`, `maximum_mean_discrepancy`, `distribution_shift`, `competency_baselines`) and `n_bootstrap=` (3 functions) | `random_state=` → `rng=` (SPEC-7 typed: `RNGLike \| SeedLike \| None`, default `0` unchanged); `n_bootstrap=` → `n_resamples=` | v1.12.0 | Tier-2 evolvable surface (`eda/__init__.py` declares it; zero entries in the public-API snapshot — verified); closes the ADR 0004 §D4 canonical-vocabulary deviation flagged by the 2026-06-09 audit (#100); cross-repo grep found **zero** consumers of any eda symbol, so a 2-minor alias window would carry pure forever-debt with no beneficiary. | Zero consumers found by grep (sole production consumer `prompt-injection-detection-submission` imports no `eval_toolkit.eda` symbol); CHANGELOG migration snippet + GitHub Release notes callout stand in for consumer issues. |
 
 **Future exception criteria** (must satisfy all):
 
