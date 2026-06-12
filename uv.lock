@@ -650,6 +650,7 @@ requires-dist = [
     { name = "jupyter-cache", marker = "extra == 'docs'", specifier = ">=1.0" },
     { name = "linkify-it-py", marker = "extra == 'docs'", specifier = ">=2.0" },
     { name = "matplotlib", marker = "extra == 'all'", specifier = ">=3.8" },
+    { name = "matplotlib", marker = "extra == 'dev'", specifier = "<3.11" },
     { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.8" },
     { name = "matplotlib", marker = "extra == 'eda'", specifier = ">=3.8" },
     { name = "matplotlib", marker = "extra == 'plotting'", specifier = ">=3.8" },
