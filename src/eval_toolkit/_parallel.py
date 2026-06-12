@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import pickle
+import warnings
 from collections.abc import Callable, Iterable, Sized
 
 _logger = logging.getLogger(__name__)
@@ -119,11 +120,12 @@ def parallel_map[T, R](
     if n_jobs > 0:
         cpu_count = os.cpu_count() or 1
         if n_jobs > cpu_count:
-            _logger.warning(
-                "%s: capping n_jobs from %d to %d (os.cpu_count()).",
-                description,
-                n_jobs,
-                cpu_count,
+            # stacklevel=3: parallel_map is a private helper one frame below
+            # the public API, so 3 attributes the warning to user code.
+            warnings.warn(
+                f"{description}: capping n_jobs from {n_jobs} to {cpu_count} " "(os.cpu_count()).",
+                UserWarning,
+                stacklevel=3,
             )
             n_jobs = cpu_count
 

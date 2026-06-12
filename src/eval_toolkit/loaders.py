@@ -32,6 +32,7 @@ import glob as _glob
 import json as _json
 import logging
 import urllib.request as _urlrequest
+import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -639,10 +640,11 @@ class HFDatasetsLoader:
             data = _hf_get_json(f"/api/datasets/{self.repo_id}/croissant")
             return data if isinstance(data, dict) else {}
         except (OSError, ValueError) as exc:  # urllib.URLError, JSONDecodeError, etc.
-            _logger.warning(
-                "HFDatasetsLoader %s: Croissant fetch failed (%s); proceeding without",
-                self.repo_id,
-                exc,
+            warnings.warn(
+                f"HFDatasetsLoader {self.repo_id}: Croissant fetch failed ({exc}); "
+                "proceeding without",
+                RuntimeWarning,
+                stacklevel=2,
             )
             return {}
 
@@ -662,10 +664,11 @@ class HFDatasetsLoader:
         try:
             entries = _hf_get_json(path)
         except (OSError, ValueError) as exc:
-            _logger.warning(
-                "HFDatasetsLoader %s: tree-API fetch failed (%s); sha256 unavailable",
-                self.repo_id,
-                exc,
+            warnings.warn(
+                f"HFDatasetsLoader {self.repo_id}: tree-API fetch failed ({exc}); "
+                "sha256 unavailable",
+                RuntimeWarning,
+                stacklevel=2,
             )
             return []
         if not isinstance(entries, list):
@@ -818,12 +821,11 @@ def _download_with_sha_verify(
             _logger.debug("OOD slice %s: cache hit at %s", slice_id, cached)
             return cached
         # Corrupted cache — log and re-download
-        _logger.warning(
-            "OOD slice %s: cached file %s sha mismatch (expected %s, got %s); re-downloading",
-            slice_id,
-            cached,
-            expected_hex,
-            actual,
+        warnings.warn(
+            f"OOD slice {slice_id}: cached file {cached} sha mismatch "
+            f"(expected {expected_hex}, got {actual}); re-downloading",
+            RuntimeWarning,
+            stacklevel=2,
         )
         cached.unlink()
 
