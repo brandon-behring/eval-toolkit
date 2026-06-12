@@ -1268,10 +1268,14 @@ def paired_mde(
     y_true, y_score_a, y_score_b : np.ndarray
         Labels and two scorers' outputs on the same rows.
     metric : MetricFn
+        Callable ``(y_true, y_score) -> float`` whose paired Δ is
+        analyzed.
     alpha : float, optional
         Two-sided significance (default 0.05).
     power : float, optional
         1 − β; probability of detection at true Δ = MDE (default 0.80).
+    n_resamples, rng : standard bootstrap params (``rng`` per SPEC 7).
+        Forwarded to the internal :func:`paired_bootstrap_diff` call.
     n_jobs : int, optional
         Parallel workers (default 1 — sequential). Forwarded to the
         internal :func:`paired_bootstrap_diff` call which carries the
@@ -2400,6 +2404,12 @@ def correct_p_values(
     np.ndarray
         Corrected p-values (a.k.a. q-values when ``method="bh"``).
 
+    Raises
+    ------
+    ValueError
+        If ``method`` is not one of the documented options, or if
+        the underlying correction raises on invalid p-values.
+
     Notes
     -----
     This function is numpy-only by module convention (the ``bootstrap``
@@ -2411,12 +2421,6 @@ def correct_p_values(
     Pass ``df[col].to_numpy()`` (1-D) on the way in; assign the returned
     array back to a new column (the DataFrame index is preserved by the
     column assignment, not by this function).
-
-    Raises
-    ------
-    ValueError
-        If ``method`` is not one of the documented options, or if
-        the underlying correction raises on invalid p-values.
     """
     if method == "bh":
         return fdr_bh_correct(p_values)

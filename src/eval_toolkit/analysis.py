@@ -52,6 +52,21 @@ class CsvPredictionReader:
     ) -> Mapping[str, Sequence[object]]:
         """Read a local CSV file.
 
+        Parameters
+        ----------
+        uri : str
+            Local filesystem path to the CSV file.
+        columns : Mapping[str, str]
+            Role → column-name mapping (e.g. ``{"label": "y",
+            "score": "p"}``); only the mapped column names are read.
+
+        Returns
+        -------
+        Mapping[str, Sequence[object]]
+            Column-oriented mapping: one entry per requested column
+            name, values in file row order (as strings — ``csv``
+            performs no type conversion).
+
         Raises
         ------
         ValueError
@@ -122,6 +137,21 @@ class JsonlPredictionReader:
     ) -> Mapping[str, Sequence[object]]:
         """Read a local JSONL file.
 
+        Parameters
+        ----------
+        uri : str
+            Local filesystem path to the JSONL file (one JSON object
+            per non-blank line).
+        columns : Mapping[str, str]
+            Role → key mapping (e.g. ``{"label": "y", "score": "p"}``);
+            only the mapped keys are read.
+
+        Returns
+        -------
+        Mapping[str, Sequence[object]]
+            Column-oriented mapping: one entry per requested key,
+            values in file row order with native JSON types preserved.
+
         Raises
         ------
         ValueError
@@ -165,6 +195,24 @@ def load_prediction_arrays(
     reader: PredictionReader | None = None,
 ) -> PredictionArrays:
     """Load labels and scores from a prediction artifact reference.
+
+    Parameters
+    ----------
+    ref : Mapping[str, Any]
+        Prediction artifact reference: must carry a non-empty ``uri``
+        and a ``columns`` mapping with ``label`` + ``score`` keys;
+        ``row_id`` / ``content_hash`` keys are optional and populate
+        the alignment fields. ``media_type`` (or the uri suffix)
+        selects the built-in reader.
+    reader : PredictionReader or None, optional
+        Explicit reader; ``None`` (default) infers CSV/JSONL from
+        ``media_type`` or the uri suffix.
+
+    Returns
+    -------
+    PredictionArrays
+        Validated ``labels`` (int, all 0/1) + finite float ``scores``,
+        plus ``row_ids`` / ``content_hashes`` tuples when mapped.
 
     Raises
     ------
@@ -223,7 +271,30 @@ def bootstrap_metric_from_predictions(
     n_resamples: int = 1000,
     rng: RNGLike | SeedLike | None = 42,
 ) -> dict[str, object]:
-    """Compute a PR-AUC bootstrap CI from one prediction ref."""
+    """Compute a PR-AUC bootstrap CI from one prediction ref.
+
+    Parameters
+    ----------
+    ref : Mapping[str, Any]
+        Prediction artifact reference (see
+        :func:`load_prediction_arrays` for the required shape).
+    reader : PredictionReader or None, optional
+        Explicit reader; ``None`` (default) infers CSV/JSONL.
+    n_resamples, rng
+        Standard bootstrap params (``rng`` per SPEC 7), forwarded to
+        :func:`eval_toolkit.bootstrap.bootstrap_ci`.
+
+    Returns
+    -------
+    dict[str, object]
+        ``BootstrapCI.to_dict()`` payload for PR-AUC.
+
+    Raises
+    ------
+    ValueError
+        Propagated from :func:`load_prediction_arrays` on a malformed
+        ref or invalid labels/scores.
+    """
     arrays = load_prediction_arrays(ref, reader=reader)
     return bootstrap_ci(
         arrays.labels,
@@ -244,6 +315,23 @@ def paired_diff_from_prediction_refs(
     rng: RNGLike | SeedLike | None = 42,
 ) -> dict[str, object]:
     """Compute paired PR-AUC delta from two prediction refs.
+
+    Parameters
+    ----------
+    baseline_ref, candidate_ref : Mapping[str, Any]
+        Prediction artifact references (see
+        :func:`load_prediction_arrays` for the required shape). Must
+        describe the same rows in the same order.
+    baseline_reader, candidate_reader : PredictionReader or None, optional
+        Explicit readers; ``None`` (default) infers CSV/JSONL per ref.
+    n_resamples, rng
+        Standard bootstrap params (``rng`` per SPEC 7), forwarded to
+        :func:`eval_toolkit.bootstrap.paired_bootstrap_diff`.
+
+    Returns
+    -------
+    dict[str, object]
+        ``PairedBootstrapCI.to_dict()`` payload for the PR-AUC delta.
 
     Raises
     ------

@@ -259,8 +259,7 @@ class Scorecard(Mapping[str, MetricResult]):
     def to_pandas(self) -> Any:
         """One-row DataFrame with metric names as the (multi)column index.
 
-        Lazy pandas import — only available if pandas is installed. Raises
-        ``ImportError`` with an install hint when pandas is missing.
+        Lazy pandas import — only available if pandas is installed.
 
         The DataFrame has 1 row (one slice) and a 2-level column index:
         outer = metric name, inner = field name in ``{"value", "status",
@@ -274,6 +273,12 @@ class Scorecard(Mapping[str, MetricResult]):
         ``n_resamples`` + ``method`` so the schema is lossless against
         :meth:`BootstrapCI.to_dict` — trace provenance no longer drops in
         the DataFrame view.
+
+        Raises
+        ------
+        ImportError
+            If pandas is not installed; the message carries the
+            ``pip install eval-toolkit[dataframe]`` hint.
 
         Notes
         -----

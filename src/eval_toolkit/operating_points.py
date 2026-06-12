@@ -111,9 +111,25 @@ def fit_operating_points(
 ) -> dict[str, FittedOperatingPoint]:
     """Fit selectors on a mixed-class slice and record threshold provenance.
 
-    Raises from the underlying selector if the data cannot support threshold
-    selection, for example single-class labels or no feasible target
-    precision/recall/FPR threshold.
+    Parameters
+    ----------
+    y_true : numpy.ndarray
+        Ground-truth labels, shape ``(n,)``; must contain both classes.
+    y_score : numpy.ndarray
+        Continuous scores, shape ``(n,)``.
+    selectors : Sequence[ThresholdSelector]
+        Threshold selectors to fit; each contributes one operating
+        point keyed by its ``criterion``.
+    fitted_on_slice : str, optional
+        Provenance label for the fit slice. Default ``""``.
+    scorer_name : str, optional
+        Provenance label for the scorer. Default ``""``.
+
+    Returns
+    -------
+    dict[str, FittedOperatingPoint]
+        Criterion → fitted operating point (threshold + fit-slice
+        provenance + fit-time metrics).
 
     Raises
     ------
@@ -159,6 +175,29 @@ def apply_operating_points(
     scorer_name: str = "",
 ) -> dict[str, dict[str, object]]:
     """Apply fitted thresholds to a mixed-class or single-class target slice.
+
+    Parameters
+    ----------
+    y_true : numpy.ndarray
+        Ground-truth labels, shape ``(n,)``; values in ``{0, 1}``.
+        Single-class slices are allowed and route through
+        ``single_class_threshold_metrics``.
+    y_score : numpy.ndarray
+        Continuous scores, shape ``(n,)``.
+    fitted : Mapping[str, FittedOperatingPoint]
+        Criterion → fitted operating point, as returned by
+        :func:`fit_operating_points`.
+    applied_to_slice : str, optional
+        Provenance label for the target slice. Default ``""``.
+    scorer_name : str, optional
+        Provenance label for the scorer. Default ``""``.
+
+    Returns
+    -------
+    dict[str, dict[str, object]]
+        Criterion → metrics-at-threshold payload, each carrying a
+        ``"threshold_provenance"`` entry (criterion, fit/apply slice
+        labels, scorer name, threshold, fit counts).
 
     Raises
     ------
