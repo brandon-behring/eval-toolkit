@@ -1,12 +1,12 @@
 """Obfuscation / encoding / invisible-Unicode prevalence detectors.
 
 This module is the **Job-1 integrity prerequisite** companion to
-:mod:`eval_toolkit.eda.data_audit`: it measures *seen-text ≠ scored-text*
+:mod:`eval_toolkit.eda.data_audit` : it measures *seen-text ≠ scored-text*
 hazards in a dataset's text columns before any downstream length / n-gram /
-embedding statistic is computed. Invisible characters silently corrupt every
-character-based stat; encoded blobs (base64 / hex) destroy lexical signal;
-homoglyphs and compatibility-decomposable characters (mathematical-bold
-Latin, fullwidth, ligatures) defeat regex-based markers.
+embedding statistic is computed. Invisible characters silently corrupt
+every character-based stat; encoded blobs (base64 / hex) destroy lexical
+signal; homoglyphs and compatibility-decomposable characters
+(mathematical-bold Latin, fullwidth, ligatures) defeat regex-based markers.
 
 Scope is intentionally narrow and torch-free: pure-stdlib detectors and a
 single aggregating :class:`ObfuscationProfile`. Public functions are
@@ -173,7 +173,8 @@ def count_invisible_chars(text: str) -> int:
     Returns
     -------
     int
-        Number of characters whose codepoint falls in :data:`INVISIBLE_RANGES`.
+        Number of characters whose codepoint falls in
+        :data:`INVISIBLE_RANGES` .
 
     Examples
     --------
@@ -221,9 +222,9 @@ def nfkc_changed(text: str) -> bool:
 def nfkc_char_delta(text: str) -> int:
     """Absolute char-count delta between ``text`` and its NFKC normalization.
 
-    A non-zero delta signals decomposition (e.g. the ﬁ ligature becoming two
-    characters); a zero delta does **not** prove the text is canonical —
-    same-length codepoint substitutions (mathematical-bold Latin → ASCII
+    A non-zero delta signals decomposition (e.g. the ﬁ ligature becoming
+    two characters); a zero delta does **not** prove the text is canonical
+    — same-length codepoint substitutions (mathematical-bold Latin → ASCII
     Latin) also change the text. Use :func:`nfkc_changed` for that signal.
 
     Parameters
@@ -286,9 +287,9 @@ def shannon_entropy(s: str) -> float:
 def has_high_entropy_alnum_run(text: str) -> bool:
     """Detect a base64-shaped or hex-shaped high-entropy run in ``text``.
 
-    Hex runs are tested first against the lower :data:`HEX_ENTROPY_THRESHOLD`
-    so a 16-char hex string is flagged even when the broader
-    :data:`BASE64_ENTROPY_THRESHOLD` bar would reject it.
+    Hex runs are tested first against the lower
+    :data:`HEX_ENTROPY_THRESHOLD` so a 16-char hex string is flagged even
+    when the broader :data:`BASE64_ENTROPY_THRESHOLD` bar would reject it.
 
     Parameters
     ----------
@@ -354,12 +355,12 @@ def has_rot13_marker(text: str) -> bool:
 def is_leeted_token(token: str) -> bool:
     """Heuristic: does ``token`` look like leetspeak?
 
-    Requires length ∈ ``[3, 12]``, ≥ 1 alphabetic character, and ≥ 2
-    leet-substitute characters (digits or ``@$!+``). The ≥ 2 floor filters
-    incidental noise like ``v1``, ``py3``, ``h0w``, and isolated phone-number
-    digits; the length-cap filters long hex-shaped identifiers (16-char
-    hashes, ``deadbeef``-style debug constants, SHA-1/-256 digests) that
-    otherwise satisfy the letter / leet thresholds.
+    Requires length ∈ ``[3, 12]`` , ≥ 1 alphabetic character, and ≥ 2
+    leet-substitute characters (digits or ``@$!+`` ). The ≥ 2 floor filters
+    incidental noise like ``v1`` , ``py3`` , ``h0w`` , and isolated
+    phone-number digits; the length-cap filters long hex-shaped identifiers
+    (16-char hashes, ``deadbeef`` -style debug constants, SHA-1/-256
+    digests) that otherwise satisfy the letter / leet thresholds.
 
     Parameters
     ----------
@@ -429,9 +430,10 @@ def leetspeak_counts(text: str) -> tuple[int, int]:
 class ObfuscationProfile:
     """Corpus-level obfuscation prevalence statistics.
 
-    Built by :func:`analyze_obfuscation` over a sequence of texts. All count
-    fields are non-negative; all rate fields are in ``[0.0, 1.0]``. An empty
-    input yields all zeros (no division-by-zero, no fabricated rates).
+    Built by :func:`analyze_obfuscation` over a sequence of texts. All
+    count fields are non-negative; all rate fields are in ``[0.0, 1.0]`` .
+    An empty input yields all zeros (no division-by-zero, no fabricated
+    rates).
 
     Parameters
     ----------

@@ -826,7 +826,7 @@
       "bases": [
         "object"
       ],
-      "doc_first_line": "A reader-prose (detector, metric, value) triple that matches the canonical binding.",
+      "doc_first_line": "Reader-prose (detector, metric, value) triple matching the binding.",
       "kind": "class",
       "signature": "(file: 'Path', line: 'int', detector: 'str', metric: 'str', value: 'float') -> None"
     },
@@ -1392,7 +1392,7 @@
       "bases": [
         "object"
       ],
-      "doc_first_line": "A reader-prose (detector, metric, value) triple where the value disagrees with the canonical binding.",
+      "doc_first_line": "Reader-prose triple whose value contradicts the canonical binding.",
       "kind": "class",
       "signature": "(file: 'Path', line: 'int', detector: 'str', metric: 'str', found_value: 'float', expected_value: 'float', surrounding_text: 'str') -> None"
     },
@@ -1480,7 +1480,7 @@
       "signature": "(repo_root: 'Path | str | None' = None) -> 'str | None'"
     },
     "cluster_bootstrap_ci": {
-      "doc_first_line": "Label-stratified **cluster** (group) bootstrap percentile CI for a single-condition metric.",
+      "doc_first_line": "Label-stratified **cluster** (group) bootstrap percentile CI.",
       "kind": "function",
       "signature": "(y_true: 'np.ndarray', y_score: 'np.ndarray', groups: 'np.ndarray', statistic: 'MetricFn', *, resample_labels: 'tuple[int, ...]' = (0, 1), n_resamples: 'int' = 1000, confidence: 'float' = 0.95, rng: 'RNGLike | SeedLike | None' = 42, n_jobs: 'int' = 1, return_samples: 'bool' = False) -> 'BootstrapCI'"
     },
@@ -1955,7 +1955,7 @@
       "signature": "(config: 'Mapping[str, Any]', repo_root: 'Path | str | None' = None, *, path_keys: 'tuple[str, ...]' = ('path', 'dir', 'file', 'splits_dir', 'model_path')) -> 'dict[str, Any]'"
     },
     "stratified_cluster_bootstrap_ci": {
-      "doc_first_line": "Cluster bootstrap of a **composite** statistic over several independent strata.",
+      "doc_first_line": "Cluster bootstrap CI of a **composite** statistic over strata.",
       "kind": "function",
       "signature": "(strata: 'Mapping[Hashable, tuple[np.ndarray, np.ndarray, np.ndarray]]', per_stratum_metric: 'MetricFn', combine: 'Callable[[Mapping[Hashable, float]], float]', *, resample_labels: 'tuple[int, ...]' = (0, 1), n_resamples: 'int' = 1000, confidence: 'float' = 0.95, rng: 'RNGLike | SeedLike | None' = 42, n_jobs: 'int' = 1, return_samples: 'bool' = False) -> 'BootstrapCI'"
     },

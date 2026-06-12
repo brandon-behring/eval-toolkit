@@ -127,7 +127,7 @@ class BindingKey:
 
 @dataclass(frozen=True, slots=True)
 class Match:
-    """A reader-prose (detector, metric, value) triple that matches the canonical binding.
+    """Reader-prose (detector, metric, value) triple matching the binding.
 
     Attributes
     ----------
@@ -153,7 +153,7 @@ class Match:
 
 @dataclass(frozen=True, slots=True)
 class Violation:
-    """A reader-prose (detector, metric, value) triple where the value disagrees with the canonical binding.
+    """Reader-prose triple whose value contradicts the canonical binding.
 
     Attributes
     ----------
