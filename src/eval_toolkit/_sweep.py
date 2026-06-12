@@ -101,6 +101,10 @@ def sweep(
         - If ``attack_threshold`` is NaN.
         - If any strategy doesn't satisfy ``TextTransform`` structurally
           (typically a missing ``name`` attribute).
+    RuntimeError
+        If the internal batch-scoring invariant is violated (scores not
+        materialized despite ``scorer`` being set) — indicates a bug in
+        ``sweep`` itself, not caller input.
 
     Examples
     --------
