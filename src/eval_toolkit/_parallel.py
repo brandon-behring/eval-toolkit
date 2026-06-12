@@ -120,12 +120,14 @@ def parallel_map[T, R](
     if n_jobs > 0:
         cpu_count = os.cpu_count() or 1
         if n_jobs > cpu_count:
-            # stacklevel=3: parallel_map is a private helper one frame below
-            # the public API, so 3 attributes the warning to user code.
+            # skip_file_prefixes walks past ALL eval_toolkit frames (call
+            # chains reach here at depth 2-4) so the warning attributes —
+            # and dedups — per user call site, not per library line.
             warnings.warn(
                 f"{description}: capping n_jobs from {n_jobs} to {cpu_count} " "(os.cpu_count()).",
                 UserWarning,
-                stacklevel=3,
+                stacklevel=2,
+                skip_file_prefixes=(os.path.dirname(__file__),),
             )
             n_jobs = cpu_count
 

@@ -163,7 +163,7 @@ _LEET_TOKEN_RE: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9@$!+]+")
 
 
 def count_invisible_chars(text: str) -> int:
-    """Count zero-width / variation-selector / tag-block characters in ``text``.
+    """Count invisible (zero-width / variation-selector / tag) chars.
 
     Parameters
     ----------
@@ -355,9 +355,9 @@ def has_rot13_marker(text: str) -> bool:
 def is_leeted_token(token: str) -> bool:
     """Heuristic: does ``token`` look like leetspeak?
 
-    Requires length ∈ ``[3, 12]`` , ≥ 1 alphabetic character, and ≥ 2
-    leet-substitute characters (digits or ``@$!+`` ). The ≥ 2 floor filters
-    incidental noise like ``v1`` , ``py3`` , ``h0w`` , and isolated
+    Requires length ∈ ``[3, 12]``, ≥ 1 alphabetic character, and ≥ 2
+    leet-substitute characters (digits or ``@$!+``). The ≥ 2 floor filters
+    incidental noise like ``v1``, ``py3``, ``h0w``, and isolated
     phone-number digits; the length-cap filters long hex-shaped identifiers
     (16-char hashes, ``deadbeef`` -style debug constants, SHA-1/-256
     digests) that otherwise satisfy the letter / leet thresholds.
@@ -431,7 +431,7 @@ class ObfuscationProfile:
     """Corpus-level obfuscation prevalence statistics.
 
     Built by :func:`analyze_obfuscation` over a sequence of texts. All
-    count fields are non-negative; all rate fields are in ``[0.0, 1.0]`` .
+    count fields are non-negative; all rate fields are in ``[0.0, 1.0]``.
     An empty input yields all zeros (no division-by-zero, no fabricated
     rates).
 

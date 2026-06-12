@@ -1621,7 +1621,7 @@ def cluster_bootstrap_ci(
     groups : np.ndarray, shape (n,)
         Cluster id per row (any sortable dtype — ints or strings).
     statistic : callable ``(y_true, y_score) -> float``
-        Metric to bootstrap (e.g. ``roc_auc`` ). Must be **picklable** when
+        Metric to bootstrap (e.g. ``roc_auc``). Must be **picklable** when
         ``n_jobs != 1`` (a named top-level function — lambdas / closures
         are rejected).
     resample_labels : tuple[int, ...], optional
@@ -1633,32 +1633,32 @@ def cluster_bootstrap_ci(
         Parallel workers (default 1 — sequential). ``n_jobs=-1`` uses all
         cores; ``n_jobs=0`` is rejected. Per-resample seeding via
         :func:`spawn_seed_sequences` makes the CI
-        **bit-for-bit identical across ``n_jobs``** for a fixed ``rng`` .
+        **bit-for-bit identical** across ``n_jobs`` for a fixed ``rng``.
         See :ref:`methodology/parallelism` .
     return_samples : bool, optional
         When ``True`` (v1.9.0, #93), attach the post-filter, read-only
         resample statistics to the result as ``BootstrapCI.samples`` — the
         same array the quantiles are computed from, so distribution
         summaries stay consistent with the CI (e.g.
-        ``frac_gt0 = float(np.mean(ci.samples > 0.0))`` ). Default
+        ``frac_gt0 = float(np.mean(ci.samples > 0.0))``). Default
         ``False`` (``samples=None``).
 
     Returns
     -------
     BootstrapCI
-        ``method="cluster_percentile"`` ;
+        ``method="cluster_percentile"``;
         ``point_estimate = statistic(y_true, y_score)`` on the full data;
         ``[alpha/2, 1 - alpha/2]`` percentile CI over the cluster-resampled
-        distribution. With ``return_samples=True`` , ``samples`` holds the
+        distribution. With ``return_samples=True``, ``samples`` holds the
         resample distribution (``shape == (n_resamples_used,)``, matching
         the result's ``n_resamples`` field).
 
     Raises
     ------
     ValueError
-        On shape mismatch, non-1-D input, ``n < 10`` , ``confidence``
-        outside (0, 1), empty ``resample_labels`` , a ``resample_labels``
-        entry absent from ``y_true`` , ``n_jobs == 0`` , non-finite
+        On shape mismatch, non-1-D input, ``n < 10``, ``confidence``
+        outside (0, 1), empty ``resample_labels``, a ``resample_labels``
+        entry absent from ``y_true``, ``n_jobs == 0``, non-finite
         ``y_score`` (NaN/inf), a non-finite point estimate, or > 5%
         degenerate resamples (statistic raised or returned non-finite).
     TypeError
@@ -1852,56 +1852,57 @@ def stratified_cluster_bootstrap_ci(
     ----------
     strata : Mapping[key, (y_true, y_score, groups)]
         Independent resample-units keyed by any hashable (e.g. ``seed`` /
-        ``(carrier, seed)`` / ``(attack_type, seed)`` ). Each value is
+        ``(carrier, seed)`` / ``(attack_type, seed)``). Each value is
         three aligned 1-D arrays. Iteration order is the mapping's order
         (stable ⇒ deterministic).
     per_stratum_metric : callable ``(y_true, y_score) -> float``
-        Metric computed on each stratum's resampled rows (e.g. ``roc_auc``
-        , ``pr_auc`` ). Must be **picklable** when ``n_jobs != 1`` .
+        Metric computed on each stratum's resampled rows (e.g.
+        ``roc_auc``, ``pr_auc``). Must be **picklable** when
+        ``n_jobs != 1``.
     combine : callable ``Mapping[key, float] -> float``
         Reduces the per-stratum metrics to the composite statistic (e.g.
-        ``val − mean_seed(m)`` ;
-        ``mean_carrier(val[c] − mean_seed(m[c, ·]))`` ; a top−bottom
+        ``val − mean_seed(m)``;
+        ``mean_carrier(val[c] − mean_seed(m[c, ·]))``; a top−bottom
         contrast). Closes over any fixed quantities (val ROC, the type
         partition) — pass a **picklable** top-level function or
         ``functools.partial`` when ``n_jobs != 1`` (lambdas are fine at
-        ``n_jobs == 1`` ).
+        ``n_jobs == 1``).
     resample_labels : tuple[int, ...], optional
         Which label strata are cluster-resampled within each stratum
-        (default ``(0, 1)`` ); ``(1,)`` resamples only positive clusters,
+        (default ``(0, 1)``); ``(1,)`` resamples only positive clusters,
         holding negatives fixed (the payload-cluster convention). Labels
         not present in a given stratum are simply skipped there.
     n_resamples, confidence, rng : standard bootstrap params (``rng`` per SPEC 7).
     n_jobs : int, optional
         Parallel workers (default 1). Per-resample seeding via
         :func:`spawn_seed_sequences` makes the CI
-        **bit-for-bit identical across ``n_jobs``** ; ``n_jobs=-1`` uses
+        **bit-for-bit identical** across ``n_jobs``; ``n_jobs=-1`` uses
         all cores. See :ref:`methodology/parallelism` .
     return_samples : bool, optional
         When ``True`` (v1.9.0, #93), attach the post-filter, read-only
         resample statistics to the result as ``BootstrapCI.samples`` — the
         same array the quantiles are computed from, so distribution
         summaries stay consistent with the CI (e.g.
-        ``frac_gt0 = float(np.mean(ci.samples > 0.0))`` ). Default
+        ``frac_gt0 = float(np.mean(ci.samples > 0.0))``). Default
         ``False`` (``samples=None``).
 
     Returns
     -------
     BootstrapCI
-        ``method="stratified_cluster_percentile"`` ;
+        ``method="stratified_cluster_percentile"``;
         ``point_estimate = combine({key: per_stratum_metric(y, score)})``
         on the full data; ``[alpha/2, 1 - alpha/2]`` percentile CI. With
-        ``return_samples=True`` , ``samples`` holds the resample
+        ``return_samples=True``, ``samples`` holds the resample
         distribution (``shape == (n_resamples_used,)``, matching the
         result's ``n_resamples`` field).
 
     Raises
     ------
     ValueError
-        On empty ``strata`` , a stratum whose arrays mismatch shape / are
+        On empty ``strata``, a stratum whose arrays mismatch shape / are
         not 1-D, a stratum with non-finite scores (NaN/inf), empty
-        ``resample_labels`` , ``confidence`` outside (0, 1),
-        ``n_jobs == 0`` , a non-finite point estimate, or > 5% degenerate
+        ``resample_labels``, ``confidence`` outside (0, 1),
+        ``n_jobs == 0``, a non-finite point estimate, or > 5% degenerate
         resamples (a per-stratum metric or ``combine`` raised or returned
         non-finite).
     TypeError
@@ -1941,7 +1942,7 @@ def stratified_cluster_bootstrap_ci(
     -----
     For a *gap* with a fixed offset (``Gx = val − stat``, ``val`` fixed),
     fold the offset into ``combine`` (``combine`` returns
-    ``val − mean(m.values())`` ) so the CI is on ``Gx`` directly.
+    ``val − mean(m.values())``) so the CI is on ``Gx`` directly.
 
     References
     ----------

@@ -121,6 +121,11 @@ def audit_file(path: Path) -> list[Finding]:
 def main(argv: list[str]) -> int:
     strict = "--strict" in argv
     files = sorted(p for p in SRC.rglob("*.py") if p.name not in SKIP_FILES)
+    if not files:
+        raise FileNotFoundError(
+            f"audit_raises_sections: no .py files under {SRC} — the gate "
+            "would pass vacuously; check the SRC path resolution"
+        )
     total_undocumented = 0
     total_extra = 0
     for path in files:

@@ -219,7 +219,9 @@ def load_prediction_arrays(
     ValueError
         If ``ref`` lacks a ``columns`` mapping, lacks a non-empty ``uri``,
         its ``columns`` mapping is missing the ``label`` / ``score`` keys
-        (re-raised from :func:`_required_column`), the loaded scores
+        (re-raised from the private ``_required_column`` helper), its
+        ``media_type`` / uri suffix matches no built-in reader while no
+        explicit ``reader`` was passed, the loaded scores
         contain non-finite values (a bare ``NaN`` token in JSONL or a
         ``"nan"`` cell in CSV passes the readers' per-row key checks but
         must not flow into metrics as a silent NaN), or the loaded labels

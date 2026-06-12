@@ -61,6 +61,11 @@ def _hf_get_json(path: str) -> Any:
 
 _logger = logging.getLogger(__name__)
 
+# Package dir for warnings skip_file_prefixes: the three RuntimeWarnings
+# below fire inside private helpers — skipping eval_toolkit frames makes
+# them attribute (and dedup) per user call site.
+_PKG_DIR = str(Path(__file__).resolve().parent)
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -645,6 +650,7 @@ class HFDatasetsLoader:
                 "proceeding without",
                 RuntimeWarning,
                 stacklevel=2,
+                skip_file_prefixes=(_PKG_DIR,),
             )
             return {}
 
@@ -669,6 +675,7 @@ class HFDatasetsLoader:
                 "sha256 unavailable",
                 RuntimeWarning,
                 stacklevel=2,
+                skip_file_prefixes=(_PKG_DIR,),
             )
             return []
         if not isinstance(entries, list):
@@ -826,6 +833,7 @@ def _download_with_sha_verify(
             f"(expected {expected_hex}, got {actual}); re-downloading",
             RuntimeWarning,
             stacklevel=2,
+            skip_file_prefixes=(_PKG_DIR,),
         )
         cached.unlink()
 

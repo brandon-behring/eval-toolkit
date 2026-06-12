@@ -134,8 +134,8 @@ def class_balance(slice_: EvalSlice) -> dict[str, object]:
     Returns
     -------
     dict
-        Keys: ``n_rows`` , ``n_positive`` , ``n_negative`` , ``pos_pct``
-        (positive fraction in ``[0, 1]`` , ``0.0`` for an empty slice),
+        Keys: ``n_rows``, ``n_positive``, ``n_negative``, ``pos_pct``
+        (positive fraction in ``[0, 1]``, ``0.0`` for an empty slice),
         ``neg_pos_ratio`` (negatives / positives; ``None`` when there are
         no positives), and ``is_single_class`` (only one observed label).
 
@@ -635,7 +635,7 @@ def audit_dataset(
 ) -> DataAudit:
     """Run the Job-1 dataset integrity gate.
 
-    Thin orchestrator: loads splits via ``loader.load_splits()`` , computes
+    Thin orchestrator: loads splits via ``loader.load_splits()``, computes
     a :class:`SplitSummary` per split, runs the reused dedup / leakage
     checks (torch-free TF-IDF backend), evaluates integrity gates, and
     returns a :class:`DataAudit` . Pure except for the gate work; performs
@@ -655,17 +655,17 @@ def audit_dataset(
         gate.
     exact : bool, optional
         Run :class:`~eval_toolkit.leakage.ExactDuplicateCheck`
-        (within-split). Default ``True`` . Recorded as ``"warning"``
-        severity (informational — does not gate ``gate_passed`` ).
+        (within-split). Default ``True``. Recorded as ``"warning"``
+        severity (informational — does not gate ``gate_passed``).
     near : bool, optional
         Run :class:`~eval_toolkit.leakage.NearDuplicateCheck`
-        (within-split, TF-IDF). Default ``True`` . ``"warning"`` severity
+        (within-split, TF-IDF). Default ``True``. ``"warning"`` severity
         (informational).
     near_threshold : float, optional
         Similarity threshold for the near-duplicate check. Default ``0.9``.
     cross_split : bool, optional
         Run :class:`~eval_toolkit.leakage.CrossSplitLeakageCheck` . Default
-        ``True`` . Requires a split named ``"train"`` ; otherwise skipped
+        ``True``. Requires a split named ``"train"``; otherwise skipped
         (the ``no_cross_split_leakage`` gate then passes with a "skipped"
         note).
     cross_split_threshold : float, optional
@@ -679,7 +679,7 @@ def audit_dataset(
         char-walk pass per detector is undesirable).
     min_neg_pos_ratio, max_neg_pos_ratio : float, optional
         Inclusive bounds for the class-balance gate's neg:pos ratio.
-        Defaults ``0.1`` / ``10.0`` .
+        Defaults ``0.1`` / ``10.0``.
     pct_over_context_threshold : float, optional
         Ceiling for the fraction of rows over the context window. Default
         ``0.05``. Only used when a tokenizer + context window are supplied.
@@ -695,11 +695,11 @@ def audit_dataset(
 
     Notes
     -----
-    Only **error** -severity gates contribute to ``gate_passed`` . The
+    Only **error** -severity gates contribute to ``gate_passed``. The
     exact / near within-split dedup checks are recorded at ``"warning"``
     severity because exact / lexical near-dupes are common in real corpora
     and rarely invalidate a split *structure*; the genuinely dangerous
-    signal — train↔eval leakage — gates via ``no_cross_split_leakage`` .
+    signal — train↔eval leakage — gates via ``no_cross_split_leakage``.
     """
     splits = loader.load_splits()
     dataset_name = getattr(loader, "name", "") or ""
