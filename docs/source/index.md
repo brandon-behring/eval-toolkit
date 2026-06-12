@@ -80,6 +80,7 @@ api/calibration
 api/claims
 api/config
 api/docs
+api/eda
 api/embeddings
 api/evidence
 api/harness
