@@ -143,6 +143,17 @@ The v0.47 unified `TextTransform` Protocol covers both defence-side
   `low_fpr_feasibility_gate`, `strict_artifact_gate`, ...
 - `EvidenceAxis`, `AggregateEvidence` for typed aggregation
 
+### EDA dataset-integrity gates ([`eda`](eda.md))
+
+Tier-2 subpackage (import explicitly; not in the package-root
+`__all__`): per-split profiling + dataset-soundness diagnostics.
+
+- Job-1 integrity gate: `audit_dataset`, `analyze_obfuscation`
+- Job-2 lexical shortcut diagnostics: `class_lexical_association`,
+  `competency_baselines`
+- Job-3 distribution shift over feature matrices: `proxy_a_distance`,
+  `maximum_mean_discrepancy`, `knn_purity`, `distribution_shift`
+
 ### Optional-extra Tier-2: probes + losses ([`probes`](probes.md), [`losses`](losses.md))
 
 Optional-dependency modules that follow the same Protocol patterns but

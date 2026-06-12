@@ -78,7 +78,7 @@ def test_median_bandwidth_positive(separated: tuple[np.ndarray, np.ndarray]) -> 
 def test_median_bandwidth_subsample_path(separated: tuple[np.ndarray, np.ndarray]) -> None:
     a, _ = separated  # 40 rows
     # max_samples below n_rows forces the deterministic subsample branch.
-    sigma = median_bandwidth(a, max_samples=10, random_state=3)
+    sigma = median_bandwidth(a, max_samples=10, rng=3)
     assert sigma > 0.0
 
 
@@ -138,7 +138,7 @@ def test_pad_too_few_samples_raises() -> None:
 @pytest.mark.unit
 def test_pad_bootstrap_ci(separated: tuple[np.ndarray, np.ndarray]) -> None:
     a, b = separated
-    r = proxy_a_distance(a, b, n_folds=4, n_bootstrap=15, random_state=0)
+    r = proxy_a_distance(a, b, n_folds=4, n_resamples=15, rng=0)
     assert r.ci_low is not None and r.ci_high is not None
     assert r.ci_low <= r.ci_high
     assert r.ci_low >= 0.0 and r.ci_high <= 2.0
@@ -150,7 +150,7 @@ def test_pad_bootstrap_ci(separated: tuple[np.ndarray, np.ndarray]) -> None:
 @pytest.mark.unit
 def test_mmd_separated_significant(separated: tuple[np.ndarray, np.ndarray]) -> None:
     a, b = separated
-    r = maximum_mean_discrepancy(a, b, n_permutations=100, random_state=0)
+    r = maximum_mean_discrepancy(a, b, n_permutations=100, rng=0)
     assert isinstance(r, MmdResult)
     assert r.mmd_squared > 0.1
     assert r.p_value < 0.05
@@ -161,7 +161,7 @@ def test_mmd_separated_significant(separated: tuple[np.ndarray, np.ndarray]) -> 
 @pytest.mark.unit
 def test_mmd_same_dist_not_significant(same_dist: tuple[np.ndarray, np.ndarray]) -> None:
     a, b = same_dist
-    r = maximum_mean_discrepancy(a, b, n_permutations=100, random_state=0)
+    r = maximum_mean_discrepancy(a, b, n_permutations=100, rng=0)
     assert r.p_value > 0.05
 
 
@@ -198,14 +198,14 @@ def test_mmd_rejects_too_few_rows() -> None:
 def test_mmd_p_value_floor(separated: tuple[np.ndarray, np.ndarray]) -> None:
     # p = (1 + count) / (B + 1) is never zero.
     a, b = separated
-    r = maximum_mean_discrepancy(a, b, n_permutations=20, random_state=0)
+    r = maximum_mean_discrepancy(a, b, n_permutations=20, rng=0)
     assert r.p_value >= 1.0 / 21.0
 
 
 @pytest.mark.unit
 def test_mmd_bootstrap_ci(separated: tuple[np.ndarray, np.ndarray]) -> None:
     a, b = separated
-    r = maximum_mean_discrepancy(a, b, n_permutations=20, n_bootstrap=15, random_state=0)
+    r = maximum_mean_discrepancy(a, b, n_permutations=20, n_resamples=15, rng=0)
     assert r.ci_low is not None and r.ci_high is not None
     assert r.ci_low <= r.ci_high
 
@@ -263,7 +263,7 @@ def test_distribution_shift_combines_all(separated: tuple[np.ndarray, np.ndarray
 @pytest.mark.unit
 def test_distribution_shift_with_bootstrap(separated: tuple[np.ndarray, np.ndarray]) -> None:
     a, b = separated
-    res = distribution_shift(a, b, pad_folds=4, n_permutations=20, n_bootstrap=10, random_state=0)
+    res = distribution_shift(a, b, pad_folds=4, n_permutations=20, n_resamples=10, rng=0)
     assert res.pad.ci_low is not None
     assert res.mmd.ci_low is not None
 
@@ -319,7 +319,7 @@ def test_median_bandwidth_non_finite_outside_subsample_raises() -> None:
     x = rng.normal(size=(50, 3))
     x[49, 0] = np.nan  # likely excluded from a 10-row subsample draw
     with pytest.raises(ValueError, match="non-finite value"):
-        median_bandwidth(x, max_samples=10, random_state=3)
+        median_bandwidth(x, max_samples=10, rng=3)
 
 
 @pytest.mark.parametrize("bad", [float("inf"), float("nan")])
@@ -341,3 +341,46 @@ def test_validate_pair_non_finite_embedding_raises(
     b[2, 1] = np.inf
     with pytest.raises(ValueError, match="x_b contains non-finite"):
         proxy_a_distance(a, b)
+
+
+# --- SPEC 7 rng contract (v1.12.0 rename) ---
+
+
+@pytest.mark.unit
+def test_rng_accepts_generator(separated: tuple[np.ndarray, np.ndarray]) -> None:
+    """SPEC 7: ``rng`` accepts a ``np.random.Generator``, not just an int seed."""
+    a, b = separated
+    r = proxy_a_distance(a, b, n_folds=4, rng=np.random.default_rng(0))
+    assert 0.0 <= r.pad <= 2.0
+    m = maximum_mean_discrepancy(a, b, n_permutations=20, rng=np.random.default_rng(0))
+    assert 0.0 < m.p_value <= 1.0
+
+
+@pytest.mark.unit
+def test_rng_int_seed_is_deterministic(same_dist: tuple[np.ndarray, np.ndarray]) -> None:
+    """Same int seed → identical results; a different seed must change them.
+
+    Runs on ``same_dist``: on ``separated`` data PAD saturates at 2.0 and the
+    MMD permutation count saturates at 0, so the equality asserts would pass
+    even with seeding fully broken (vacuous). The cross-seed inequality pins
+    that the results are actually rng-sensitive here.
+    """
+    a, b = same_dist
+    r1 = proxy_a_distance(a, b, n_folds=4, n_resamples=10, rng=7)
+    r2 = proxy_a_distance(a, b, n_folds=4, n_resamples=10, rng=7)
+    assert r1 == r2
+    assert proxy_a_distance(a, b, n_folds=4, n_resamples=10, rng=8) != r1
+    m1 = maximum_mean_discrepancy(a, b, n_permutations=50, rng=7)
+    m2 = maximum_mean_discrepancy(a, b, n_permutations=50, rng=7)
+    assert m1 == m2
+    assert maximum_mean_discrepancy(a, b, n_permutations=50, rng=8) != m1
+
+
+@pytest.mark.unit
+def test_negative_n_resamples_raises(same_dist: tuple[np.ndarray, np.ndarray]) -> None:
+    """A negative n_resamples raises instead of silently skipping the bootstrap."""
+    a, b = same_dist
+    with pytest.raises(ValueError, match="n_resamples must be >= 0"):
+        proxy_a_distance(a, b, n_folds=4, n_resamples=-3)
+    with pytest.raises(ValueError, match="n_resamples must be >= 0"):
+        maximum_mean_discrepancy(a, b, n_permutations=5, n_resamples=-3)

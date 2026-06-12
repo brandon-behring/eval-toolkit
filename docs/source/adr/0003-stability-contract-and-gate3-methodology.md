@@ -111,6 +111,15 @@ functionality:
   `is_defined_on(y_true) -> tuple[bool, str]` for richer cell-state
   detection. Implementations that don't implement the subprotocol
   continue to satisfy the base Protocol; this is additive.
+- **Amendment (2026-06-12, v1.12.0):** Tier-2 surfaces may change
+  beyond strictly-additive (parameter renames; eventual removals) in a
+  SemVer-MINOR **only** through the deprecation process documented in
+  `docs/source/DEPRECATION.md` — the standard 2-minor warning window,
+  or its one-time-exception criteria (small verified consumer set,
+  cross-repo notification, alias-debt justification, announce-time
+  documentation). The symbol itself must remain importable through
+  v1.x. First use: the `eval_toolkit.eda` SPEC-7 parameter renames at
+  v1.12.0 (#100, exception path).
 
 #### Tier 3: FREE (SemVer-patch)
 

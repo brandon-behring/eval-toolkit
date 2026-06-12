@@ -46,6 +46,8 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from eval_toolkit._rng import RNGLike, SeedLike
+
 __all__ = [
     "DEFAULT_CHAR_NGRAM_RANGE",
     "DEFAULT_MIN_COUNT",
@@ -519,10 +521,10 @@ def _score_baseline(
     x_test: np.ndarray,
     y_test: np.ndarray,
     *,
-    random_state: int,
+    sklearn_seed: int,
 ) -> BaselineScore:
     """Fit a logistic regression on ``x_train`` and score it on the test set."""
-    clf = LogisticRegression(max_iter=1000, random_state=random_state)
+    clf = LogisticRegression(max_iter=1000, random_state=sklearn_seed)
     clf.fit(x_train, y_train)
     scores = clf.predict_proba(x_test)[:, 1]
     return BaselineScore(
@@ -541,7 +543,7 @@ def competency_baselines(
     *,
     positive_label: object = 1,
     char_ngram_range: tuple[int, int] = DEFAULT_CHAR_NGRAM_RANGE,
-    random_state: int = 0,
+    rng: RNGLike | SeedLike | None = 0,
 ) -> CompetencyResult:
     """Fit partial-input / competency baselines and score the shortcut floor (C2).
 
@@ -565,8 +567,10 @@ def competency_baselines(
     char_ngram_range : (int, int), optional
         Character n-gram span for the char-n-gram baseline. Default
         :data:`DEFAULT_CHAR_NGRAM_RANGE`.
-    random_state : int, optional
-        Seed for the logistic-regression solvers (determinism). Default ``0``.
+    rng : RNGLike | SeedLike | None, optional
+        RNG argument per `Scientific Python SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_;
+        seeds the logistic-regression solvers (determinism). Int seed
+        (default ``0``), ``Generator``, or ``None`` (entropy).
 
     Returns
     -------
@@ -622,12 +626,18 @@ def competency_baselines(
     bow_train = bow_vec.fit_transform(train_texts)
     bow_test = bow_vec.transform(test_texts)
 
+    # Derive an int seed for sklearn at the boundary (sklearn's random_state
+    # does not accept Generator across supported versions) — the
+    # cross_validate_metric pattern.
+    gen = np.random.default_rng(rng)
+    sklearn_seed = int(gen.integers(0, 2**31 - 1))
+
     baselines = (
-        _score_baseline("length", len_train, y_train, len_test, y_test, random_state=random_state),
+        _score_baseline("length", len_train, y_train, len_test, y_test, sklearn_seed=sklearn_seed),
         _score_baseline(
-            "char_ngram", char_train, y_train, char_test, y_test, random_state=random_state
+            "char_ngram", char_train, y_train, char_test, y_test, sklearn_seed=sklearn_seed
         ),
-        _score_baseline("bow", bow_train, y_train, bow_test, y_test, random_state=random_state),
+        _score_baseline("bow", bow_train, y_train, bow_test, y_test, sklearn_seed=sklearn_seed),
     )
     return CompetencyResult(
         baselines=baselines,

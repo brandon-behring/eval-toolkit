@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed — BREAKING for `eval_toolkit.eda` (Tier-2 one-time exception, [#100](https://github.com/brandon-behring/eval-toolkit/issues/100))
+
+SPEC-7 canonical-vocabulary renames across the eda subpackage, shipped as a
+hard rename under the documented one-time-exception path (see
+`docs/source/DEPRECATION.md`, exceptions table — Tier-2 evolvable surface,
+**zero** consumers found by cross-repo grep, alias = forever-debt):
+
+- **`random_state=` → `rng=`** on `median_bandwidth`, `proxy_a_distance`,
+  `maximum_mean_discrepancy`, `distribution_shift` (eda.distribution_shift)
+  and `competency_baselines` (eda.lexical_association). The parameter is now
+  SPEC-7 typed (`RNGLike | SeedLike | None`) and accepts a
+  `numpy.random.Generator`; the default seed `0` is unchanged.
+- **`n_bootstrap=` → `n_resamples=`** on `proxy_a_distance`,
+  `maximum_mean_discrepancy`, `distribution_shift`.
+- Migration: `proxy_a_distance(a, b, n_bootstrap=200, random_state=1)`
+  → `proxy_a_distance(a, b, n_resamples=200, rng=1)`.
+- **Numeric caveat**: sklearn seeds are now derived at the boundary from one
+  `Generator` (the `cross_validate_metric` pattern), so results at a given
+  seed differ from v1.11.0 values. Per-seed determinism is preserved —
+  the same seed always gives the same result within a release.
+
+### Fixed
+
+- **`proxy_a_distance` / `maximum_mean_discrepancy`: negative
+  `n_resamples` raises `ValueError`** instead of silently skipping the
+  bootstrap and returning `ci_low=None` (pre-merge review finding;
+  consistent with the neighboring `n_permutations < 1` guard).
+- **matplotlib 3.11 compatibility**: `set_plot_style` now casts
+  `PLOT_STYLE` at the typed-stub boundary — matplotlib 3.11.0 types
+  `RcParams.update` with Literal rc-key names, which rejected the plain
+  `str`-keyed dict under mypy strict (CI resolves matplotlib freshly
+  and broke on the 3.11.0 release; runtime behavior unchanged,
+  verified on 3.11.0).
+
+### Documentation
+
+- **`docs/source/DEPRECATION.md` reframed post-1.0**: the stale pre-1.0
+  SemVer section now states the ADR 0003 tier contract (Tier-1 MAJOR /
+  Tier-2 MINOR-with-policy / Tier-3 PATCH); the 2-minor warning window and
+  exception criteria are unchanged.
+- **ADR 0003 Tier-2 amendment (2026-06-12)**: non-additive Tier-2 changes
+  (parameter renames; eventual removals) may ship in a SemVer-MINOR only
+  through the DEPRECATION.md process — the 2-minor warning window or the
+  documented one-time-exception criteria; symbols stay importable through
+  v1.x. First use: the eda renames in this release.
+
 ## [1.11.0] — 2026-06-11 — audit-validator family hardening R16: multi-category subjects + window centering (#99)
 
 ### Fixed — audit-validator family correctness ([#99](https://github.com/brandon-behring/eval-toolkit/issues/99))
