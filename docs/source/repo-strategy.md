@@ -66,10 +66,11 @@ utilities. `metrics` has in-degree 4 (analysis,
 operating_points, thresholds, harness all import it), which makes
 "extract metrics" a refactor that ripples into half the package.
 
-**Conceptual sprawl.** 24 modules, 12.3K LOC, six distinct concerns
+**Conceptual sprawl.** 43 modules, ~28K LOC, seven distinct concerns
 under one name: math kernels, eval orchestration, evidence/claims,
-reproducibility scaffolding, plotting, standalone utilities (text
-dedup, markdown rendering, paths, config). The "eval-toolkit" name
+reproducibility scaffolding, plotting, EDA dataset-integrity
+diagnostics (the `eda/` subpackage, v1.5.0+), standalone utilities
+(text dedup, markdown rendering, paths, config). The "eval-toolkit" name
 fits the math + orchestration; it strains when applied to a 1300-LOC
 text-deduplication library or a markdown renderer.
 

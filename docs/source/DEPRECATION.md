@@ -132,7 +132,7 @@ When the release that contains the deadline ships (e.g., `0.31.0`):
 
 ## Active deprecations
 
-_None at v0.49.0 — every prior deprecation has either been hard-removed
+_None as of v1.12.0 — every prior deprecation has either been hard-removed
 or formally re-classified as a no-op kept for backward compatibility
 (see below)._
 
