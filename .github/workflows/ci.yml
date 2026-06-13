@@ -29,10 +29,15 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Create venv + install (with dev extras)
+      - name: Create venv + install (lock-faithful, dev extras)
+        # uv sync installs the EXACT uv.lock pins (incl. matplotlib) so PR
+        # CI is deterministic — a new matplotlib release can no longer break
+        # the pytest-mpl baselines on an unrelated PR. Forward-compat drift
+        # is caught off the PR path by .github/workflows/forward-compat-canary.yml
+        # (fresh resolution, weekly). #117.
         run: |
           uv venv --python ${{ matrix.python-version }} .venv
-          uv pip install -e ".[dev]"
+          uv sync --extra dev
 
       - name: Lint (ruff)
         run: uv run python -m ruff check src tests scripts

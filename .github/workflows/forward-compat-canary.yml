@@ -1,0 +1,73 @@
+name: Forward-compat canary
+
+# Weekly FRESH-resolution run of the core gates that a new dependency
+# release is most likely to break (mypy types, pytest-mpl visual baselines,
+# runtime). PR CI is lock-faithful (uv sync) so it stays deterministic;
+# this canary deliberately resolves dependencies freshly (uv pip install
+# -e ".[dev]" → latest compatible matplotlib/numpy/scipy/sklearn/...) to
+# surface forward-compat drift OFF the PR critical path.
+#
+# A RED canary means a newly-released dependency broke forward-compat.
+# The fix is maintainer-driven and controlled:
+#   1. Reproduce locally with a fresh install.
+#   2. Fix-forward the code (e.g. a typed-stub cast), then
+#   3. `uv lock --upgrade-package <dep>` to adopt the new version, and
+#      `pytest --mpl-generate-path=tests/baseline/test_plotting_visual
+#      tests/test_plotting_visual.py` to regenerate baselines if the
+#      rendering changed — never on a random feature PR.
+# History: matplotlib 3.11.0 (2026-06-12) broke mypy + all 10 baselines;
+# that incident motivated the lock-faithful-PR + scheduled-canary split (#117).
+#
+# Cron-only + manual; never gates a PR.
+
+on:
+  schedule:
+    # Mondays 04:00 UTC — staggered from nightly-mc (Sun 03:00) and
+    # nightly-benchmarks (Sat 02:00) so scheduled CI doesn't pile up.
+    - cron: "0 4 * * 1"
+  workflow_dispatch: # allow manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.13"]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: latest
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Create venv + FRESH install (latest compatible deps)
+        # Deliberately NOT lock-faithful — this is the drift detector.
+        run: |
+          uv venv --python ${{ matrix.python-version }} .venv
+          uv pip install -e ".[dev]"
+
+      - name: Report resolved versions (drift visibility)
+        run: uv run python -c "import matplotlib, numpy, scipy, sklearn; print('matplotlib', matplotlib.__version__, '| numpy', numpy.__version__, '| scipy', scipy.__version__, '| sklearn', sklearn.__version__)"
+
+      - name: Type check (mypy strict)
+        run: uv run python -m mypy src scripts
+
+      - name: Core tests
+        run: uv run python -m pytest -m "not monte_carlo and not benchmark and not integration" --no-cov -q
+
+      - name: Visual regression (pytest-mpl)
+        run: uv run python -m pytest --mpl tests/test_plotting_visual.py
+
+      - name: Doctests
+        run: tr -d '\r' < .doctest-modules | xargs uv run python -m pytest --doctest-modules --no-cov
