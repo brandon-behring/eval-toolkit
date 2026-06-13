@@ -569,8 +569,10 @@ def competency_baselines(
         :data:`DEFAULT_CHAR_NGRAM_RANGE`.
     rng : RNGLike | SeedLike | None, optional
         RNG argument per `Scientific Python SPEC 7 <https://scientific-python.org/specs/spec-0007/>`_;
-        seeds the logistic-regression solvers (determinism). Int seed
-        (default ``0``), ``Generator``, or ``None`` (entropy).
+        seeds the logistic-regression solvers. **Inert under the default
+        ``lbfgs`` solver** (lbfgs ignores ``random_state``); it only changes
+        output for stochastic solvers such as ``saga`` / ``liblinear``. Int
+        seed (default ``0``), ``Generator``, or ``None`` (entropy).
 
     Returns
     -------

@@ -62,7 +62,7 @@ What would have to change for this decision to be reopened?
 
 ## Cross-references
 
-- [`docs/RELEASING.md`](../../RELEASING.md) — release-flow process; ADRs
+- [`docs/source/RELEASING.md`](../RELEASING.md) — release-flow process; ADRs
   are typically drafted as part of release prep.
 - [`docs/source/roadmap.md`](../roadmap.md) — long-term direction;
   ADRs explain how individual roadmap decisions were made.

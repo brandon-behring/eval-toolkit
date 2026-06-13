@@ -358,21 +358,26 @@ def test_rng_accepts_generator(separated: tuple[np.ndarray, np.ndarray]) -> None
 
 @pytest.mark.unit
 def test_rng_int_seed_is_deterministic(same_dist: tuple[np.ndarray, np.ndarray]) -> None:
-    """Same int seed → identical results; a different seed must change them.
+    """Same int seed → identical results; a different seed changes them.
 
-    Runs on ``same_dist``: on ``separated`` data PAD saturates at 2.0 and the
-    MMD permutation count saturates at 0, so the equality asserts would pass
-    even with seeding fully broken (vacuous). The cross-seed inequality pins
-    that the results are actually rng-sensitive here.
+    Determinism (same seed → identical output) is checked for both PAD and
+    MMD. Cross-seed *sensitivity* is witnessed by MMD's permutation p-value:
+    on ``same_dist`` PAD is degenerate (the domain classifier sits at chance,
+    so PAD clamps to ~0 and every bootstrap resample clamps too), which makes
+    a PAD cross-seed inequality fixture-fragile — so MMD carries that check,
+    and PAD gets only the same-seed determinism assertion. (Pinning the PAD
+    inequality on the whole dataclass was the fragile form flagged by the
+    2026-06-13 review.)
     """
     a, b = same_dist
     r1 = proxy_a_distance(a, b, n_folds=4, n_resamples=10, rng=7)
     r2 = proxy_a_distance(a, b, n_folds=4, n_resamples=10, rng=7)
-    assert r1 == r2
-    assert proxy_a_distance(a, b, n_folds=4, n_resamples=10, rng=8) != r1
+    assert r1 == r2  # PAD: same seed → identical
     m1 = maximum_mean_discrepancy(a, b, n_permutations=50, rng=7)
     m2 = maximum_mean_discrepancy(a, b, n_permutations=50, rng=7)
-    assert m1 == m2
+    assert m1 == m2  # MMD: same seed → identical
+    # Cross-seed sensitivity: MMD's permutation p-value is seed-driven and
+    # non-degenerate on same_dist (unlike PAD, which clamps).
     assert maximum_mean_discrepancy(a, b, n_permutations=50, rng=8) != m1
 
 

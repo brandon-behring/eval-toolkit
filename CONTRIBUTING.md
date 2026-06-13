@@ -176,7 +176,7 @@ pre-1.0 expectations, breaking changes are allowed in MINOR bumps (`0.X.0`)
 during the 0.x series; PATCH bumps (`0.X.Y`) remain backward-compatible.
 
 > **Full runbook (incl. known gotchas + recovery recipes)**:
-> [`docs/RELEASING.md`](docs/RELEASING.md). Read that for anything
+> [`docs/source/RELEASING.md`](docs/source/RELEASING.md). Read that for anything
 > beyond the smooth happy path.
 
 The release checklist:

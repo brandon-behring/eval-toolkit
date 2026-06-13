@@ -237,7 +237,9 @@ T1–T3 was added under the same `scope="narrative"` opt-in:
 Combined dogfood result: consumer's residual 36 (v1.1.0) → 7
 (v1.2.0); 93% total reduction vs the pre-fix v1.0.5 baseline.
 
-**Still deferred** (post-v1.2.0): the cross-detector
+**Still deferred** (post-v1.2.0) — **closed at v1.3.0 by
+[ADR 0006](0006-pairing-rules-for-cross-detector-list-grammar.md)**,
+the formal pairing-rules design for this exact case: the cross-detector
 list-grammar problem proper — prose where a single
 detector mention precedes multiple values that belong to
 DIFFERENT detectors via list connectives ("and", "for X", "vs").

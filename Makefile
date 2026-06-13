@@ -132,14 +132,17 @@ release-prep:
 	@echo ''                                          >> src/eval_toolkit/_version.py
 	@echo '__version__ = "$(VERSION)"'                >> src/eval_toolkit/_version.py
 	@echo "[release-prep] wrote src/eval_toolkit/_version.py with __version__ = '$(VERSION)'"
+	@sed -i 's/^version: .*/version: "$(VERSION)"/' CITATION.cff
+	@sed -i "s/^date-released: .*/date-released: \"$$(date +%Y-%m-%d)\"/" CITATION.cff
+	@echo "[release-prep] bumped CITATION.cff to version=$(VERSION) + today's date-released"
 	REGEN_PUBLIC_API_GOLDEN=1 $(PYTHON) -m pytest tests/test_public_api.py -q
 	@echo ""
 	@echo "[release-prep] DONE. Next steps:"
 	@echo "  1. Edit CHANGELOG.md: convert [Unreleased] header to '## [$(VERSION)] — $$(date +%Y-%m-%d) — <theme>'"
-	@echo "  2. Review diff: git diff src/eval_toolkit/_version.py tests/golden/public_api/snapshot.json CHANGELOG.md"
+	@echo "  2. Review diff: git diff src/eval_toolkit/_version.py tests/golden/public_api/snapshot.json CHANGELOG.md CITATION.cff"
 	@echo "  2b. Classify the snapshot diff against ADR 0003 tiers (Tier-1/2/3) and label"
 	@echo "      the CHANGELOG entry to match — see the v1.5.0 erratum (#101)."
-	@echo "  3. Commit:      git add src/eval_toolkit/_version.py tests/golden/public_api/snapshot.json CHANGELOG.md"
+	@echo "  3. Commit:      git add src/eval_toolkit/_version.py tests/golden/public_api/snapshot.json CHANGELOG.md CITATION.cff"
 	@echo "                  git commit -m 'chore(release): v$(VERSION) — <theme>'"
 	@echo "  4. Push:        git push origin main"
 	@echo "  5. After CI green: git tag -a v$(VERSION) -m 'v$(VERSION) — <theme>' && git push origin v$(VERSION)"
