@@ -114,12 +114,6 @@ docs = [
 all = ["eval-toolkit[dataframe,plotting,property,yaml,parquet,validation]"]
 dev = [
     "eval-toolkit[all]",
-    # Dev-only ceiling (2026-06-12): the pytest-mpl visual baselines are
-    # rendered under matplotlib 3.10.x; 3.11.0 renders differently and
-    # fails all 10 baseline comparisons. Library extras keep the >=3.8
-    # floor (no consumer ceiling). Lift after regenerating baselines
-    # under 3.11 — tracked in #117.
-    "matplotlib<3.11",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-mpl>=0.16",
